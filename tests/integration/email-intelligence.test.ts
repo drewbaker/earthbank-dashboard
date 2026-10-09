@@ -20,7 +20,7 @@ vi.mock('#server/utils/jobs/enqueue.ts', () => ({
 
 const WEBHOOK_SECRET = `whsec_${Buffer.from('test-webhook-secret-32-bytes!!!!').toString('base64')}`
 process.env.RESEND_WEBHOOK_SECRET = WEBHOOK_SECRET
-process.env.INBOUND_EMAIL_DOMAIN = 'in.theearthbank.org'
+process.env.INBOUND_EMAIL_DOMAIN = 'mail.theearthbank.org'
 
 const { cleanupTestDatabase } = setupTestDatabase()
 let funderId: string

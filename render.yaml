@@ -73,7 +73,7 @@ services:
           - key: RESEND_WEBHOOK_SECRET
             sync: false
           - key: INBOUND_EMAIL_DOMAIN
-            value: in.theearthbank.org
+            value: mail.theearthbank.org
           - key: SIDEQUEST_DASHBOARD_USER
             value: admin
           - key: SIDEQUEST_DASHBOARD_PASSWORD

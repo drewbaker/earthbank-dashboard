@@ -37,7 +37,7 @@ In the Google Cloud console, use a project that belongs to the Earth Bank Worksp
 ## 4. Resend (alerts and forwarding)
 
 1. **Sending**: add and verify the domain `mail.theearthbank.org` (SPF/DKIM records at the DNS provider). Set `EMAIL_FROM` to `Earth Bank Dashboard <noreply@mail.theearthbank.org>` and `RESEND_API_KEY`.
-2. **Receiving**: add `in.theearthbank.org` as a receiving domain and create its MX record (Resend shows the value). This subdomain only receives the dashboard's private forwarding addresses, so it doesn't affect anyone's Google mail.
+2. **Receiving**: turn on receiving for the same `mail.theearthbank.org` domain and create its MX record (Resend shows the value). This subdomain only receives the dashboard's private forwarding addresses (`updates+…@mail.theearthbank.org`), so it doesn't affect anyone's Google mail on `theearthbank.org`. `INBOUND_EMAIL_DOMAIN` must match the receiving domain.
 3. **Webhook**: create a webhook for the `email.received` event pointing at `https://dashboard.theearthbank.org/webhooks/inbound-email`. Copy its signing secret into `RESEND_WEBHOOK_SECRET`.
 4. Test: in **Settings → Email**, copy your forwarding address and forward any email to it. It appears on the **Activity** page within a minute (as a draft funder if the sender is new).
 

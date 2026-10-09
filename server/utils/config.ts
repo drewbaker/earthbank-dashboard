@@ -99,7 +99,7 @@ export const config = {
         return [...new Set([this.googleWorkspaceDomain, this.inboundEmailDomain, ...domains])]
     },
     get inboundEmailDomain() {
-        return env('INBOUND_EMAIL_DOMAIN', 'in.theearthbank.org').toLowerCase()
+        return env('INBOUND_EMAIL_DOMAIN', 'mail.theearthbank.org').toLowerCase()
     },
     get resendWebhookSecret() {
         return env('RESEND_WEBHOOK_SECRET')

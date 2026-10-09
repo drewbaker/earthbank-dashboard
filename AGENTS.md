@@ -245,7 +245,7 @@ services:
           - key: RESEND_WEBHOOK_SECRET
             sync: false
           - key: INBOUND_EMAIL_DOMAIN
-            value: in.theearthbank.org
+            value: mail.theearthbank.org
           - key: SIDEQUEST_DASHBOARD_USER
             value: admin
           - key: SIDEQUEST_DASHBOARD_PASSWORD
@@ -981,7 +981,7 @@ RESEND_API_KEY=
 EMAIL_FROM="Earth Bank Dashboard <noreply@mail.theearthbank.org>"
 
 # Inbound forwarded email (Resend Inbound).
-INBOUND_EMAIL_DOMAIN=in.theearthbank.org
+INBOUND_EMAIL_DOMAIN=mail.theearthbank.org
 RESEND_WEBHOOK_SECRET=
 
 # Background workers (Sidequest + Nitro cron) run in this process.
