@@ -4,7 +4,7 @@ import { CHANGE_SOURCE_LABELS } from '#shared/constants/pipeline.ts'
 import type { ChangeEvent } from '#shared/schemas/index.ts'
 import { usePipelineReference } from '~/composables/usePipelineReference.ts'
 import { changeFieldLabel, formatChangeValue } from '~/utils/change-values.ts'
-import { formatRelativeTime } from '~/utils/format.ts'
+import { formatDate, formatRelativeTime } from '~/utils/format.ts'
 
 defineProps<{ events: ChangeEvent[]; showEntityName?: boolean; busyEventId?: string | null }>()
 const emit = defineEmits<{
@@ -80,7 +80,25 @@ const STATUS_BADGES: Record<ChangeEvent['status'], { label: string; color: 'warn
                     >
                     · {{ formatRelativeTime({ value: event.created_at }) }}
                 </p>
-                <slot name="evidence" :event="event" />
+                <div
+                    v-if="event.evidence"
+                    class="mt-1 rounded-md border border-default bg-elevated/40 px-3 py-2 text-xs"
+                >
+                    <p class="text-muted">
+                        <UIcon
+                            :name="event.evidence.source === 'forward' ? 'i-lucide-forward' : 'i-lucide-mail'"
+                            class="mr-1 inline size-3.5 align-text-bottom"
+                        />
+                        {{ event.evidence.from_address }} · {{ formatDate({ value: event.evidence.sent_at }) }}
+                        <template v-if="event.evidence.mailbox_user">
+                            · via {{ event.evidence.mailbox_user.name }}</template
+                        >
+                    </p>
+                    <p v-if="event.evidence.subject" class="font-medium text-highlighted">
+                        {{ event.evidence.subject }}
+                    </p>
+                    <p class="text-muted">{{ event.evidence.summary }}</p>
+                </div>
             </div>
             <div class="flex shrink-0 items-start gap-1">
                 <template v-if="event.status === 'pending'">

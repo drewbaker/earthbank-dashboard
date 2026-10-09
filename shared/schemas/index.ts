@@ -11,6 +11,7 @@ import { ErrorResponse, UserSummary } from '#shared/schemas/common.ts'
 import { Contact, CreateContactRequest, UpdateContactRequest } from '#shared/schemas/contacts.ts'
 import { CreateFunderRequest, Funder, FunderDetail, FunderList, UpdateFunderRequest } from '#shared/schemas/funders.ts'
 import { ForecastInputs } from '#shared/schemas/forecast.ts'
+import { ActivitySummary, EmailEvidence, EmailEvidenceList, MailboxStatus } from '#shared/schemas/mail.ts'
 import { Goal, GoalList, UpdateGoalRequest } from '#shared/schemas/goals.ts'
 import {
     CreateOpportunityRequest,
@@ -54,6 +55,7 @@ export * from '#shared/schemas/contacts.ts'
 export * from '#shared/schemas/forecast.ts'
 export * from '#shared/schemas/funders.ts'
 export * from '#shared/schemas/goals.ts'
+export * from '#shared/schemas/mail.ts'
 export * from '#shared/schemas/milestones.ts'
 export * from '#shared/schemas/opportunities.ts'
 export * from '#shared/schemas/scenarios.ts'
@@ -113,4 +115,8 @@ export const openapiSchemas: Record<string, z.ZodType> = {
     ScenarioList,
     CreateScenarioRequest,
     UpdateScenarioRequest,
+    MailboxStatus,
+    EmailEvidence,
+    EmailEvidenceList,
+    ActivitySummary,
 }

@@ -1,9 +1,12 @@
 import type { ChangeEventRow } from '#server/database/change-events.ts'
 import { listChangeEventRows } from '#server/database/change-events.ts'
+import { findEmailEvidenceByIds } from '#server/database/email-evidence.ts'
 import { findFunderNames } from '#server/database/funders.ts'
+import type { EmailEvidence as EmailEvidenceRow, User as UserRow } from '#server/generated/prisma/client.ts'
 import { findOpportunityNames, listOpportunityIdsForFunder } from '#server/database/opportunities.ts'
 import { toIsoDateTime } from '#server/utils/dates.ts'
 import { serializeUserSummary } from '#server/utils/serializers/common.ts'
+import { serializeEmailEvidence } from '#server/utils/serializers/email-evidence.ts'
 import type { ChangeSource, ChangeStatus } from '#shared/constants/pipeline.ts'
 import type { ChangeEntityType, ChangeEvent } from '#shared/schemas/index.ts'
 
@@ -42,9 +45,15 @@ export async function listChangeEventFeed({
     }
     const rows = await listChangeEventRows({ entityType, entityIds, source, status, cursor, limit })
     const page = rows.slice(0, limit)
-    const names = await loadEntityNames({ events: page })
+    const [names, evidence] = await Promise.all([loadEntityNames({ events: page }), loadEvidence({ events: page })])
     return {
-        data: page.map(event => serializeChangeEvent({ event, ...names.get(event.entity_id) })),
+        data: page.map(event =>
+            serializeChangeEvent({
+                event,
+                ...names.get(event.entity_id),
+                evidence: event.evidence_id ? (evidence.get(event.evidence_id) ?? null) : null,
+            }),
+        ),
         next_cursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
         has_more: rows.length > limit,
     }
@@ -56,16 +65,19 @@ export async function listChangeEventFeed({
  * @param input.event - The event row with its users.
  * @param input.entityName - Display name of the funder or opportunity.
  * @param input.funderId - The funder it belongs to.
+ * @param input.evidence - The email behind an AI change, if any.
  * @returns The API representation.
  */
 export function serializeChangeEvent({
     event,
     entityName = null,
     funderId = null,
+    evidence = null,
 }: {
     event: ChangeEventRow
     entityName?: string | null
     funderId?: string | null
+    evidence?: (EmailEvidenceRow & { mailbox_user: UserRow | null }) | null
 }): ChangeEvent {
     return {
         id: event.id,
@@ -80,6 +92,7 @@ export function serializeChangeEvent({
         status: event.status as ChangeStatus,
         actor: serializeUserSummary({ user: event.actor_user }),
         evidence_id: event.evidence_id,
+        evidence: evidence ? serializeEmailEvidence({ evidence }) : null,
         reason: event.reason,
         confidence: event.confidence,
         resolved_at: toIsoDateTime({ date: event.resolved_at }),
@@ -112,4 +125,16 @@ async function loadEntityNames({ events }: { events: ChangeEventRow[] }) {
         })
     }
     return names
+}
+
+/**
+ * Load the emails behind a page of AI changes.
+ *
+ * @param input.events - The events.
+ * @returns Evidence id → evidence row.
+ */
+async function loadEvidence({ events }: { events: ChangeEventRow[] }) {
+    const ids = [...new Set(events.flatMap(event => (event.evidence_id ? [event.evidence_id] : [])))]
+    const rows = ids.length ? await findEmailEvidenceByIds({ ids }) : []
+    return new Map(rows.map(row => [row.id, row]))
 }

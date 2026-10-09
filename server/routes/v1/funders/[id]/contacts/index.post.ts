@@ -4,6 +4,7 @@ import { defineApiHandler, parseBody, requestIp } from '#server/utils/api.ts'
 import { recordAudit } from '#server/utils/audit.ts'
 import { requireUser } from '#server/utils/auth.ts'
 import { addContactToFunder } from '#server/utils/contacts.ts'
+import { enqueueFunderBackfill } from '#server/utils/jobs/enqueue.ts'
 import { serializeContact } from '#server/utils/serializers/contacts.ts'
 import { CreateContactRequest } from '#shared/schemas/index.ts'
 
@@ -47,6 +48,9 @@ export default defineApiHandler(async event => {
         changes: { funder_id: funderId, name: contact.name },
         ip: requestIp({ event }),
     })
+    if (contact.email) {
+        await enqueueFunderBackfill({ funderId })
+    }
     setResponseStatus(event, 201)
     return serializeContact({ contact })
 })

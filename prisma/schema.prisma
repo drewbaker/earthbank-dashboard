@@ -44,6 +44,9 @@ model User {
     comments             Comment[]
     attachments          Attachment[]
     scenarios            Scenario[]
+    mailbox_connection   MailboxConnection?
+    inbound_addresses    InboundAddress[]
+    email_evidence       EmailEvidence[]
 
     @@map("user")
 }
@@ -115,6 +118,7 @@ model Funder {
     opportunities Opportunity[]
     milestones    Milestone[]
     tasks         Task[]
+    emails        EmailEvidence[]
 
     @@index([tier])
     @@index([relationship_status])
@@ -212,8 +216,9 @@ model ChangeEvent {
     resolved_by_user_id String?
     created_at          DateTime  @default(now())
 
-    actor_user       User? @relation("change_event_actor", fields: [actor_user_id], references: [id], onDelete: SetNull)
-    resolved_by_user User? @relation("change_event_resolver", fields: [resolved_by_user_id], references: [id], onDelete: SetNull)
+    actor_user       User?          @relation("change_event_actor", fields: [actor_user_id], references: [id], onDelete: SetNull)
+    resolved_by_user User?          @relation("change_event_resolver", fields: [resolved_by_user_id], references: [id], onDelete: SetNull)
+    evidence         EmailEvidence? @relation(fields: [evidence_id], references: [id], onDelete: SetNull)
 
     @@index([entity_type, entity_id, field])
     @@index([status])
@@ -406,4 +411,68 @@ model Scenario {
     created_by User? @relation(fields: [created_by_id], references: [id], onDelete: SetNull)
 
     @@map("scenario")
+}
+
+// A team member's connected Gmail. Only the encrypted refresh token is kept; mail is fetched on demand.
+model MailboxConnection {
+    id                      String    @id
+    user_id                 String    @unique
+    google_email            String
+    refresh_token_encrypted String
+    scopes                  String
+    // active | error (token revoked or expired; the user reconnects)
+    status                  String    @default("active")
+    last_synced_at          DateTime?
+    last_error              String?
+    created_at              DateTime  @default(now())
+    updated_at              DateTime  @updatedAt
+
+    user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+    @@map("mailbox_connection")
+}
+
+// What the dashboard keeps about an email it read: who, when, and an AI summary. Never the body.
+model EmailEvidence {
+    id                String    @id
+    // gmail | forward
+    source            String
+    // RFC 5322 Message-ID, so the same email in two inboxes is processed once.
+    message_id_header String    @unique
+    mailbox_user_id   String?
+    from_address      String
+    to_addresses      Json      @default("[]")
+    sent_at           DateTime
+    // Hidden (null) when the AI marks the email sensitive.
+    subject           String?
+    summary           String
+    is_relevant       Boolean   @default(true)
+    is_sensitive      Boolean   @default(false)
+    funder_id         String?
+    model             String?
+    confidence        Float?
+    created_at        DateTime  @default(now())
+
+    mailbox_user  User?         @relation(fields: [mailbox_user_id], references: [id], onDelete: SetNull)
+    funder        Funder?       @relation(fields: [funder_id], references: [id], onDelete: SetNull)
+    change_events ChangeEvent[]
+
+    @@index([funder_id, sent_at])
+    @@map("email_evidence")
+}
+
+// A user's private forwarding address: updates+<token>@INBOUND_EMAIL_DOMAIN.
+model InboundAddress {
+    id              String    @id
+    user_id         String
+    // Looked up by hash; the encrypted copy lets Settings show the address again.
+    token_hash      String    @unique
+    token_encrypted String
+    revoked_at      DateTime?
+    created_at      DateTime  @default(now())
+
+    user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+    @@index([user_id])
+    @@map("inbound_address")
 }

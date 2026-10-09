@@ -177,3 +177,33 @@ export function setFunderArchivedAt({ funderId, archivedAt }: { funderId: string
 export function findFunderNames({ funderIds }: { funderIds: string[] }) {
     return db().funder.findMany({ where: { id: { in: funderIds } }, select: { id: true, name: true } })
 }
+
+/**
+ * Every active funder with the addresses and domains used to match its email.
+ *
+ * @returns Funder ids with contact emails and domains.
+ */
+export async function listFunderMatchData() {
+    const funders = await db().funder.findMany({
+        where: { archived_at: null },
+        select: {
+            id: true,
+            email_domains: true,
+            contacts: { where: { archived_at: null, email: { not: null } }, select: { email: true } },
+        },
+    })
+    return funders.map(funder => ({
+        id: funder.id,
+        contactEmails: funder.contacts.map(contact => contact.email!),
+        emailDomains: Array.isArray(funder.email_domains) ? (funder.email_domains as string[]) : [],
+    }))
+}
+
+/**
+ * How many AI-drafted funders wait for review.
+ *
+ * @returns The count.
+ */
+export function countDraftFunders() {
+    return db().funder.count({ where: { status: 'draft', archived_at: null } })
+}

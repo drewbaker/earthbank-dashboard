@@ -26,6 +26,8 @@
         "eval:classify-email": "tsx scripts/eval-classify-email.ts"
     },
     "dependencies": {
+        "@anthropic-ai/sdk": "0.132.1",
+        "@googleapis/gmail": "22.0.1",
         "@iconify-json/lucide": "1.2.142",
         "@nuxt/ui": "4.11.3",
         "@prisma/adapter-better-sqlite3": "7.10.0",

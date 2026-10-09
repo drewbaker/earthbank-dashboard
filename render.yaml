@@ -59,9 +59,7 @@ services:
           - key: AI_PROVIDER
             value: anthropic
           - key: AI_MODEL
-            value: claude-haiku-5-5
-          - key: AI_FALLBACK_MODEL
-            value: claude-sonnet-5-5
+            value: claude-opus-5-5
           - key: ANTHROPIC_API_KEY
             sync: false
           - key: EMAIL_FROM

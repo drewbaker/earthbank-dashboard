@@ -84,6 +84,18 @@ export const config = {
     get bookkeepingApiKey() {
         return env('BOOKEEPING_API_KEY')
     },
+    get anthropicApiKey() {
+        return env('ANTHROPIC_API_KEY')
+    },
+    get aiModel() {
+        return env('AI_MODEL', 'claude-opus-5-5')
+    },
+    get inboundEmailDomain() {
+        return env('INBOUND_EMAIL_DOMAIN', 'in.theearthbank.org').toLowerCase()
+    },
+    get resendWebhookSecret() {
+        return env('RESEND_WEBHOOK_SECRET')
+    },
     get runBackgroundWorkers() {
         return env('NITRO_RUN_BACKGROUND_WORKERS', 'true') === 'true'
     },

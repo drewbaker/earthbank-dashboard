@@ -6,6 +6,7 @@ const settingsSections: NavigationMenuItem[] = [
     { label: 'Team', icon: 'i-lucide-users', to: '/settings/team' },
     { label: 'Pipeline', icon: 'i-lucide-target', to: '/settings/pipeline' },
     { label: 'Cash', icon: 'i-lucide-landmark', to: '/settings/cash' },
+    { label: 'Email', icon: 'i-lucide-mail', to: '/settings/email' },
 ]
 </script>
 

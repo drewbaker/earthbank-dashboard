@@ -6,6 +6,7 @@ import { recordAudit } from '#server/utils/audit.ts'
 import type { AuthActor } from '#server/utils/auth.ts'
 import { requireUser } from '#server/utils/auth.ts'
 import { createFunderWithDetails, loadFunderDetail } from '#server/utils/funders.ts'
+import { enqueueFunderBackfill } from '#server/utils/jobs/enqueue.ts'
 import { assertActiveUser } from '#server/utils/users.ts'
 import { CreateFunderRequest } from '#shared/schemas/index.ts'
 
@@ -13,7 +14,8 @@ defineRouteMeta({
     openAPI: {
         tags: ['Funders'],
         summary: 'Create a funder',
-        description: 'Creates a funder with optional first contacts and a first opportunity.',
+        description:
+            'Creates a funder with optional first contacts and a first opportunity, then reads the past year of email with them from connected mailboxes.',
         requestBody: {
             required: true,
             content: { 'application/json': { schema: { $ref: '#/components/schemas/CreateFunderRequest' } } },
@@ -57,6 +59,7 @@ export default defineApiHandler(async event => {
             : null,
     })
     await auditFunderCreated({ event, actor: ctx.actor, funderId, name: body.name })
+    await enqueueFunderBackfill({ funderId })
     setResponseStatus(event, 201)
     return loadFunderDetail({ funderId })
 })

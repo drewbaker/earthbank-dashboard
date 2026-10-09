@@ -11,6 +11,7 @@ export { Sidequest }
 const QUEUES = [
     { name: 'default', concurrency: 2 },
     { name: 'email', concurrency: 2 },
+    { name: 'mail', concurrency: 1 },
 ]
 
 let readiness: Promise<void> | undefined

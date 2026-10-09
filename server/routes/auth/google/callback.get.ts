@@ -1,11 +1,14 @@
 import type { H3Event } from 'h3'
 import { defineEventHandler, getQuery, sendRedirect, setResponseHeader } from 'h3'
+import { upsertMailboxConnection } from '#server/database/mailboxes.ts'
 import { findUserByGoogleSub, upsertGoogleUser } from '#server/database/users.ts'
 import { requestIp } from '#server/utils/api.ts'
 import { recordAudit } from '#server/utils/audit.ts'
 import { startSession } from '#server/utils/auth.ts'
 import { checkWorkspaceIdentity, completeGoogleSignIn } from '#server/utils/auth/google.ts'
 import { config } from '#server/utils/config.ts'
+import { encryptSecret } from '#server/utils/crypto.ts'
+import { enqueueMailboxSync } from '#server/utils/jobs/enqueue.ts'
 
 // Google redirects here after sign-in. This is the only place accounts are created.
 export default defineEventHandler(async event => {
@@ -24,6 +27,10 @@ export default defineEventHandler(async event => {
     if (check.rejection) {
         console.info('[auth] sign-in rejected', check.rejection)
         return redirectToLogin({ event, error: 'wrong_account' })
+    }
+
+    if (result.purpose === 'connect_gmail') {
+        return connectGmail({ event, googleSub: check.identity.googleSub, email: check.identity.email, ...result })
     }
 
     const existing = await findUserByGoogleSub({ googleSub: check.identity.googleSub })
@@ -55,4 +62,56 @@ export default defineEventHandler(async event => {
  */
 function redirectToLogin({ event, error }: { event: H3Event; error: string }) {
     return sendRedirect(event, `/login?error=${error}`, 302)
+}
+
+/**
+ * Finish "Connect Gmail": the Google account must be the signed-in user's own, and Google must have
+ * granted read-only mail access with a refresh token. Then queue a first sync.
+ *
+ * @param input.event - The callback request.
+ * @param input.googleSub - Google subject of the account that consented.
+ * @param input.email - Its verified email.
+ * @param input.refreshToken - Refresh token from Google (needed for background sync).
+ * @param input.grantedScopes - Scopes Google granted.
+ * @param input.redirectPath - Where to send the browser afterwards.
+ * @returns The redirect response.
+ */
+async function connectGmail({
+    event,
+    googleSub,
+    email,
+    refreshToken,
+    grantedScopes,
+    redirectPath,
+}: {
+    event: H3Event
+    googleSub: string
+    email: string
+    refreshToken: string | null
+    grantedScopes: string
+    redirectPath: string
+}) {
+    const auth = event.context.auth
+    const user = await findUserByGoogleSub({ googleSub })
+    if (!auth || !user || user.id !== auth.user.id) {
+        return sendRedirect(event, `${redirectPath}?gmail=wrong_account`, 302)
+    }
+    if (!refreshToken || !grantedScopes.includes('gmail.readonly')) {
+        return sendRedirect(event, `${redirectPath}?gmail=not_granted`, 302)
+    }
+    const connection = await upsertMailboxConnection({
+        userId: user.id,
+        googleEmail: email,
+        refreshTokenEncrypted: encryptSecret({ plaintext: refreshToken }),
+        scopes: grantedScopes,
+    })
+    await recordAudit({
+        actor: { type: 'user', userId: user.id },
+        action: 'mailbox.connected',
+        entityType: 'mailbox_connection',
+        entityId: connection.id,
+        ip: requestIp({ event }),
+    })
+    await enqueueMailboxSync({ mailboxConnectionId: connection.id })
+    return sendRedirect(event, `${redirectPath}?gmail=connected`, 302)
 }

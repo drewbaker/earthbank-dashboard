@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { CHANGE_SOURCES, CHANGE_STATUSES } from '#shared/constants/pipeline.ts'
 import { CursorQuery, IsoDateTime, listOf, UserSummary } from '#shared/schemas/common.ts'
+import { EmailEvidence } from '#shared/schemas/mail.ts'
 
 export const ChangeEntityType = z.enum(['funder', 'opportunity'])
 export type ChangeEntityType = z.infer<typeof ChangeEntityType>
@@ -18,6 +19,7 @@ export const ChangeEvent = z.object({
     status: z.enum(CHANGE_STATUSES),
     actor: UserSummary.nullable(),
     evidence_id: z.string().nullable(),
+    evidence: EmailEvidence.nullable(),
     reason: z.string().nullable(),
     confidence: z.number().nullable(),
     resolved_at: IsoDateTime.nullable(),

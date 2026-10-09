@@ -169,29 +169,40 @@ Notes from building it:
 
 Goal: the pipeline updates itself from funder email, with evidence and an easy override. See AGENTS.md §10 "Email intelligence" for the rules.
 
-- [ ] Prisma models:
-    - [ ] `MailboxConnection`: user_id (unique), google_email, refresh_token_encrypted, scopes, history_id, last_synced_at, status (`active | error | revoked`), last_error
-    - [ ] `EmailEvidence`: source (`gmail | forward`), external_message_id (unique), mailbox_user_id, from_address, to_addresses, sent_at, subject (null when sensitive), summary (≤ 300 chars), is_sensitive, funder_id?, opportunity_id?, model, processed_at
-    - [ ] `InboundAddress`: user_id, token_hash, created_at, revoked_at
-- [ ] Gmail connect: `GET /auth/google/gmail` (incremental scopes, offline, consent) and its callback branch; `DELETE /v1/mailbox` revokes at Google and deletes the row
-- [ ] `server/utils/mail/`: `GmailProvider`, `buildFunderMailQueries({ contacts, domains })` (batched under Gmail's query length limit), `normalizeEmail` (strip quoted replies, signatures and HTML; cap at about 8k characters), `matchFunder({ addresses })` (exact contact email first, then domain, never free-mail domains)
-- [ ] `server/utils/ai/`: `AiProvider`, `AnthropicProvider` (forced tool use, zod → JSON Schema, Haiku first then Sonnet when confidence < 0.6), instructions in `server/utils/ai/instructions/classify-email/*.md`
-- [ ] Jobs:
-    - [ ] `SyncMailboxJob` (incremental via `historyId`; full query fallback when the history has expired)
-    - [ ] `BackfillFunderJob` (`newer_than:12m` for one funder across all connected mailboxes)
-    - [ ] `ClassifyEmailJob` (classify → `EmailEvidence` → `applyFieldChanges` with auto-apply when confidence ≥ 0.8 and the change is not a move to `lost` or an amount decrease; otherwise pending)
-    - [ ] `mail-sync` Nitro task every 15 min
-- [ ] Rules:
-    - [ ] Manual edits win: skip AI changes to a field when the email's `sent_at` is older than the field's latest manual change
-    - [ ] Never store or log the email body
-- [ ] Forwarding:
-    - [ ] Settings → Email shows `updates+{token}@in.theearthbank.org` with copy and regenerate buttons
-    - [ ] `POST /webhooks/inbound-email`: verify the Resend signature; resolve the token; require the envelope sender to be that user's address; `parseInboundEmail` unwraps the forwarded original; enqueue `ClassifyEmailJob` with source `ai_forward`
-    - [ ] Unknown sender → the AI proposes a draft funder (status `draft`) with contact, domain, goal type and opportunity; confirming it on Activity activates it and enqueues `BackfillFunderJob`
-- [ ] `/activity` page: feed of change events (filters: source, status, funder, date). Each row shows what changed, the evidence summary, sent date and sender, the AI reason and confidence, and **Accept / Reject** (pending), **Revert** (applied), and **Edit** (opens the field). A "Needs review" count badge in the sidebar.
-- [ ] Funder timeline includes email evidence entries
-- [ ] `scripts/eval-classify-email.ts` + git-ignored `tests/fixtures/emails/*.eml` with expected outputs; prints accuracy per field
-- [ ] Tests: `email-matching.test.ts`, `classify-email.test.ts` (mocked AI: auto-apply vs pending, manual-wins rule, no body stored), `inbound-webhook.test.ts` (bad signature, bad token, wrong sender, unknown sender → draft)
+Status: built and verified locally with a fake AI (no Google OAuth client, Anthropic key or Resend inbound domain yet). Integration tests cover auto-apply vs review, manual-wins, no stored bodies, sensitive subjects, draft funders, replaced forwarding addresses and webhook signatures.
+
+Changes from the original plan (and why):
+
+- **Model**: `claude-opus-5-5` by default (`AI_MODEL` to change), via structured outputs (`beta.messages.parse` + zod) with server-side refusal fallbacks. Opus 5.5 rejects forced tool use, so the planned forced-tool + Haiku/Sonnet cascade was dropped; one model, low effort.
+- **Gmail sync** uses Gmail search with `after:` (last sync − 1 day; 90 days on first connect) instead of `historyId`: history would list every new message in the inbox, whereas search only ever returns funder mail.
+- **Dedupe** is by RFC Message-ID, so an email in two people's inboxes is read once. Forwarded copies use the Resend id.
+- **Forwarding** accepts any sender (the use case is mail that landed in a personal inbox); the secret token proves it came from a team member. Only Resend's email id is queued; the job fetches the content.
+- **Instructions** live in `server/utils/ai/instructions.ts` (bundles into Nitro and workers without file reads).
+- Email bodies never touch the database or the job queue; jobs carry ids and re-fetch.
+
+- [x] Prisma models:
+    - [x] `MailboxConnection`: user_id (unique), google_email, refresh_token_encrypted, scopes, history_id, last_synced_at, status (`active | error | revoked`), last_error
+    - [x] `EmailEvidence`: source (`gmail | forward`), external_message_id (unique), mailbox_user_id, from_address, to_addresses, sent_at, subject (null when sensitive), summary (≤ 300 chars), is_sensitive, funder_id?, opportunity_id?, model, processed_at
+    - [x] `InboundAddress`: user_id, token_hash, created_at, revoked_at
+- [x] Gmail connect: `GET /auth/google/gmail` (incremental scopes, offline, consent) and its callback branch; `DELETE /v1/mailbox` revokes at Google and deletes the row
+- [x] `server/utils/mail/`: `GmailProvider`, `buildFunderMailQueries({ contacts, domains })` (batched under Gmail's query length limit), `normalizeEmail` (strip quoted replies, signatures and HTML; cap at about 8k characters), `matchFunder({ addresses })` (exact contact email first, then domain, never free-mail domains)
+- [x] `server/utils/ai/`: `AiProvider`, `AnthropicProvider` (forced tool use, zod → JSON Schema, Haiku first then Sonnet when confidence < 0.6), instructions in `server/utils/ai/instructions/classify-email/*.md`
+- [x] Jobs:
+    - [x] `SyncMailboxJob` (incremental via `historyId`; full query fallback when the history has expired)
+    - [x] `BackfillFunderJob` (`newer_than:12m` for one funder across all connected mailboxes)
+    - [x] `ClassifyEmailJob` (classify → `EmailEvidence` → `applyFieldChanges` with auto-apply when confidence ≥ 0.8 and the change is not a move to `lost` or an amount decrease; otherwise pending)
+    - [x] `mail-sync` Nitro task every 15 min
+- [x] Rules:
+    - [x] Manual edits win: skip AI changes to a field when the email's `sent_at` is older than the field's latest manual change
+    - [x] Never store or log the email body
+- [x] Forwarding:
+    - [x] Settings → Email shows `updates+{token}@in.theearthbank.org` with copy and regenerate buttons
+    - [x] `POST /webhooks/inbound-email`: verify the Resend signature; resolve the token; require the envelope sender to be that user's address; `parseInboundEmail` unwraps the forwarded original; enqueue `ClassifyEmailJob` with source `ai_forward`
+    - [x] Unknown sender → the AI proposes a draft funder (status `draft`) with contact, domain, goal type and opportunity; confirming it on Activity activates it and enqueues `BackfillFunderJob`
+- [x] `/activity` page: feed of change events (filters: source, status, funder, date). Each row shows what changed, the evidence summary, sent date and sender, the AI reason and confidence, and **Accept / Reject** (pending), **Revert** (applied), and **Edit** (opens the field). A "Needs review" count badge in the sidebar.
+- [x] Funder timeline includes email evidence entries
+- [x] `scripts/eval-classify-email.ts` + git-ignored `tests/fixtures/emails/*.eml` with expected outputs; prints accuracy per field
+- [x] Tests: `email-matching.test.ts`, `classify-email.test.ts` (mocked AI: auto-apply vs pending, manual-wins rule, no body stored), `inbound-webhook.test.ts` (bad signature, bad token, wrong sender, unknown sender → draft)
 
 ## Phase 6: Hardening + deploy
 

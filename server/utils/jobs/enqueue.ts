@@ -1,5 +1,8 @@
+import { BackfillFunderJob } from '#root/jobs/backfill-funder.job.ts'
+import { ProcessForwardedEmailJob } from '#root/jobs/process-forwarded-email.job.ts'
 import { SendEmailJob } from '#root/jobs/send-email.job.ts'
 import { SyncBookkeepingJob } from '#root/jobs/sync-bookkeeping.job.ts'
+import { SyncMailboxJob } from '#root/jobs/sync-mailbox.job.ts'
 import { ensureJobQueue, Sidequest } from '#server/utils/jobs/sidequest.ts'
 
 /**
@@ -40,4 +43,50 @@ export async function enqueueBookkeepingSync() {
         .timeout(10 * 60 * 1000)
         .unique(true)
         .enqueue()
+}
+
+// Mail jobs share one queue with concurrency 1: they call the AI and write the pipeline, and running
+// them one at a time keeps change order predictable and stays well inside API rate limits.
+
+/**
+ * Queue a Gmail sync for one mailbox (one waiting sync per mailbox at a time).
+ *
+ * @param input.mailboxConnectionId - The connection.
+ * @returns The queued job.
+ */
+export async function enqueueMailboxSync({ mailboxConnectionId }: { mailboxConnectionId: string }) {
+    await ensureJobQueue()
+    return Sidequest.build(SyncMailboxJob)
+        .queue('mail')
+        .maxAttempts(3)
+        .timeout(15 * 60 * 1000)
+        .unique({ withArgs: true })
+        .enqueue({ mailboxConnectionId })
+}
+
+/**
+ * Queue a year of email backfill for a funder across every connected mailbox.
+ *
+ * @param input.funderId - The funder.
+ * @returns The queued job.
+ */
+export async function enqueueFunderBackfill({ funderId }: { funderId: string }) {
+    await ensureJobQueue()
+    return Sidequest.build(BackfillFunderJob)
+        .queue('mail')
+        .maxAttempts(3)
+        .timeout(15 * 60 * 1000)
+        .unique({ withArgs: true })
+        .enqueue({ funderId })
+}
+
+/**
+ * Queue processing of one forwarded email.
+ *
+ * @param input.receivedEmailId - Resend's received email id.
+ * @returns The queued job.
+ */
+export async function enqueueForwardedEmail({ receivedEmailId }: { receivedEmailId: string }) {
+    await ensureJobQueue()
+    return Sidequest.build(ProcessForwardedEmailJob).queue('mail').maxAttempts(5).enqueue({ receivedEmailId })
 }

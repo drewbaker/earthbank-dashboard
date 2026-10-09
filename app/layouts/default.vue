@@ -1,5 +1,24 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useAsyncData } from '#imports'
+import type { ActivitySummary } from '#shared/schemas/index.ts'
+import { useApi } from '~/composables/useApi.ts'
 import { primaryNavigation, secondaryNavigation } from '~/utils/navigation.ts'
+
+const api = useApi()
+// Shows how many AI suggestions and drafted funders wait for review next to "Activity".
+const { data: activitySummary } = useAsyncData('layout.activity-summary', () =>
+    api<ActivitySummary>({ path: '/activity/summary' }).catch(() => null),
+)
+
+const navigationItems = computed(() => {
+    const waiting = (activitySummary.value?.pending_changes ?? 0) + (activitySummary.value?.draft_funders ?? 0)
+    return primaryNavigation.map(item =>
+        item.to === '/activity' && waiting > 0
+            ? { ...item, badge: { label: String(waiting), color: 'warning' as const } }
+            : item,
+    )
+})
 </script>
 
 <template>
@@ -20,7 +39,7 @@ import { primaryNavigation, secondaryNavigation } from '~/utils/navigation.ts'
             </template>
 
             <template #default="{ collapsed }">
-                <UNavigationMenu :collapsed="collapsed" :items="primaryNavigation" orientation="vertical" />
+                <UNavigationMenu :collapsed="collapsed" :items="navigationItems" orientation="vertical" />
                 <UNavigationMenu
                     :collapsed="collapsed"
                     :items="secondaryNavigation"

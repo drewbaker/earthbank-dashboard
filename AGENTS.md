@@ -229,9 +229,7 @@ services:
           - key: ANTHROPIC_API_KEY
             sync: false
           - key: AI_MODEL
-            value: claude-haiku-5-5
-          - key: AI_FALLBACK_MODEL
-            value: claude-sonnet-5-5
+            value: claude-opus-5-5
           - key: EMAIL_FROM
             value: Earth Bank Dashboard <noreply@mail.theearthbank.org>
           - key: RESEND_API_KEY
@@ -677,7 +675,7 @@ async function auditFunderCreated({
 Each external service gets a tiny interface in `server/utils/<area>/` plus a registry function that picks the implementation from config:
 
 - **Email** (`server/utils/email/`): `EmailProvider { name, send({ to, subject, html, text }) }`, `ResendProvider`, `ConsoleProvider` (dev). Messages always have `html` and `text`. Sending happens in a job, never inline in a request.
-- **AI** (`server/utils/ai/`): `AiProvider { completeJson() }`, chosen by `AI_PROVIDER` (default `anthropic`) / `AI_MODEL` (default `claude-haiku-5-5`) / `AI_FALLBACK_MODEL` (default `claude-sonnet-5-5`). `AnthropicProvider` uses `@anthropic-ai/sdk`; structured output comes from a zod schema → JSON Schema passed as a forced tool's `input_schema`, and the result is parsed back through zod. Instructions live as numbered Markdown files (`instructions/classify-email/00-overview.md`, `10-…`) so they can be edited and versioned. Use a cheap default model and retry with the fallback model only when the result is low-confidence. Keep an eval script (`npm run eval:<thing>`) that runs against local fixtures and scores the output.
+- **AI** (`server/utils/ai/`): `AiProvider { completeStructured({ instructions, prompt, schema }) }`, chosen by `AI_PROVIDER` (default `anthropic`) / `AI_MODEL` (default `claude-opus-5-5`; set a cheaper model such as `claude-haiku-5-5` here if volume makes cost matter). `AnthropicProvider` uses `@anthropic-ai/sdk`'s `beta.messages.parse` with structured outputs (`output_config.format` from a zod schema; Opus 5.5 rejects forced tool use), low effort, and server-side refusal fallbacks (`fallbacks: "default"`). The result is range-checked after parsing. Instructions live in `server/utils/ai/instructions.ts` (TypeScript strings rather than Markdown files, so they bundle into Nitro and the job workers without file reads). `npm run eval:classify-email` scores the classifier against labelled fixtures.
 - **Bookkeeping** (`server/utils/bookkeeping/`): `BookkeepingProvider { listAccounts(), getAccountBalance({ accountId }), listTransactions({ since, cursor }) }`. `BookeepingAiProvider` calls `BOOKEEPING_API_BASE` with `Authorization: Bearer BOOKEEPING_API_KEY` and backs off on 429 (limits: 100 reads/min, 6,000/day). `FixtureProvider` serves JSON fixtures in dev when no key is set. There are no webhooks, so we poll.
 - **Mailbox** (`server/utils/mail/`): `MailboxProvider { searchMessages({ query, after }), listHistory({ startHistoryId }), getMessage({ id }) }`, implemented by `GmailProvider` over `googleapis`. `parseInboundEmail({ payload })` turns a Resend Inbound webhook payload into the same normalized `IncomingEmail { messageId, from, to, cc, date, subject, text }`, unwrapping the forwarded original where possible.
 - **Storage** (`server/utils/storage.ts`): `putFile({ key, data })`, `readStoredFile({ key })`, `streamFile({ key })`, `fileExists({ key })`, … over relative keys. Local disk now; S3/R2 later.
@@ -875,9 +873,9 @@ Module choices for this product:
 Keeps funder and opportunity status current from email, without the AI ever seeing private mail.
 
 - **What gets read**: only messages to or from a known contact's address or a funder's `email_domains`. Free-mail domains (gmail.com, outlook.com, …, listed in `shared/constants/free-mail-domains.ts`) match by exact address only. The whole inbox is never scanned or sent to the AI.
-- **Gmail sync** (`SyncMailboxJob`, every 15 min per connected mailbox): builds Gmail search queries from contacts and domains (batched, because queries have a length limit), uses `historyId` for incremental sync, and skips message ids already in `email_evidence`.
+- **Gmail sync** (`SyncMailboxJob`, every 15 min per connected mailbox): builds Gmail search queries from contacts and domains (batched, because queries have a length limit) with `after:` set to the last sync minus a day (90 days on the first sync), and skips emails whose RFC Message-ID is already in `email_evidence`, so the same email in two inboxes is read once. Gmail search does the filtering, so non-funder mail is never fetched (no `historyId` scan of the whole inbox).
 - **Backfill** (`BackfillFunderJob`): when a funder is created, or a contact or domain is added, search each connected mailbox for `from:/to:{address or @domain} newer_than:12m` and classify the results.
-- **Forwarding**: each user has a private address `updates+{token}@INBOUND_EMAIL_DOMAIN` (Settings → Email; regenerable). `POST /webhooks/inbound-email` verifies the Resend signature, the token, and that the sender is that user's address, then classifies the forwarded original with source `ai_forward`. If the sender matches no funder, the AI proposes a **draft funder** (contact, domain, goal type, opportunity) that waits as "Needs review" on Activity; confirming it runs the backfill.
+- **Forwarding**: each user has a private address `updates+{token}@INBOUND_EMAIL_DOMAIN` (Settings → Email; regenerable). `POST /webhooks/inbound-email` verifies the Resend signature and queues only the received email's id; the job fetches the email from Resend, resolves the token, and classifies the forwarded original with source `ai_forward`. Any sender may forward (the point is mail that landed in a personal inbox); the secret token proves it came from a team member. If the sender matches no funder, the AI proposes a **draft funder** (contact, domain, goal type, opportunity) that waits as "Needs review" on Activity; confirming it runs the backfill.
 - **Classification** (`ClassifyEmailJob`): the subject and body, trimmed and with quoted replies and signatures stripped, go to the AI. It returns `{ funder_id, opportunity_id?, proposed_changes: [{ field, to }], last_contact_at, summary, reason, confidence, is_sensitive }`, validated by zod. Fields it may change: opportunity `stage`, `amount_cents`, `expected_decision_at`, `expected_receipt_at`, `next_step`; funder `last_contact_at`, `relationship_status`; new contacts.
 - **What is stored** (`email_evidence`): Gmail or inbound message id, from, date, subject, mailbox owner, and the AI summary (≤ 300 characters). **Never the body.** When the AI flags `is_sensitive` (personal, HR, legal, salary, health), the subject is hidden and the summary is limited to the funding fact.
 - **Applying changes**: a change is applied automatically when confidence ≥ 0.8 and it is not a move to `lost` or an amount decrease; otherwise it becomes a pending suggestion. Each applied or pending change writes a `change_event` with `source`, `evidence_id`, `reason` and `confidence`.
@@ -957,8 +955,7 @@ BOOKEEPING_API_KEY=
 
 # AI (Anthropic). Without a key, email classification is skipped.
 AI_PROVIDER=anthropic
-AI_MODEL=claude-haiku-5-5
-AI_FALLBACK_MODEL=claude-sonnet-5-5
+AI_MODEL=claude-opus-5-5
 ANTHROPIC_API_KEY=
 
 # Email (Resend). Without a key, emails are logged to the console.

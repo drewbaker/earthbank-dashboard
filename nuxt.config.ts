@@ -55,6 +55,7 @@ export default defineNuxtConfig({
         scheduledTasks: {
             '0 * * * *': ['cleanup'],
             '15 * * * *': ['bookkeeping-sync'],
+            '*/15 * * * *': ['mail-sync'],
             // 03:00 UTC is overnight across the US.
             '0 3 * * *': ['backup'],
             // 13:00 UTC is early morning on the US east coast (9am EDT / 8am EST), weekdays only.
