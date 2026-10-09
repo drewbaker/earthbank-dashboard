@@ -1,7 +1,12 @@
+import { unzipSync } from 'fflate'
+import mammoth from 'mammoth'
 import readXlsxFile from 'read-excel-file/node'
 
 const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+const PPTX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 const PDF_MIME_TYPE = 'application/pdf'
+const DOWNLOADABLE_MIME_TYPES = new Set([PDF_MIME_TYPE, XLSX_MIME_TYPE, DOCX_MIME_TYPE, PPTX_MIME_TYPE])
 const PLAIN_TEXT_MIME_TYPES = new Set(['text/plain', 'text/markdown', 'text/csv'])
 
 // Google's own formats are exported: Docs and Slides as text, Sheets as .xlsx so every tab is read
@@ -18,8 +23,8 @@ export const MAX_DOCUMENT_CHARACTERS = 100_000
 export type ContentPlan = { action: 'export'; exportMimeType: string } | { action: 'download'; mimeType: string }
 
 /**
- * How to get a file's content from Drive, or null when the type isn't supported (Word and
- * PowerPoint files, images, …; converting them to Google Docs or Slides makes them readable).
+ * How to get a file's content from Drive, or null when the type isn't supported (images, old binary
+ * .doc/.ppt files, …; converting those to Google Docs or Slides makes them readable).
  *
  * @param input.mimeType - Drive MIME type.
  * @returns The plan, or null.
@@ -29,7 +34,7 @@ export function contentPlan({ mimeType }: { mimeType: string }): ContentPlan | n
     if (exportMimeType) {
         return { action: 'export', exportMimeType }
     }
-    if (mimeType === PDF_MIME_TYPE || mimeType === XLSX_MIME_TYPE || PLAIN_TEXT_MIME_TYPES.has(mimeType)) {
+    if (DOWNLOADABLE_MIME_TYPES.has(mimeType) || PLAIN_TEXT_MIME_TYPES.has(mimeType)) {
         return { action: 'download', mimeType }
     }
     return null
@@ -68,6 +73,12 @@ async function rawText({ data, contentMimeType }: { data: Uint8Array; contentMim
     }
     if (contentMimeType === XLSX_MIME_TYPE) {
         return spreadsheetText({ sheets: await readXlsxFile(Buffer.from(data)) })
+    }
+    if (contentMimeType === DOCX_MIME_TYPE) {
+        return (await mammoth.extractRawText({ buffer: Buffer.from(data) })).value
+    }
+    if (contentMimeType === PPTX_MIME_TYPE) {
+        return presentationText({ files: unzipSync(data) })
     }
     return new TextDecoder('utf-8').decode(data)
 }
@@ -108,4 +119,68 @@ function cellText({ cell }: { cell: unknown }) {
         return Number.isInteger(cell) ? String(cell) : String(Math.round(cell * 10000) / 10000)
     }
     return String(cell).replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * A .pptx deck as text: each slide's text boxes in order, then its speaker notes. A .pptx is a zip of
+ * XML parts; text sits in `<a:t>` runs grouped into `<a:p>` paragraphs.
+ *
+ * @param input.files - The unzipped parts, keyed by path.
+ * @returns The text, one "## Slide N" section per slide.
+ */
+export function presentationText({ files }: { files: Record<string, Uint8Array> }) {
+    const decoder = new TextDecoder('utf-8')
+    const slideNumbers = Object.keys(files)
+        .flatMap(path => {
+            const match = path.match(/^ppt\/slides\/slide(\d+)\.xml$/)
+            return match ? [Number(match[1])] : []
+        })
+        .sort((first, second) => first - second)
+    return slideNumbers
+        .map(number => {
+            const slide = xmlParagraphs({ xml: decoder.decode(files[`ppt/slides/slide${number}.xml`]) })
+            const notesPart = files[`ppt/notesSlides/notesSlide${number}.xml`]
+            // Notes pages repeat the slide number in a placeholder; drop bare numbers.
+            const notes = notesPart
+                ? xmlParagraphs({ xml: decoder.decode(notesPart) }).filter(line => !/^\d+$/.test(line))
+                : []
+            return [`## Slide ${number}`, ...slide, ...(notes.length ? [`Notes: ${notes.join(' ')}`] : [])].join('\n')
+        })
+        .join('\n\n')
+}
+
+/**
+ * The non-empty paragraphs of an Office XML part, with entities decoded.
+ *
+ * @param input.xml - The XML text.
+ * @returns One string per paragraph.
+ */
+function xmlParagraphs({ xml }: { xml: string }) {
+    return (xml.match(/<a:p[ >][\s\S]*?<\/a:p>/g) ?? [])
+        .map(paragraph =>
+            (paragraph.match(/<a:t>([\s\S]*?)<\/a:t>/g) ?? [])
+                .map(run => decodeXmlEntities({ text: run.replace(/<\/?a:t>/g, '') }))
+                .join(''),
+        )
+        .map(line => line.trim())
+        .filter(Boolean)
+}
+
+/**
+ * Decode the XML entities Office writes (&amp; &lt; &gt; &quot; &apos; and numeric ones).
+ *
+ * @param input.text - Text with entities.
+ * @returns Plain text.
+ */
+function decodeXmlEntities({ text }: { text: string }) {
+    const named: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }
+    return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, code: string) => {
+        if (code.startsWith('#x') || code.startsWith('#X')) {
+            return String.fromCodePoint(Number.parseInt(code.slice(2), 16))
+        }
+        if (code.startsWith('#')) {
+            return String.fromCodePoint(Number.parseInt(code.slice(1), 10))
+        }
+        return named[code] ?? entity
+    })
 }

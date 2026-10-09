@@ -4,6 +4,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { fakeAi } from '#root/tests/helpers/fake-ai.ts'
 import { createTestUser } from '#root/tests/helpers/factories.ts'
+import { buildPptx } from '#root/tests/helpers/office-files.ts'
 import { setupTestDatabase } from '#root/tests/helpers/test-database.ts'
 import type { DriveFile, KnowledgeDrive } from '#server/utils/knowledge/drive.ts'
 import type { ThreadMessage } from '#server/utils/mail/gmail.ts'
@@ -128,11 +129,7 @@ describe('Drive knowledge sync', () => {
                     text: 'Earth Bank lends to farmers. The design grant budget is $480,000.',
                 }),
                 driveFile({ id: 'csv-1', name: 'Pipeline numbers', mimeType: 'text/csv', text: 'a,b\n1,2' }),
-                driveFile({
-                    id: 'pptx-1',
-                    name: 'Old deck.pptx',
-                    mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-                }),
+                driveFile({ id: 'doc-old', name: 'Old memo.doc', mimeType: 'application/msword' }),
                 driveFile({ id: 'pdf-1', name: 'Huge.pdf', mimeType: 'application/pdf', sizeBytes: 50_000_000 }),
             ],
         })
@@ -142,7 +139,7 @@ describe('Drive knowledge sync', () => {
         expect(Object.fromEntries(documents.map(document => [document.name, document.status]))).toEqual({
             'Three pager': 'indexed',
             'Pipeline numbers': 'indexed',
-            'Old deck.pptx': 'unsupported',
+            'Old memo.doc': 'unsupported',
             'Huge.pdf': 'too_large',
         })
     })
@@ -309,6 +306,47 @@ describe('AI-drafted funder emails', () => {
                 now: new Date(),
             }),
         ).rejects.toMatchObject({ status: 400, code: 'unknown_opportunity' })
+    })
+})
+
+describe('Drive knowledge sync of newly readable types', () => {
+    it('re-reads an unchanged file that an earlier version could not read', async () => {
+        const { syncKnowledgeSource } = await import('#server/utils/knowledge/sync.ts')
+        const { listKnowledgeDocuments, upsertKnowledgeDocument } = await import('#server/database/knowledge.ts')
+        const pptxMimeType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+        const modifiedAt = new Date('2026-08-01T00:00:00Z')
+        // As stored by a version without PowerPoint support.
+        await upsertKnowledgeDocument({
+            sourceId,
+            driveFileId: 'pptx-deck',
+            name: 'Investor deck.pptx',
+            mimeType: pptxMimeType,
+            webViewLink: null,
+            modifiedAt,
+            status: 'unsupported',
+            text: null,
+            syncedAt: new Date(),
+        })
+        const deck = buildPptx({ slides: [{ paragraphs: ['Lending model: 4% blended'] }] })
+        const drive: KnowledgeDrive = {
+            getFolder: async ({ folderId }) => ({ id: folderId, name: 'Earth Bank Shared' }),
+            listFiles: async () => [
+                {
+                    id: 'pptx-deck',
+                    name: 'Investor deck.pptx',
+                    mimeType: pptxMimeType,
+                    modifiedAt,
+                    webViewLink: null,
+                    sizeBytes: deck.length,
+                },
+            ],
+            exportFile: async () => new Uint8Array(),
+            downloadFile: async () => deck,
+        }
+        await syncKnowledgeSource({ knowledgeSourceId: sourceId, now: new Date(), drive })
+        const stored = (await listKnowledgeDocuments()).find(document => document.drive_file_id === 'pptx-deck')
+        expect(stored).toMatchObject({ status: 'indexed' })
+        expect(stored!.char_count).toBeGreaterThan(0)
     })
 })
 

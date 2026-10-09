@@ -155,8 +155,8 @@ async function updateDocument({
                 <p class="text-sm text-muted">
                     Documents in these folders (business models, explainers, decks) inform AI-drafted emails to funders,
                     so drafts use Earth Bank's own facts and figures. Only files inside the folders you connect are
-                    read. Google Docs, Sheets, Slides, PDFs and .xlsx files are read; convert Word and PowerPoint files
-                    to Google format to include them. Folders re-sync every night.
+                    read. Google Docs, Sheets and Slides, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), PDFs and text
+                    files are read; old .doc and .ppt files need converting first. Folders re-sync every night.
                 </p>
             </div>
 

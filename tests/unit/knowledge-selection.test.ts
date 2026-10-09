@@ -1,8 +1,9 @@
 // Covers which Drive text the AI reads: everything when it fits, otherwise pinned documents plus the
 // passages that best match the email; and how files become text.
 import { describe, expect, it } from 'vitest'
+import { buildDocx, buildPptx } from '#root/tests/helpers/office-files.ts'
 import { parseDriveFolderId } from '#server/utils/knowledge/drive.ts'
-import { contentPlan, spreadsheetText } from '#server/utils/knowledge/extract.ts'
+import { contentPlan, extractText, spreadsheetText } from '#server/utils/knowledge/extract.ts'
 import { chunkText, scoreChunks, selectKnowledge } from '#server/utils/knowledge/select.ts'
 
 /**
@@ -111,8 +112,33 @@ describe('Drive file handling', () => {
         })
         expect(
             contentPlan({ mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }),
-        ).toBeNull()
+        ).toMatchObject({ action: 'download' })
+        expect(contentPlan({ mimeType: 'application/msword' })).toBeNull()
         expect(contentPlan({ mimeType: 'image/png' })).toBeNull()
+    })
+
+    it('reads Word documents', async () => {
+        const text = await extractText({
+            data: buildDocx({ paragraphs: ['Earth Bank three-pager', 'We lend to farmers &amp; land stewards.'] }),
+            contentMimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        })
+        expect(text).toBe('Earth Bank three-pager\n\nWe lend to farmers & land stewards.')
+    })
+
+    it('reads PowerPoint slides in order with their speaker notes', async () => {
+        const slides: { paragraphs: string[]; notes?: string[] }[] = Array.from({ length: 11 }, (_, index) => ({
+            paragraphs: [`Slide text ${index + 1}`],
+        }))
+        slides[0] = { paragraphs: ['Earth Bank', 'Capital for regenerative land'], notes: ['Open with the ask'] }
+        const text = await extractText({
+            data: buildPptx({ slides }),
+            contentMimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        })
+        expect(text).toMatch(
+            /^## Slide 1\nEarth Bank\nCapital for regenerative land\nNotes: Open with the ask\n\n## Slide 2\n/,
+        )
+        // Slide 10 comes after slide 9, not after slide 1.
+        expect(text.indexOf('Slide text 10')).toBeGreaterThan(text.indexOf('Slide text 9'))
     })
 
     it('turns every spreadsheet tab into text, skipping empty rows', () => {

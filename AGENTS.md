@@ -120,7 +120,7 @@ Names used throughout: **Earth Bank Dashboard** (display name), `earthbank_dashb
 | Validation | `zod` | `z.toJSONSchema` for OpenAPI and AI schemas |
 | Auth | `google-auth-library` | Sign in with Google only, restricted to the `theearthbank.org` Workspace; our own DB sessions (see §6) |
 | Gmail | `@googleapis/gmail` (`gmail.readonly`, `gmail.compose` for drafts) | Same OAuth client as sign-in |
-| Google Drive | `@googleapis/drive` (`drive.readonly`) | Knowledge folders for AI drafting; `unpdf` and `read-excel-file` extract text |
+| Google Drive | `@googleapis/drive` (`drive.readonly`) | Knowledge folders for AI drafting; `unpdf`, `read-excel-file`, `mammoth` (.docx) and `fflate` (.pptx) extract text |
 | Bank data | Bookeeping.ai public API (`docs.bookeeping.ai`) | Behind `BookkeepingProvider`; read-only, polled |
 | Background jobs | `sidequest` + `@sidequest/sqlite-backend` | Separate `jobs.db` file |
 | Scheduled work | Nitro tasks (`experimental.tasks`, `scheduledTasks`) | |
@@ -896,7 +896,7 @@ Keeps funder and opportunity status current from email, without the AI ever seei
 
 ### Knowledge (Google Drive)
 
-- Settings → Knowledge connects Drive folders by link. `SyncKnowledgeJob` lists each folder (subfolders included, capped at 500 files), downloads only new or changed files, and stores their text: Google Docs and Slides exported as text, Sheets and .xlsx with every tab, PDFs via `unpdf`, plain text/CSV/Markdown. Word and PowerPoint files are listed as "Not readable" (convert them to Google format). Files over 20 MB or failed exports are recorded with their status.
+- Settings → Knowledge connects Drive folders by link. `SyncKnowledgeJob` lists each folder (subfolders included, capped at 500 files), downloads only new or changed files, and stores their text: Google Docs and Slides exported as text, Sheets and .xlsx with every tab, Word .docx via `mammoth`, PowerPoint .pptx (slide text and speaker notes, unzipped with `fflate`), PDFs via `unpdf`, plain text/CSV/Markdown. Old binary .doc/.ppt files and images are listed as "Not readable"; files of a type that becomes readable are retried on the next sync. Files over 20 MB or failed exports are recorded with their status.
 - People can **pin** a document (always given to the AI in full) or **exclude** it (never given).
 - For each draft, `selectKnowledge` includes every usable document when they total under ~300k characters, in a stable order so the reference block is prompt-cached; otherwise pinned documents plus the best-matching passages (BM25 over ~1,500-character chunks) up to the budget.
 

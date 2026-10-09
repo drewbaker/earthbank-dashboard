@@ -69,7 +69,12 @@ export async function syncKnowledgeSource({
         const unchangedIds: string[] = []
         for (const file of files) {
             const stored = versions.get(file.id)
-            if (stored && stored.modified_at.getTime() === file.modifiedAt.getTime() && stored.status !== 'failed') {
+            // Unchanged files are skipped, except ones that failed or that couldn't be read before but
+            // can be now (support for a file type was added).
+            const isRetryable =
+                stored?.status === 'failed' ||
+                (stored?.status === 'unsupported' && contentPlan({ mimeType: file.mimeType }) !== null)
+            if (stored && stored.modified_at.getTime() === file.modifiedAt.getTime() && !isRetryable) {
                 unchangedIds.push(file.id)
                 summary.unchanged++
                 continue
