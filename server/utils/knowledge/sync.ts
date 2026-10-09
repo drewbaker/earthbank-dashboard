@@ -2,6 +2,8 @@ import {
     deleteMissingKnowledgeDocuments,
     findKnowledgeSource,
     knowledgeDocumentVersions,
+    listIndexedKnowledgeTexts,
+    markKnowledgeDocumentSensitive,
     recordKnowledgeSync,
     touchKnowledgeDocuments,
     upsertKnowledgeDocument,
@@ -10,6 +12,7 @@ import { decryptSecret } from '#server/utils/crypto.ts'
 import type { DriveFile, KnowledgeDrive } from '#server/utils/knowledge/drive.ts'
 import { GoogleKnowledgeDrive } from '#server/utils/knowledge/drive.ts'
 import { contentPlan, extractText } from '#server/utils/knowledge/extract.ts'
+import { sensitiveReasonFromName, sensitiveReasonFromText } from '#server/utils/knowledge/sensitive.ts'
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024
 
@@ -19,6 +22,7 @@ export type KnowledgeSyncSummary = {
     unchanged: number
     unsupported: number
     failed: number
+    sensitive: number
     removed: number
 }
 
@@ -64,6 +68,7 @@ export async function syncKnowledgeSource({
             unchanged: 0,
             unsupported: 0,
             failed: 0,
+            sensitive: 0,
             removed: 0,
         }
         const unchangedIds: string[] = []
@@ -80,9 +85,19 @@ export async function syncKnowledgeSource({
                 continue
             }
             const status = await syncFile({ sourceId: source.id, file, drive: client, now })
-            summary[status === 'indexed' ? 'indexed' : status === 'failed' ? 'failed' : 'unsupported']++
+            summary[
+                status === 'indexed'
+                    ? 'indexed'
+                    : status === 'failed'
+                      ? 'failed'
+                      : status === 'sensitive'
+                        ? 'sensitive'
+                        : 'unsupported'
+            ]++
         }
         await touchKnowledgeDocuments({ sourceId: source.id, driveFileIds: unchangedIds, syncedAt: now })
+        // Documents read before the sensitive check existed (or before its rules changed) get checked too.
+        summary.sensitive += await scrubSensitiveDocuments({ sourceId: source.id })
         summary.removed = await deleteMissingKnowledgeDocuments({
             sourceId: source.id,
             keepDriveFileIds: files.map(file => file.id),
@@ -134,7 +149,11 @@ async function syncFile({
     const plan = contentPlan({ mimeType: file.mimeType })
     let status = 'unsupported'
     let text: string | null = null
-    if (plan && file.sizeBytes !== null && file.sizeBytes > MAX_FILE_BYTES) {
+    // A sensitive-looking name is never downloaded.
+    let sensitiveReason = sensitiveReasonFromName({ name: file.name })
+    if (sensitiveReason) {
+        status = 'sensitive'
+    } else if (plan && file.sizeBytes !== null && file.sizeBytes > MAX_FILE_BYTES) {
         status = 'too_large'
     } else if (plan) {
         try {
@@ -146,7 +165,9 @@ async function syncFile({
                 data,
                 contentMimeType: plan.action === 'export' ? plan.exportMimeType : plan.mimeType,
             })
-            status = 'indexed'
+            sensitiveReason = sensitiveReasonFromText({ text })
+            status = sensitiveReason ? 'sensitive' : 'indexed'
+            text = sensitiveReason ? null : text
         } catch (error) {
             // Drive refuses exports over 10 MB; anything else is logged by file id only.
             const message = error instanceof Error ? error.message : String(error)
@@ -163,7 +184,27 @@ async function syncFile({
         modifiedAt: file.modifiedAt,
         status,
         text,
+        sensitiveReason,
         syncedAt: now,
     })
     return status
+}
+
+/**
+ * Re-check a source's readable documents against the sensitive rules, deleting the text of any match.
+ *
+ * @param input.sourceId - The source.
+ * @returns How many documents were newly marked sensitive.
+ */
+async function scrubSensitiveDocuments({ sourceId }: { sourceId: string }) {
+    let marked = 0
+    for (const document of await listIndexedKnowledgeTexts({ sourceId })) {
+        const reason =
+            sensitiveReasonFromName({ name: document.name }) ?? sensitiveReasonFromText({ text: document.text ?? '' })
+        if (reason) {
+            await markKnowledgeDocumentSensitive({ knowledgeDocumentId: document.id, reason })
+            marked++
+        }
+    }
+    return marked
 }

@@ -52,6 +52,7 @@ export function serializeKnowledgeDocument({
         mime_type: document.mime_type,
         web_view_link: document.web_view_link,
         status,
+        sensitive_reason: document.sensitive_reason,
         char_count: document.char_count,
         is_pinned: document.is_pinned,
         is_excluded: document.is_excluded,

@@ -350,6 +350,71 @@ describe('Drive knowledge sync of newly readable types', () => {
     })
 })
 
+describe('Drive knowledge sync of sensitive documents', () => {
+    it('never downloads files with sensitive names and scrubs stored text that turns out sensitive', async () => {
+        const { syncKnowledgeSource } = await import('#server/utils/knowledge/sync.ts')
+        const { listKnowledgeDocuments, upsertKnowledgeDocument } = await import('#server/database/knowledge.ts')
+        const modifiedAt = new Date('2026-08-01T00:00:00Z')
+        // Read and stored before the sensitive check existed.
+        await upsertKnowledgeDocument({
+            sourceId,
+            driveFileId: 'wire-instructions',
+            name: 'Wire instructions.docx',
+            mimeType: 'text/plain',
+            webViewLink: null,
+            modifiedAt,
+            status: 'indexed',
+            text: 'Send to account number: 123456789',
+            syncedAt: new Date(),
+        })
+        const reads: string[] = []
+        const drive: KnowledgeDrive = {
+            getFolder: async ({ folderId }) => ({ id: folderId, name: 'Earth Bank Shared' }),
+            listFiles: async () => [
+                {
+                    id: 'wire-instructions',
+                    name: 'Wire instructions.docx',
+                    mimeType: 'text/plain',
+                    modifiedAt,
+                    webViewLink: null,
+                    sizeBytes: 100,
+                },
+                {
+                    id: 'passport',
+                    name: 'Drew passport scan.pdf',
+                    mimeType: 'application/pdf',
+                    modifiedAt,
+                    webViewLink: null,
+                    sizeBytes: 100,
+                },
+            ],
+            exportFile: async ({ fileId }) => {
+                reads.push(fileId)
+                return new Uint8Array()
+            },
+            downloadFile: async ({ fileId }) => {
+                reads.push(fileId)
+                return new Uint8Array()
+            },
+        }
+        const summary = await syncKnowledgeSource({ knowledgeSourceId: sourceId, now: new Date(), drive })
+        expect(summary).toMatchObject({ sensitive: 2 })
+        expect(reads).toEqual([])
+        const { db } = await import('#server/utils/db.ts')
+        const stored = await db().knowledgeDocument.findMany({
+            where: { drive_file_id: { in: ['wire-instructions', 'passport'] } },
+            orderBy: { drive_file_id: 'asc' },
+        })
+        expect(stored.map(document => [document.drive_file_id, document.status, document.text])).toEqual([
+            ['passport', 'sensitive', null],
+            ['wire-instructions', 'sensitive', null],
+        ])
+        expect((await listKnowledgeDocuments()).find(document => document.drive_file_id === 'passport')).toMatchObject({
+            sensitive_reason: 'looks like a passport',
+        })
+    })
+})
+
 describe('reply needed', () => {
     it('is set while the funder sent the latest email and cleared once Earth Bank replies', async () => {
         const { createEmailEvidence } = await import('#server/database/email-evidence.ts')

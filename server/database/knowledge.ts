@@ -133,8 +133,9 @@ export async function knowledgeDocumentVersions() {
  * @param input.mimeType - Drive MIME type.
  * @param input.webViewLink - Link to open it in Drive.
  * @param input.modifiedAt - Drive's modified time.
- * @param input.status - `indexed`, `unsupported`, `too_large` or `failed`.
+ * @param input.status - `indexed`, `unsupported`, `too_large`, `failed` or `sensitive`.
  * @param input.text - Extracted text, when indexed.
+ * @param input.sensitiveReason - Why it was skipped as sensitive.
  * @param input.syncedAt - When it was synced.
  * @returns The document row.
  */
@@ -147,6 +148,7 @@ export function upsertKnowledgeDocument({
     modifiedAt,
     status,
     text,
+    sensitiveReason = null,
     syncedAt,
 }: {
     sourceId: string
@@ -157,6 +159,7 @@ export function upsertKnowledgeDocument({
     modifiedAt: Date
     status: string
     text: string | null
+    sensitiveReason?: string | null
     syncedAt: Date
 }) {
     const fields = {
@@ -167,6 +170,7 @@ export function upsertKnowledgeDocument({
         modified_at: modifiedAt,
         status,
         text,
+        sensitive_reason: sensitiveReason,
         char_count: text?.length ?? 0,
         synced_at: syncedAt,
     }
@@ -276,5 +280,38 @@ export function updateKnowledgeDocument({
         where: { id: knowledgeDocumentId },
         data: { is_pinned: isPinned, is_excluded: isExcluded },
         omit: { text: true },
+    })
+}
+
+/**
+ * A source's readable documents with their text, to re-check them for sensitive content.
+ *
+ * @param input.sourceId - The source.
+ * @returns Id, name and text.
+ */
+export function listIndexedKnowledgeTexts({ sourceId }: { sourceId: string }) {
+    return db().knowledgeDocument.findMany({
+        where: { source_id: sourceId, status: 'indexed' },
+        select: { id: true, name: true, text: true },
+    })
+}
+
+/**
+ * Mark a document sensitive and delete its stored text.
+ *
+ * @param input.knowledgeDocumentId - The document.
+ * @param input.reason - Why it's sensitive.
+ * @returns Resolves once updated.
+ */
+export async function markKnowledgeDocumentSensitive({
+    knowledgeDocumentId,
+    reason,
+}: {
+    knowledgeDocumentId: string
+    reason: string
+}) {
+    await db().knowledgeDocument.update({
+        where: { id: knowledgeDocumentId },
+        data: { status: 'sensitive', sensitive_reason: reason, text: null, char_count: 0, is_pinned: false },
     })
 }

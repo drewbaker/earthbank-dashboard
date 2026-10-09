@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { IsoDateTime, listOf, UserSummary } from '#shared/schemas/common.ts'
 
-export const KNOWLEDGE_DOCUMENT_STATUSES = ['indexed', 'unsupported', 'too_large', 'failed'] as const
+export const KNOWLEDGE_DOCUMENT_STATUSES = ['indexed', 'unsupported', 'too_large', 'failed', 'sensitive'] as const
 
 export const KnowledgeSource = z.object({
     id: z.string(),
@@ -27,6 +27,8 @@ export const KnowledgeDocument = z.object({
     mime_type: z.string(),
     web_view_link: z.string().nullable(),
     status: z.enum(KNOWLEDGE_DOCUMENT_STATUSES),
+    /** Why it was skipped as sensitive (its text is never stored). */
+    sensitive_reason: z.string().nullable(),
     char_count: z.number().int(),
     is_pinned: z.boolean(),
     is_excluded: z.boolean(),

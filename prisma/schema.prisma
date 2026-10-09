@@ -517,8 +517,10 @@ model KnowledgeDocument {
     web_view_link String?
     // Drive's modifiedTime; a file is only downloaded again when this changes.
     modified_at   DateTime
-    // indexed | unsupported | too_large | failed
+    // indexed | unsupported | too_large | failed | sensitive
     status        String
+    // Why a file was skipped as sensitive (an ID, a tax form…); its text is never stored.
+    sensitive_reason String?
     text          String?
     char_count    Int      @default(0)
     // Pinned documents are always given to the AI in full; excluded ones never are.

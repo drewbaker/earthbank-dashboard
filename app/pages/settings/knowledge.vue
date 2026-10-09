@@ -30,6 +30,7 @@ const STATUS_LABELS: Record<
     unsupported: { label: 'Not readable', color: 'neutral' },
     too_large: { label: 'Too large', color: 'warning' },
     failed: { label: 'Failed', color: 'error' },
+    sensitive: { label: 'Sensitive · skipped', color: 'warning' },
 }
 
 const connectResult = computed(() => {
@@ -243,6 +244,7 @@ async function updateDocument({
                     {{ readableCount }} documents are available to the AI. When they're too long to read all at once,
                     pinned documents (like the three-page explainer) are always read in full and the most relevant
                     passages of the rest are picked for each email. Exclude anything that shouldn't inform emails.
+                    Personal documents (IDs, passports, tax forms, bank details) are skipped automatically.
                 </p>
             </div>
             <UCard :ui="{ body: 'p-0 sm:p-0' }">
@@ -261,11 +263,23 @@ async function updateDocument({
                         >
                             {{ document.name }}
                         </a>
-                        <UBadge
-                            :label="STATUS_LABELS[document.status].label"
-                            :color="STATUS_LABELS[document.status].color"
-                            size="sm"
-                        />
+                        <UTooltip
+                            :text="
+                                document.sensitive_reason
+                                    ? `Not read: ${document.sensitive_reason}. Its contents are never stored or sent to the AI.`
+                                    : undefined
+                            "
+                            :disabled="!document.sensitive_reason"
+                        >
+                            <UBadge
+                                :label="STATUS_LABELS[document.status].label"
+                                :color="STATUS_LABELS[document.status].color"
+                                size="sm"
+                            />
+                        </UTooltip>
+                        <span v-if="document.sensitive_reason" class="text-xs text-muted sm:hidden">
+                            {{ document.sensitive_reason }}
+                        </span>
                         <template v-if="document.status === 'indexed'">
                             <USwitch
                                 :model-value="document.is_pinned"
