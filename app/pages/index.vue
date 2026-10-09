@@ -21,6 +21,21 @@ const { goals } = usePipelineReference()
 const { inputs, isReady, baseProjection } = useForecast()
 
 const { data: cash } = await useAsyncData('overview.cash', () => api<CashSummary>({ path: '/cash/summary' }))
+
+// Tells apart "not connected" from "connected but not synced yet" or "the last sync failed".
+const cashSetupMessage = computed(() => {
+    const sync = cash.value?.sync
+    if (sync?.last_error) {
+        return `The last Bookeeping.ai sync failed: ${sync.last_error} Check the key, then press Sync now in Settings → Cash.`
+    }
+    if (sync?.is_configured && !sync.last_synced_at) {
+        return "Bookeeping.ai is connected but hasn't synced yet. It syncs hourly; press Sync now in Settings → Cash to sync right away."
+    }
+    if (sync?.is_configured) {
+        return 'Bookeeping.ai synced, but no balance or spending came through. Check the accounts in Settings → Cash, or enter the balance and burn by hand.'
+    }
+    return "Connect Bookeeping.ai (set BOOKEEPING_API_KEY) or enter today's balance and burn in Settings → Cash to see runway."
+})
 const { data: milestones } = await useAsyncData('overview.milestones', () =>
     api<MilestoneList>({ path: '/milestones' }),
 )
@@ -86,7 +101,7 @@ function describeRunway({ end }: { end: RunwayEnd }) {
                     color="warning"
                     icon="i-lucide-landmark"
                     title="Cash on hand isn't known yet"
-                    description="Connect Bookeeping.ai (set BOOKEEPING_API_KEY) or enter today's balance and burn in Settings → Cash to see runway."
+                    :description="cashSetupMessage"
                     :actions="[{ label: 'Cash settings', to: '/settings/cash', color: 'warning', variant: 'solid' }]"
                 />
 
