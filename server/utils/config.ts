@@ -78,6 +78,12 @@ export const config = {
     get emailFrom() {
         return env('EMAIL_FROM', 'Earth Bank Dashboard <noreply@mail.theearthbank.org>')
     },
+    get bookkeepingApiBase() {
+        return env('BOOKEEPING_API_BASE', 'https://api.bookeeping.ai/public-api').replace(/\/$/, '')
+    },
+    get bookkeepingApiKey() {
+        return env('BOOKEEPING_API_KEY')
+    },
     get runBackgroundWorkers() {
         return env('NITRO_RUN_BACKGROUND_WORKERS', 'true') === 'true'
     },

@@ -134,24 +134,36 @@ Notes from building it:
 
 Goal: one view of cash runway against the pipeline, plus what-if modeling.
 
-- [ ] Prisma models:
-    - [ ] `BankAccount`: external_id, name, institution, currency, is_included (counts toward cash), last_synced_at
-    - [ ] `BalanceSnapshot`: bank_account_id, as_of (date, unique per account), balance_cents
-    - [ ] `BankTransaction`: external_id (unique), bank_account_id, booked_on, amount_cents (negative = outflow), description, category, counterparty, is_excluded_from_burn
-    - [ ] `Scenario`: name, description, adjustments (JSON), created_by, is_pinned
-- [ ] `server/utils/bookkeeping/`: `BookkeepingProvider`, `BookeepingAiProvider` (Bearer key, paginate, back off on 429), `FixtureProvider`. Read `https://docs.bookeeping.ai/api-reference/openapi.json` first to confirm field names.
-- [ ] `SyncBookkeepingJob` + hourly `bookkeeping-sync` task: upsert accounts, today's balance snapshot, transactions since the last sync minus 7 days (catches late edits)
-- [ ] Burn (`server/utils/burn.ts`): trailing 3 full months of net outflow from included accounts, excluding transfers between own accounts, categories marked excluded in Settings, and inflows tagged as grants. Manual override in Settings (`burn_override_cents`).
-- [ ] `shared/forecast/project-runway.ts`, pure and unit-tested:
+Status: built and verified locally with a manual balance and burn (no Bookeeping.ai key yet); the sync is covered by an integration test against a fake API that mirrors Bookeeping.ai's OpenAPI spec.
+
+Notes from building it:
+
+- Bookeeping.ai transactions are double-entry: the "main" entry is the bank side (DEBIT = money in) and the other entry carries the category. Burn counts operating categories (EXPENSE, COST_OF_GOODS_SOLD, OTHER_EXPENSE, OVERHEAD, TAX, TAX_PAYABLE) plus uncategorized money out, net of refunds; transfers, loans, equity and income are left out.
+- Cash on hand prefers the bank's own balance (`institutionBalance`, via Plaid) over the ledger balance. Month-end history comes from `monthWiseBalance`. Non-deposit accounts (cards, loans) start excluded.
+- Without `BOOKEEPING_API_KEY`, Settings → Cash takes a manual balance and burn so the forecast works on day one.
+- The forecast only counts Design Grants and OpEx money by default (lending capital goes into the lending structure); configurable in Settings → Cash. Overdue expected receipts are modeled as landing today; undated asks are listed, not drawn.
+- The projection runs in the browser (`shared/forecast/project-runway.ts`), so scenario changes redraw instantly. Scenario adjustments also include `change_probability`.
+- Chart colors were checked with the dataviz palette validator for light and dark surfaces; the scenario line is dashed so it isn't color-only.
+- `nuxt-charts` stays on 2.2.3 (npm `latest`); 3.x is only published under the `next` tag.
+
+- [x] Prisma models:
+    - [x] `BankAccount`: external_id, name, institution, currency, is_included (counts toward cash), last_synced_at
+    - [x] `BalanceSnapshot`: bank_account_id, as_of (date, unique per account), balance_cents
+    - [x] `BankTransaction`: external_id (unique), bank_account_id, booked_on, amount_cents (negative = outflow), description, category, counterparty, is_excluded_from_burn
+    - [x] `Scenario`: name, description, adjustments (JSON), created_by, is_pinned
+- [x] `server/utils/bookkeeping/`: `BookkeepingProvider`, `BookeepingAiProvider` (Bearer key, paginate, back off on 429), `FixtureProvider`. Read `https://docs.bookeeping.ai/api-reference/openapi.json` first to confirm field names.
+- [x] `SyncBookkeepingJob` + hourly `bookkeeping-sync` task: upsert accounts, today's balance snapshot, transactions since the last sync minus 7 days (catches late edits)
+- [x] Burn (`server/utils/burn.ts`): trailing 3 full months of net outflow from included accounts, excluding transfers between own accounts, categories marked excluded in Settings, and inflows tagged as grants. Manual override in Settings (`burn_override_cents`).
+- [x] `shared/forecast/project-runway.ts`, pure and unit-tested:
     - Inputs: `{ startingCashCents, monthlyBurnCents, opportunities: [{ id, amountCents, expectedReceiptAt, probability, stage }], milestones, adjustments, months: 24, today }`
     - Output: `{ months: [{ month, committedCashCents, weightedCashCents }], committedRunwayOutAt, weightedRunwayOutAt, markers }`
     - Committed line counts `committed` and `received` stages only; weighted line multiplies by stage probability (or the override)
-- [ ] `shared/schemas/scenarios.ts`: adjustment union: `shift_receipt { opportunity_id, months }`, `change_amount { opportunity_id, amount_cents }`, `exclude_opportunity { opportunity_id }`, `add_recurring_cost { label, monthly_cents, starts_at, ends_at? }`, `add_one_off { label, amount_cents, at }` (positive = income), `change_burn_pct { pct, starts_at }`
-- [ ] `/v1` routes: `cash/summary` (balance, burn, runway, last sync), `cash/accounts` (toggle included), `forecast` (base projection inputs), scenarios CRUD, `settings/burn`
-- [ ] Pages:
-    - [ ] `/` Overview: KPI tiles (cash, monthly burn, runway months + date, committed $ and weighted $ per goal), goal progress bars vs target, small runway chart, upcoming milestones (next 30 days), my tasks, recent AI updates
-    - [ ] `/forecast`: line chart (committed, weighted, and the selected scenario) with milestone markers and a zero line; scenario side panel with live client-side recalculation through `projectRunway`, drag-to-shift opportunity dates, "Add hire" / "Add one-off" forms, save, compare two scenarios
-- [ ] Tests: `runway-projection.test.ts` (every adjustment kind, runway-out date, probability weighting), `burn.test.ts`, `bookkeeping-sync.test.ts` (mocked fetch, idempotent)
+- [x] `shared/schemas/scenarios.ts`: adjustment union: `shift_receipt { opportunity_id, months }`, `change_amount { opportunity_id, amount_cents }`, `exclude_opportunity { opportunity_id }`, `add_recurring_cost { label, monthly_cents, starts_at, ends_at? }`, `add_one_off { label, amount_cents, at }` (positive = income), `change_burn_pct { pct, starts_at }`
+- [x] `/v1` routes: `cash/summary` (balance, burn, runway, last sync), `cash/accounts` (toggle included), `forecast` (base projection inputs), scenarios CRUD, `settings/burn`
+- [x] Pages:
+    - [x] `/` Overview: KPI tiles (cash, monthly burn, runway months + date, committed $ and weighted $ per goal), goal progress bars vs target, small runway chart, upcoming milestones (next 30 days), my tasks, recent AI updates
+    - [x] `/forecast`: line chart (committed, weighted, and the selected scenario) with milestone markers and a zero line; scenario side panel with live client-side recalculation through `projectRunway`, drag-to-shift opportunity dates, "Add hire" / "Add one-off" forms, save, compare two scenarios
+- [x] Tests: `runway-projection.test.ts` (every adjustment kind, runway-out date, probability weighting), `burn.test.ts`, `bookkeeping-sync.test.ts` (mocked fetch, idempotent)
 
 ## Phase 5: Email intelligence
 

@@ -1,4 +1,5 @@
 import { SendEmailJob } from '#root/jobs/send-email.job.ts'
+import { SyncBookkeepingJob } from '#root/jobs/sync-bookkeeping.job.ts'
 import { ensureJobQueue, Sidequest } from '#server/utils/jobs/sidequest.ts'
 
 /**
@@ -23,4 +24,20 @@ export async function enqueueEmail({
 }) {
     await ensureJobQueue()
     return Sidequest.build(SendEmailJob).queue('email').maxAttempts(5).enqueue({ to, subject, html, text })
+}
+
+/**
+ * Queue a Bookeeping.ai sync. Only one can be waiting at a time, so the hourly task and the
+ * "Sync now" button never pile up.
+ *
+ * @returns The queued Sidequest job.
+ */
+export async function enqueueBookkeepingSync() {
+    await ensureJobQueue()
+    return Sidequest.build(SyncBookkeepingJob)
+        .queue('default')
+        .maxAttempts(3)
+        .timeout(10 * 60 * 1000)
+        .unique(true)
+        .enqueue()
 }

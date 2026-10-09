@@ -43,6 +43,7 @@ model User {
     created_milestones   Milestone[]
     comments             Comment[]
     attachments          Attachment[]
+    scenarios            Scenario[]
 
     @@map("user")
 }
@@ -329,4 +330,80 @@ model Attachment {
 
     @@index([task_id])
     @@map("attachment")
+}
+
+// A bank (or card) account synced from Bookeeping.ai.
+model BankAccount {
+    id             String    @id
+    external_id    String    @unique
+    name           String
+    // Depository | Credit | Loan | Investment | Other (Bookeeping.ai's account types)
+    account_type   String
+    currency       String    @default("USD")
+    // Whether this account counts toward cash on hand and runway.
+    is_included    Boolean   @default(true)
+    last_synced_at DateTime?
+    created_at     DateTime  @default(now())
+    updated_at     DateTime  @updatedAt
+
+    snapshots    BalanceSnapshot[]
+    transactions BankTransaction[]
+
+    @@map("bank_account")
+}
+
+// One account's balance on one day (today's sync, or a month-end from Bookeeping.ai's history).
+model BalanceSnapshot {
+    id              String   @id
+    bank_account_id String
+    as_of           DateTime
+    balance_cents   BigInt
+    // institution (the bank's own figure) | accounting (Bookeeping.ai's ledger)
+    source          String
+    created_at      DateTime @default(now())
+
+    bank_account BankAccount @relation(fields: [bank_account_id], references: [id], onDelete: Cascade)
+
+    @@unique([bank_account_id, as_of])
+    @@map("balance_snapshot")
+}
+
+// One transaction, signed from the bank account's point of view: + money in, - money out.
+model BankTransaction {
+    id                    String    @id
+    external_id           String    @unique
+    bank_account_id       String?
+    booked_on             DateTime
+    amount_cents          BigInt
+    description           String?
+    counterparty_name     String?
+    category_name         String?
+    // Bookeeping.ai parent category of the non-bank side: EXPENSE, INCOME, CURRENT_ASSET (transfers), …
+    parent_category       String?
+    // Set by a person to leave a one-off (e.g. a loan repayment) out of the burn rate.
+    is_excluded_from_burn Boolean   @default(false)
+    source_updated_at     DateTime?
+    created_at            DateTime  @default(now())
+    updated_at            DateTime  @updatedAt
+
+    bank_account BankAccount? @relation(fields: [bank_account_id], references: [id], onDelete: SetNull)
+
+    @@index([booked_on])
+    @@map("bank_transaction")
+}
+
+// A named what-if for the runway forecast; adjustments are validated by zod (shared/schemas/scenarios.ts).
+model Scenario {
+    id            String    @id
+    name          String
+    description   String?
+    adjustments   Json      @default("[]")
+    created_by_id String?
+    archived_at   DateTime?
+    created_at    DateTime  @default(now())
+    updated_at    DateTime  @updatedAt
+
+    created_by User? @relation(fields: [created_by_id], references: [id], onDelete: SetNull)
+
+    @@map("scenario")
 }
