@@ -10,5 +10,5 @@ export const primaryNavigation: NavigationMenuItem[] = [
 ]
 
 export const secondaryNavigation: NavigationMenuItem[] = [
-    { label: 'Settings', icon: 'i-lucide-settings', to: '/settings/team' },
+    { label: 'Settings', icon: 'i-lucide-settings', to: '/settings' },
 ]

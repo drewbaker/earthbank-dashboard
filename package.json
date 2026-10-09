@@ -39,6 +39,7 @@
         "nitropack": "2.13.4",
         "nuxt": "4.6.0",
         "nuxt-charts": "2.2.3",
+        "read-excel-file": "9.3.12",
         "resend": "6.32.1",
         "sidequest": "1.16.6",
         "tailwindcss": "4.3.3",

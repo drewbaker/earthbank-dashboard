@@ -53,39 +53,49 @@ Notes from building it:
 
 Goal: the spreadsheet's Master Pipeline lives in the app and can be edited, and every change is logged.
 
-- [ ] Prisma models:
-    - [ ] `Funder`: name (unique, case-insensitive via a `name_key` column), kind (`foundation | dfi | corporate | individual | government | other`), tier (`t1`–`t4`), relationship_status (`no_contact | early | active | advanced | committed | dead`), geo_focus, email_domains (JSON array), materials_sent_at, last_contact_at, notes, owner_id, status `draft | active` (drafts come from forwarded emails), archived_at
-    - [ ] `Contact`: funder_id, name, title, email (unique when present), notes
-    - [ ] `Goal`: type (`design_grant | opex | lending_capital`), name, target_amount_cents, target_date, notes. Seed the three goals in a migration-safe seed function that runs at boot when the table is empty.
-    - [ ] `Opportunity`: funder_id, goal_id, name, stage (`identified | in_discussion | proposal | due_diligence | committed | received | lost`), amount_cents, probability_override, expected_decision_at, expected_receipt_at, received_at, next_step, owner_id, archived_at
-    - [ ] `ChangeEvent`: entity_type, entity_id, field, from_value, to_value (JSON), source (`manual | import | ai_email | ai_forward`), status (`applied | pending | rejected | reverted`), actor_user_id, evidence_id, reason, confidence, created_at
-    - [ ] `Setting`: key, value JSON. `stage_probabilities` defaults: identified 5, in_discussion 15, proposal 35, due_diligence 60, committed 95, received 100, lost 0.
-- [ ] `server/utils/change-events.ts`: `applyFieldChanges({ entityType, entityId, changes, source, actorUserId, evidenceId, reason, confidence })`, the only write path for tracked fields; `revertChange({ changeEventId })`
-- [ ] zod schemas in `shared/schemas/` (`funders.ts`, `contacts.ts`, `opportunities.ts`, `goals.ts`, `settings.ts`) and constants in `shared/constants/` (stages, tiers, goal types, labels, colors)
-- [ ] `/v1` routes:
-    - [ ] funders: list (filters: tier, relationship_status, goal, owner, `q`), get, create (enqueues the backfill job once Phase 5 lands), patch, archive
-    - [ ] funders/{id}/contacts: CRUD
-    - [ ] opportunities: list, get, create, patch, archive
-    - [ ] goals: list with computed totals (committed, weighted, received), patch
-    - [ ] change-events: list by entity
-    - [ ] settings/stage-probabilities: get, put
-- [ ] Pages:
-    - [ ] `/pipeline`: `UTable` of opportunities joined with funders. Columns: funder, goal, stage, amount, weighted amount, expected receipt, next step, owner, last contact. Filters and goal tabs; toggle to a kanban by stage (drag to change stage calls `applyFieldChanges`).
-    - [ ] `/pipeline/funders/[id]`: header (tier, status, owner, domains), contacts, opportunities, notes, timeline (change events; later emails and tasks)
-    - [ ] "New funder" modal: name, contact name and email, domains (pre-filled from the email unless it's a free-mail domain), goal, optional first opportunity
-- [ ] `scripts/import-pipeline.ts <path.xlsx>`, using `read-excel-file`, sheet "Master Pipeline", header row 4. Idempotent: match on normalized org name and re-run safely.
-    - [ ] Merge duplicate rows (e.g. Nordic Development Fund, Hewlett Foundation); keep the row with more data and the higher tier
-    - [ ] Contacts: split column B on `;` and `,` and pair with column C emails by position; ignore `—`, "Not found in inbox — verify manually" and parenthetical notes (keep them in the contact's notes)
-    - [ ] `email_domains` from contact emails, skipping free-mail domains
-    - [ ] Tier `T1`–`T4` → `t1`–`t4`; status → relationship_status (Committed, Advanced, Active, Early, No Contact, Dead)
-    - [ ] Last Contact: parse the leading date (`Jun 2, 2026 (met Jun 10)`, `Jun 2026 (…)`, `Apr 2026 (…)`); keep the full text in notes
-    - [ ] Design / Grant $ > 0 → `design_grant` opportunity; Potential Follow-On $ > 0 → `lending_capital` opportunity. Stage from status: Committed→committed, Advanced→due_diligence, Active→in_discussion, Early→identified, Dead→lost. No Contact creates no opportunity.
-    - [ ] Potential Size ("Design Grant Only", "Above $10M", "Sub $10M", "TBD") goes into notes
-    - [ ] EB 3-Pager `Y` → `materials_sent_at` = the import date (the sheet has no date)
-    - [ ] Notes: full text into `funder.notes`; text after `NEXT:` into each opportunity's `next_step`
-    - [ ] All writes use `applyFieldChanges` with source `import`
-    - [ ] Print a summary: created, updated, merged, skipped
-- [ ] Tests: `import-pipeline.test.ts` (against a small fixture xlsx built in the test; idempotent on re-run), `change-events.test.ts`, `funders-api.test.ts`
+Status: built and verified locally. The real sheet imports as 70 funders, 58 contacts and 29 opportunities; a second run changes nothing.
+
+Notes from building it:
+
+- Money columns are `BigInt` (Prisma's `Int` is 32-bit, too small for $50M lending asks); serializers return plain numbers.
+- Calendar dates (expected receipt, last contact, target date) travel as `YYYY-MM-DD` and are stored at UTC midnight.
+- Contacts are soft-deleted; re-adding the same email to the same funder restores the contact.
+- The importer also creates bare prospects for the names listed under "PIPELINE TOTAL", and an amount-less design-grant opportunity for "Design Grant Only" funders in conversation.
+- Re-imports never overwrite a field someone edited by hand (any applied manual change event for that field).
+
+- [x] Prisma models:
+    - [x] `Funder`: name (unique, case-insensitive via a `name_key` column), kind (`foundation | dfi | corporate | individual | government | other`), tier (`t1`–`t4`), relationship_status (`no_contact | early | active | advanced | committed | dead`), geo_focus, email_domains (JSON array), materials_sent_at, last_contact_at, notes, owner_id, status `draft | active` (drafts come from forwarded emails), archived_at
+    - [x] `Contact`: funder_id, name, title, email (unique when present), notes
+    - [x] `Goal`: type (`design_grant | opex | lending_capital`), name, target_amount_cents, target_date, notes. Seed the three goals in a migration-safe seed function that runs at boot when the table is empty.
+    - [x] `Opportunity`: funder_id, goal_id, name, stage (`identified | in_discussion | proposal | due_diligence | committed | received | lost`), amount_cents, probability_override, expected_decision_at, expected_receipt_at, received_at, next_step, owner_id, archived_at
+    - [x] `ChangeEvent`: entity_type, entity_id, field, from_value, to_value (JSON), source (`manual | import | ai_email | ai_forward`), status (`applied | pending | rejected | reverted`), actor_user_id, evidence_id, reason, confidence, created_at
+    - [x] `Setting`: key, value JSON. `stage_probabilities` defaults: identified 5, in_discussion 15, proposal 35, due_diligence 60, committed 95, received 100, lost 0.
+- [x] `server/utils/change-events.ts`: `applyFieldChanges({ entityType, entityId, changes, source, actorUserId, evidenceId, reason, confidence })`, the only write path for tracked fields; `revertChange({ changeEventId })`
+- [x] zod schemas in `shared/schemas/` (`funders.ts`, `contacts.ts`, `opportunities.ts`, `goals.ts`, `settings.ts`) and constants in `shared/constants/` (stages, tiers, goal types, labels, colors)
+- [x] `/v1` routes:
+    - [x] funders: list (filters: tier, relationship_status, goal, owner, `q`), get, create (enqueues the backfill job once Phase 5 lands), patch, archive
+    - [x] funders/{id}/contacts: CRUD
+    - [x] opportunities: list, get, create, patch, archive
+    - [x] goals: list with computed totals (committed, weighted, received), patch
+    - [x] change-events: list by entity
+    - [x] settings/stage-probabilities: get, put
+- [x] Pages:
+    - [x] `/pipeline`: `UTable` of opportunities joined with funders. Columns: funder, goal, stage, amount, weighted amount, expected receipt, next step, owner, last contact. Filters and goal tabs; toggle to a kanban by stage (drag to change stage calls `applyFieldChanges`).
+    - [x] `/pipeline/funders/[id]`: header (tier, status, owner, domains), contacts, opportunities, notes, timeline (change events; later emails and tasks)
+    - [x] "New funder" modal: name, contact name and email, domains (pre-filled from the email unless it's a free-mail domain), goal, optional first opportunity
+- [x] `scripts/import-pipeline.ts <path.xlsx>`, using `read-excel-file`, sheet "Master Pipeline", header row 4. Idempotent: match on normalized org name and re-run safely.
+    - [x] Merge duplicate rows (e.g. Nordic Development Fund, Hewlett Foundation); keep the row with more data and the higher tier
+    - [x] Contacts: split column B on `;` and `,` and pair with column C emails by position; ignore `—`, "Not found in inbox — verify manually" and parenthetical notes (keep them in the contact's notes)
+    - [x] `email_domains` from contact emails, skipping free-mail domains
+    - [x] Tier `T1`–`T4` → `t1`–`t4`; status → relationship_status (Committed, Advanced, Active, Early, No Contact, Dead)
+    - [x] Last Contact: parse the leading date (`Jun 2, 2026 (met Jun 10)`, `Jun 2026 (…)`, `Apr 2026 (…)`); keep the full text in notes
+    - [x] Design / Grant $ > 0 → `design_grant` opportunity; Potential Follow-On $ > 0 → `lending_capital` opportunity. Stage from status: Committed→committed, Advanced→due_diligence, Active→in_discussion, Early→identified, Dead→lost. No Contact creates no opportunity.
+    - [x] Potential Size ("Design Grant Only", "Above $10M", "Sub $10M", "TBD") goes into notes
+    - [x] EB 3-Pager `Y` → `materials_sent_at` = the import date (the sheet has no date)
+    - [x] Notes: full text into `funder.notes`; text after `NEXT:` into each opportunity's `next_step`
+    - [x] All writes use `applyFieldChanges` with source `import`
+    - [x] Print a summary: created, updated, merged, skipped
+- [x] Tests: `import-pipeline.test.ts` (against a small fixture xlsx built in the test; idempotent on re-run), `change-events.test.ts`, `funders-api.test.ts`
 
 ## Phase 3: Milestones, tasks, collaboration
 

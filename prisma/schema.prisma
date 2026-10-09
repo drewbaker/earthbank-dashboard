@@ -5,7 +5,8 @@
 //   API JSON and form state look the same.
 // - IDs are prefixed, time-sortable strings generated in app code (newId in server/utils/ids.ts),
 //   never by the database.
-// - Money is integer cents in USD.
+// - Money is integer cents in USD, stored as BigInt (Prisma's Int is 32-bit, too small for
+//   lending-capital amounts). Serializers convert to plain numbers at the API boundary.
 // - The database URL comes from prisma.config.ts (derived from DATA_DIR).
 
 generator client {
@@ -31,8 +32,12 @@ model User {
     created_at      DateTime  @default(now())
     updated_at      DateTime  @updatedAt
 
-    sessions  Session[]
-    audit_log AuditLog[]
+    sessions             Session[]
+    audit_log            AuditLog[]
+    owned_funders        Funder[]
+    owned_opportunities  Opportunity[]
+    change_events        ChangeEvent[] @relation("change_event_actor")
+    resolved_changes     ChangeEvent[] @relation("change_event_resolver")
 
     @@map("user")
 }
@@ -69,4 +74,147 @@ model AuditLog {
     @@index([entity_type, entity_id])
     @@index([created_at])
     @@map("audit_log")
+}
+
+// An organization that might give or lend us money.
+model Funder {
+    id                  String    @id
+    name                String
+    // Lowercased, punctuation-free name; keeps "IKEA Foundation" and "Ikea foundation" as one funder.
+    name_key            String    @unique
+    // foundation | dfi | corporate | individual | government | other
+    kind                String    @default("foundation")
+    // t1 (hot) … t4 (target, no relationship)
+    tier                String?
+    // no_contact | early | active | advanced | committed | dead
+    relationship_status String    @default("no_contact")
+    geo_focus           String?
+    // "Design Grant Only", "Above $10M", … as written in the pipeline sheet.
+    potential_size      String?
+    // Domains whose mail belongs to this funder (JSON array of strings); never free-mail domains.
+    email_domains       Json      @default("[]")
+    materials_sent_at   DateTime?
+    last_contact_at     DateTime?
+    last_contact_note   String?
+    notes               String?
+    owner_id            String?
+    // active | draft (drafts are proposed by the AI from forwarded email and wait for review)
+    status              String    @default("active")
+    archived_at         DateTime?
+    created_at          DateTime  @default(now())
+    updated_at          DateTime  @updatedAt
+
+    owner         User?         @relation(fields: [owner_id], references: [id], onDelete: SetNull)
+    contacts      Contact[]
+    opportunities Opportunity[]
+
+    @@index([tier])
+    @@index([relationship_status])
+    @@map("funder")
+}
+
+// A person at a funder.
+model Contact {
+    id          String    @id
+    funder_id   String
+    name        String
+    title       String?
+    // Unique when present; SQLite allows many NULLs.
+    email       String?   @unique
+    notes       String?
+    archived_at DateTime?
+    created_at  DateTime  @default(now())
+    updated_at  DateTime  @updatedAt
+
+    funder Funder @relation(fields: [funder_id], references: [id], onDelete: Cascade)
+
+    @@index([funder_id])
+    @@map("contact")
+}
+
+// One of the three funding goals every opportunity counts toward.
+model Goal {
+    id                  String    @id
+    // design_grant | opex | lending_capital
+    type                String    @unique
+    name                String
+    target_amount_cents BigInt?
+    target_date         DateTime?
+    notes               String?
+    sort                Int       @default(0)
+    created_at          DateTime  @default(now())
+    updated_at          DateTime  @updatedAt
+
+    opportunities Opportunity[]
+
+    @@map("goal")
+}
+
+// One ask to one funder for one goal.
+model Opportunity {
+    id                   String    @id
+    funder_id            String
+    goal_id              String
+    name                 String
+    // identified | in_discussion | proposal | due_diligence | committed | received | lost
+    stage                String    @default("identified")
+    amount_cents         BigInt?
+    // 0–100; when null the stage's default probability applies.
+    probability_override Int?
+    expected_decision_at DateTime?
+    expected_receipt_at  DateTime?
+    received_at          DateTime?
+    next_step            String?
+    owner_id             String?
+    archived_at          DateTime?
+    created_at           DateTime  @default(now())
+    updated_at           DateTime  @updatedAt
+
+    funder Funder @relation(fields: [funder_id], references: [id], onDelete: Cascade)
+    goal   Goal   @relation(fields: [goal_id], references: [id])
+    owner  User?  @relation(fields: [owner_id], references: [id], onDelete: SetNull)
+
+    @@index([funder_id])
+    @@index([goal_id, stage])
+    @@map("opportunity")
+}
+
+// Every change to a tracked funder or opportunity field, from any source. Written only through
+// applyFieldChanges (server/utils/change-events.ts) so the Activity log is complete.
+model ChangeEvent {
+    id                  String    @id
+    // funder | opportunity
+    entity_type         String
+    entity_id           String
+    field               String
+    from_value          Json?
+    to_value            Json?
+    // manual | import | ai_email | ai_forward
+    source              String
+    // applied | pending | rejected | reverted
+    status              String
+    actor_user_id       String?
+    evidence_id         String?
+    reason              String?
+    confidence          Float?
+    resolved_at         DateTime?
+    resolved_by_user_id String?
+    created_at          DateTime  @default(now())
+
+    actor_user       User? @relation("change_event_actor", fields: [actor_user_id], references: [id], onDelete: SetNull)
+    resolved_by_user User? @relation("change_event_resolver", fields: [resolved_by_user_id], references: [id], onDelete: SetNull)
+
+    @@index([entity_type, entity_id, field])
+    @@index([status])
+    @@index([source])
+    @@map("change_event")
+}
+
+// Small app-wide settings (stage probabilities, burn settings), validated by zod in app code.
+model Setting {
+    key        String   @id
+    value      Json
+    updated_at DateTime @updatedAt
+
+    @@map("setting")
 }

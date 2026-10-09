@@ -1,0 +1,27 @@
+// Personal mailbox providers. Mail from these domains matches a funder by exact address only, never
+// by domain, and they are never stored as a funder's email domain.
+export const FREE_MAIL_DOMAINS = new Set([
+    'gmail.com',
+    'googlemail.com',
+    'outlook.com',
+    'hotmail.com',
+    'live.com',
+    'msn.com',
+    'yahoo.com',
+    'ymail.com',
+    'icloud.com',
+    'me.com',
+    'mac.com',
+    'aol.com',
+    'proton.me',
+    'protonmail.com',
+    'gmx.com',
+    'gmx.net',
+    'zoho.com',
+    'fastmail.com',
+    'hey.com',
+    'mail.com',
+    'yandex.com',
+    'qq.com',
+    '163.com',
+])

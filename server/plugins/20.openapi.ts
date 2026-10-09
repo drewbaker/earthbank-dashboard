@@ -8,7 +8,12 @@ export default defineNitroPlugin(nitroApp => {
     const components = Object.fromEntries(
         Object.entries(openapiSchemas).map(([name, schema]) => [
             name,
-            z.toJSONSchema(schema, { target: 'openapi-3.0' }),
+            // Requests are documented as the client sends them (before transforms), responses as returned.
+            z.toJSONSchema(schema, {
+                target: 'openapi-3.0',
+                io: name.endsWith('Request') ? 'input' : 'output',
+                unrepresentable: 'any',
+            }),
         ]),
     )
     nitroApp.hooks.hook('beforeResponse', (event, response) => {
