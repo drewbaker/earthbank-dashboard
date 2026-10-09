@@ -77,7 +77,7 @@ export function listUsers() {
 }
 
 /**
- * Deactivate a user and delete their sessions, in one transaction.
+ * Deactivate a user and delete their sessions and Gmail connection, in one transaction.
  *
  * @param input.userId - The user to deactivate.
  * @param input.deactivatedAt - When it happened.
@@ -87,6 +87,7 @@ export async function deactivateUser({ userId, deactivatedAt }: { userId: string
     const [user] = await db().$transaction([
         db().user.update({ where: { id: userId }, data: { deactivated_at: deactivatedAt } }),
         db().session.deleteMany({ where: { user_id: userId } }),
+        db().mailboxConnection.deleteMany({ where: { user_id: userId } }),
     ])
     return user
 }

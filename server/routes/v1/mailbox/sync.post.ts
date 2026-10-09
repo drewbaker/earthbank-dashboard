@@ -1,7 +1,8 @@
 import { setResponseStatus } from 'h3'
 import { defineRouteMeta } from 'nitropack/runtime'
 import { findMailboxConnectionForUser } from '#server/database/mailboxes.ts'
-import { defineApiHandler } from '#server/utils/api.ts'
+import { defineApiHandler, requestIp } from '#server/utils/api.ts'
+import { recordAudit } from '#server/utils/audit.ts'
 import { requireUser } from '#server/utils/auth.ts'
 import { config } from '#server/utils/config.ts'
 import { badRequest } from '#server/utils/errors.ts'
@@ -29,6 +30,13 @@ export default defineApiHandler(async event => {
         throw badRequest({ message: 'Connect Gmail first.', code: 'mailbox_not_connected' })
     }
     await enqueueMailboxSync({ mailboxConnectionId: connection.id })
+    await recordAudit({
+        actor: ctx.actor,
+        action: 'mailbox.sync_requested',
+        entityType: 'mailbox_connection',
+        entityId: connection.id,
+        ip: requestIp({ event }),
+    })
     setResponseStatus(event, 202)
     return { queued: true }
 })
