@@ -225,12 +225,14 @@ function findPart({
 }
 
 /** Google's per-user Gmail quota is spent fast by a first sync; this keeps under it. */
-const GMAIL_MIN_INTERVAL_MS = 100
+const GMAIL_MIN_INTERVAL_MS = 250
+const GMAIL_MAX_INTERVAL_MS = 4000
 const GMAIL_RETRY_DELAYS_MS = [15_000, 30_000, 60_000, 60_000, 60_000]
 
 /**
  * Pace Gmail API calls (at most one per `minIntervalMs`) and wait and retry when Google says the
- * per-minute quota or rate limit was hit, instead of failing the whole sync.
+ * per-minute quota or rate limit was hit, instead of failing the whole sync. Each rate-limit hit also
+ * halves the pace for the rest of the run, since accounts' quotas differ.
  *
  * @param input.minIntervalMs - Least time between calls.
  * @param input.retryDelaysMs - Waits before each retry after a rate-limit error.
@@ -250,6 +252,7 @@ export function createGmailThrottle({
     now?: () => number
 }) {
     let nextCallAt = 0
+    let interval = minIntervalMs
     return {
         /**
          * Run one Gmail call, paced and retried on rate limits.
@@ -264,7 +267,7 @@ export function createGmailThrottle({
                 if (delay > 0) {
                     await wait(delay)
                 }
-                nextCallAt = now() + minIntervalMs
+                nextCallAt = now() + interval
                 try {
                     return await call()
                 } catch (error) {
@@ -272,7 +275,14 @@ export function createGmailThrottle({
                     if (retryDelay === undefined || !isGmailRateLimit({ error })) {
                         throw error
                     }
-                    console.info('[mail] Gmail rate limit, waiting', retryDelay / 1000, 'seconds')
+                    interval = Math.min(GMAIL_MAX_INTERVAL_MS, Math.max(interval * 2, 100))
+                    console.info(
+                        '[mail] Gmail rate limit, waiting',
+                        retryDelay / 1000,
+                        'seconds; now',
+                        interval,
+                        'ms between calls',
+                    )
                     await wait(retryDelay)
                 }
             }

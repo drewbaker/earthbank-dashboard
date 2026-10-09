@@ -4,16 +4,23 @@ import {
     findInboundAddressByTokenHash,
     replaceInboundAddress,
 } from '#server/database/inbound-addresses.ts'
+import { hasAuditEntry } from '#server/database/audit-logs.ts'
 import { listFunderMatchData } from '#server/database/funders.ts'
+import { findActiveUserByEmail } from '#server/database/users.ts'
 import type { AiProvider } from '#server/utils/ai/provider.ts'
 import { config } from '#server/utils/config.ts'
+import { recordAudit } from '#server/utils/audit.ts'
 import { decryptSecret, encryptSecret, hashToken } from '#server/utils/crypto.ts'
+import { renderEmail } from '#server/utils/email/layout.ts'
+import { enqueueEmail } from '#server/utils/jobs/enqueue.ts'
 import { proposeDraftFunder, processFunderEmail } from '#server/utils/mail/classify.ts'
 import type { ProcessEmailResult } from '#server/utils/mail/classify.ts'
+import type { InstructionAction } from '#server/utils/mail/instructions.ts'
+import { carryOutEmailInstructions } from '#server/utils/mail/instructions.ts'
 import { buildFunderMatchIndex, matchFunder } from '#server/utils/mail/matching.ts'
-import { htmlToText, stripQuotedText, unwrapForwardedMessage } from '#server/utils/mail/normalize.ts'
+import { htmlToText, senderNote, stripQuotedText, unwrapForwardedMessage } from '#server/utils/mail/normalize.ts'
 import type { IncomingEmail } from '#server/utils/mail/types.ts'
-import { emailDomain } from '#shared/utils/email-addresses.ts'
+import { emailDomain, normalizeEmailAddress } from '#shared/utils/email-addresses.ts'
 import { randomBytes } from 'node:crypto'
 
 const LOCAL_PART = 'updates'
@@ -26,6 +33,8 @@ export type ReceivedEmail = {
     subject: string
     text: string | null
     html: string | null
+    /** Header name → value, for checking the email is authentic. */
+    headers: Record<string, string> | null
     createdAt: string
 }
 
@@ -78,53 +87,237 @@ export function forwardingTokenFrom({ recipients, domain }: { recipients: string
     return null
 }
 
+export type InboundEmailResult =
+    | { kind: 'ignored'; reason: string }
+    | { kind: 'instructions'; actions: InstructionAction[]; isVerified: boolean }
+    | { kind: 'forward'; result: ProcessEmailResult }
+
 /**
- * Process an email someone forwarded to their private address: work out the original message, then
- * update the funder it's about, or draft a new funder when the sender isn't known.
+ * Handle an email sent to the dashboard: dashboard@theearthbank.org, or a person's private address.
  *
- * Any sender may forward (the point is mail that reached a personal address); the secret token in
- * the address is what proves it came from a team member.
+ * Who sent it: a private address's secret token proves it; for the shared dashboard address the
+ * sender must be a team member and the email must pass DMARC/DKIM for an Earth Bank domain.
+ *
+ * What it is: if they wrote something above (or instead of) a forwarded message, it's instructions
+ * ("add this funder", "mark UBS approved"), which the AI carries out as them and then emails them
+ * what it did. A plain forward updates the funder it's about, or drafts a new funder.
  *
  * @param input.receivedEmailId - Resend's id for the received email.
  * @param input.ai - The AI provider.
+ * @param input.today - Today's date for the team (YYYY-MM-DD).
  * @param input.fetchReceivedEmail - Loads the email (Resend by default; tests pass a fake).
- * @returns What happened, or null when the address isn't a live forwarding address.
+ * @returns What happened.
  */
-export async function processForwardedEmail({
+export async function processInboundEmail({
     receivedEmailId,
     ai,
+    today,
     fetchReceivedEmail = fetchFromResend,
 }: {
     receivedEmailId: string
     ai: AiProvider
+    today: string
     fetchReceivedEmail?: (input: { id: string }) => Promise<ReceivedEmail>
-}): Promise<ProcessEmailResult | null> {
+}): Promise<InboundEmailResult> {
     const received = await fetchReceivedEmail({ id: receivedEmailId })
-    const token = forwardingTokenFrom({
-        recipients: [...received.to, ...received.receivedFor],
-        domain: config.inboundEmailDomain,
-    })
-    const inboundAddress = token ? await findInboundAddressByTokenHash({ tokenHash: hashToken({ token }) }) : null
-    if (!inboundAddress || inboundAddress.user.deactivated_at) {
-        console.info('[mail] forwarded email to an unknown or revoked address', receivedEmailId)
-        return null
+    const sender = await identifySender({ received })
+    if (!sender) {
+        console.info('[mail] inbound email from an unknown sender or address', receivedEmailId)
+        return { kind: 'ignored', reason: 'unknown sender' }
     }
 
-    const email = originalOfForward({ received })
-    if (!email || config.internalEmailDomains.includes(emailDomain({ email: email.from }))) {
-        // Without a recognizable forwarded header the only sender we know is the person who forwarded
-        // it, which would wrongly become a funder contact.
-        console.info('[mail] forwarded email had no recognizable original sender', receivedEmailId)
+    const body = received.text ?? (received.html ? htmlToText({ html: received.html }) : '')
+    const note = senderNote({ text: body })
+    const forwarded = originalOfForward({ received })
+    const hasInstructions = note.replace(/^(fyi|fwd?:?|see below|thanks?)[\s.!]*$/i, '').length > 0
+
+    if (!hasInstructions) {
+        if (!forwarded || config.internalEmailDomains.includes(emailDomain({ email: forwarded.from }))) {
+            // Without a recognizable forwarded header the only sender we know is the person who
+            // forwarded it, which would wrongly become a funder contact.
+            console.info('[mail] forwarded email had no recognizable original sender', receivedEmailId)
+            return { kind: 'ignored', reason: 'nothing to do' }
+        }
+        const index = buildFunderMatchIndex({
+            funders: await listFunderMatchData(),
+            internalDomains: config.internalEmailDomains,
+        })
+        const funderId = matchFunder({
+            index,
+            from: forwarded.from,
+            recipients: [...forwarded.to, ...forwarded.cc],
+        })
+        const result = funderId
+            ? await processFunderEmail({
+                  email: forwarded,
+                  funderId,
+                  source: 'forward',
+                  mailboxUserId: sender.user.id,
+                  ai,
+              })
+            : await proposeDraftFunder({ email: forwarded, forwardedByUserId: sender.user.id, ai })
+        return { kind: 'forward', result }
+    }
+
+    // Webhooks can be delivered twice; instructions must only ever be carried out once.
+    if (await hasAuditEntry({ action: INSTRUCTION_AUDIT_ACTION, entityId: received.id })) {
+        return { kind: 'ignored', reason: 'already processed' }
+    }
+    const subject = received.subject || '(no subject)'
+    let reply: string
+    let actions: InstructionAction[] = []
+    if (sender.isVerified) {
+        const outcome = await carryOutEmailInstructions({
+            sender: { id: sender.user.id, name: sender.user.name, email: sender.user.email },
+            subject,
+            instructions: note,
+            forwarded:
+                forwarded && !config.internalEmailDomains.includes(emailDomain({ email: forwarded.from }))
+                    ? forwarded
+                    : null,
+            ai,
+            today,
+        })
+        reply = outcome.reply
+        actions = outcome.actions
+    } else {
+        reply =
+            "This email couldn't be verified as coming from you (it didn't pass the domain's DMARC/DKIM checks), so nothing was changed. If you sent it, try again from your Earth Bank Gmail. If you didn't, someone may be sending email in your name."
+    }
+    await recordAudit({
+        actor: { type: 'user', userId: sender.user.id },
+        action: INSTRUCTION_AUDIT_ACTION,
+        entityType: 'inbound_email',
+        entityId: received.id,
+        changes: { is_verified: sender.isVerified, actions: actions.map(action => action.description) },
+    })
+    await replyToSender({ to: sender.user.email, subject, reply, actions })
+    return { kind: 'instructions', actions, isVerified: sender.isVerified }
+}
+
+/** @deprecated Old name, kept so queued jobs and imports keep working. */
+export const processForwardedEmail = processInboundEmail
+
+const INSTRUCTION_AUDIT_ACTION = 'email_instruction.processed'
+
+/**
+ * Who sent an inbound email, and whether that's proven.
+ *
+ * @param input.received - The received email.
+ * @returns The team member and whether the email is verified, or null when it isn't from the team.
+ */
+async function identifySender({ received }: { received: ReceivedEmail }) {
+    const recipients = [...received.to, ...received.receivedFor].map(address => address.toLowerCase())
+    const token = forwardingTokenFrom({ recipients, domain: config.inboundEmailDomain })
+    if (token) {
+        const inboundAddress = await findInboundAddressByTokenHash({ tokenHash: hashToken({ token }) })
+        return inboundAddress && !inboundAddress.user.deactivated_at
+            ? { user: inboundAddress.user, isVerified: true }
+            : null
+    }
+    if (!recipients.some(address => isDashboardAddress({ address }))) {
         return null
     }
-    const index = buildFunderMatchIndex({
-        funders: await listFunderMatchData(),
+    // A Google Group rewrites From to the group's own address; the person is then in these headers.
+    const fromAddress = normalizeEmailAddress({ email: received.from }) ?? ''
+    const senderAddress = isDashboardAddress({ address: fromAddress })
+        ? (normalizeEmailAddress({
+              email: headerValue({ headers: received.headers, name: 'x-original-sender' }) ?? '',
+          }) ?? normalizeEmailAddress({ email: headerValue({ headers: received.headers, name: 'reply-to' }) ?? '' }))
+        : fromAddress
+    if (!senderAddress) {
+        return null
+    }
+    const user = await findActiveUserByEmail({
+        email: senderAddress,
+        workspaceDomain: config.googleWorkspaceDomain,
         internalDomains: config.internalEmailDomains,
     })
-    const funderId = matchFunder({ index, from: email.from, recipients: [...email.to, ...email.cc] })
-    return funderId
-        ? processFunderEmail({ email, funderId, source: 'forward', mailboxUserId: inboundAddress.user_id, ai })
-        : proposeDraftFunder({ email, forwardedByUserId: inboundAddress.user_id, ai })
+    return user ? { user, isVerified: isAuthenticatedEarthBankEmail({ headers: received.headers }) } : null
+}
+
+/**
+ * Whether an address is the shared dashboard address, as the team writes it or as Workspace routes
+ * it on to the receiving domain (dashboard@mail.theearthbank.org).
+ *
+ * @param input.address - Lowercased address.
+ * @returns True for the dashboard address.
+ */
+export function isDashboardAddress({ address }: { address: string }) {
+    const [local] = config.dashboardEmailAddress.split('@')
+    return address === config.dashboardEmailAddress || address === `${local}@${config.inboundEmailDomain}`
+}
+
+/**
+ * Whether the receiving server found the email genuinely from an Earth Bank domain: an
+ * Authentication-Results header with `dmarc=pass` (or `dkim=pass`) for one of Earth Bank's domains.
+ * Without it a "From: leslie@theearthbank.org" could be forged, so instructions aren't carried out.
+ *
+ * @param input.headers - The email's headers.
+ * @returns True when authenticated.
+ */
+export function isAuthenticatedEarthBankEmail({ headers }: { headers: Record<string, string> | null }) {
+    const results = headerValue({ headers, name: 'authentication-results' }) ?? ''
+    return config.internalEmailDomains.some(domain => {
+        const escaped = domain.replace(/\./g, '\\.')
+        return (
+            new RegExp(`dmarc=pass[^;]*header\\.from=${escaped}`, 'i').test(results) ||
+            new RegExp(`dkim=pass[^;]*header\\.(d|i)=@?${escaped}`, 'i').test(results)
+        )
+    })
+}
+
+/**
+ * Case-insensitive header lookup.
+ *
+ * @param input.headers - Headers, or null.
+ * @param input.name - Header name.
+ * @returns The value, or null.
+ */
+function headerValue({ headers, name }: { headers: Record<string, string> | null; name: string }) {
+    if (!headers) {
+        return null
+    }
+    const key = Object.keys(headers).find(candidate => candidate.toLowerCase() === name)
+    return key ? (headers[key] ?? null) : null
+}
+
+/**
+ * Email the sender what the assistant did, with links.
+ *
+ * @param input.to - The sender.
+ * @param input.subject - Their email's subject.
+ * @param input.reply - The assistant's reply.
+ * @param input.actions - What it did.
+ * @returns Resolves once queued.
+ */
+async function replyToSender({
+    to,
+    subject,
+    reply,
+    actions,
+}: {
+    to: string
+    subject: string
+    reply: string
+    actions: InstructionAction[]
+}) {
+    const { html, text } = renderEmail({
+        heading: actions.length ? 'Done' : 'Nothing changed yet',
+        paragraphs: [
+            ...reply.split(/\n{2,}|\n/).filter(Boolean),
+            ...actions.map(action => `• ${action.description}: ${action.url}`),
+            'Every change is on the Activity page, where it can be reverted.',
+        ],
+        buttonLabel: 'Open Activity',
+        buttonUrl: `${config.appUrl}/activity`,
+    })
+    await enqueueEmail({
+        to,
+        subject: subject.toLowerCase().startsWith('re:') ? subject : `Re: ${subject}`,
+        html,
+        text,
+    })
 }
 
 /**
@@ -172,6 +365,7 @@ async function fetchFromResend({ id }: { id: string }): Promise<ReceivedEmail> {
         subject: data.subject ?? '',
         text: data.text,
         html: data.html,
+        headers: data.headers ?? null,
         createdAt: data.created_at,
     }
 }

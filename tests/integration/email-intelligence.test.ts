@@ -267,6 +267,7 @@ describe('forwarded email', () => {
         const result = await processForwardedEmail({
             receivedEmailId: 'rcv_1',
             ai: provider,
+            today: '2026-10-07',
             fetchReceivedEmail: async () => ({
                 id: 'rcv_1',
                 from: 'drew.personal@gmail.com',
@@ -275,10 +276,11 @@ describe('forwarded email', () => {
                 subject: 'Fwd: Earth Bank',
                 text: 'FYI\n\n---------- Forwarded message ---------\nFrom: Jane Doe <jane@northwind.org>\nDate: Tue, Oct 6, 2026 at 4:12 PM\nSubject: Earth Bank\nTo: <drew.personal@gmail.com>\n\nWe would love to talk about a $250k grant.',
                 html: null,
+                headers: null,
                 createdAt: '2026-10-07T10:00:00Z',
             }),
         })
-        expect(result).toMatchObject({ status: 'draft_funder_created' })
+        expect(result).toMatchObject({ kind: 'forward', result: { status: 'draft_funder_created' } })
         const draft = await db().funder.findFirstOrThrow({
             where: { name: 'Northwind Climate Fund' },
             include: { contacts: true, opportunities: true },
@@ -296,6 +298,7 @@ describe('forwarded email', () => {
         const result = await processForwardedEmail({
             receivedEmailId: 'rcv_2',
             ai: provider,
+            today: '2026-10-07',
             fetchReceivedEmail: async () => ({
                 id: 'rcv_2',
                 from: 'someone@example.org',
@@ -304,10 +307,11 @@ describe('forwarded email', () => {
                 subject: 'Hi',
                 text: 'Hello',
                 html: null,
+                headers: null,
                 createdAt: '2026-10-07T10:00:00Z',
             }),
         })
-        expect(result).toBeNull()
+        expect(result).toMatchObject({ kind: 'ignored' })
     })
 })
 

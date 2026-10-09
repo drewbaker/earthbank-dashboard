@@ -39,6 +39,7 @@ export default defineApiHandler(async event => {
                   sync: serializeSyncStatus({ connection, now: new Date() }),
               }
             : null,
+        dashboard_address: config.dashboardEmailAddress,
         forwarding_address: await forwardingAddressFor({ userId: ctx.user.id }),
     }
 })

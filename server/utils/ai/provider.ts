@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod'
+import { betaZodOutputFormat, betaZodTool } from '@anthropic-ai/sdk/helpers/beta/zod'
 import type { z } from 'zod'
 import { config } from '#server/utils/config.ts'
 
@@ -8,9 +8,21 @@ export type StructuredResult<Output> =
 
 export type AiEffort = 'low' | 'medium' | 'high'
 
+/** An action the AI may take, with a zod-validated input and a function that does it. */
+export type AiTool = {
+    name: string
+    description: string
+    inputSchema: z.ZodObject
+    run: (input: never) => Promise<string>
+}
+
 export interface AiProvider {
     name: string
     model: string
+    /**
+     * Let the model work through a request using tools; returns its final written answer.
+     */
+    runWithTools(input: { instructions: string; prompt: string; tools: AiTool[]; maxSteps?: number }): Promise<string>
     completeStructured<Schema extends z.ZodType>(input: {
         instructions: string
         reference?: string
@@ -87,6 +99,48 @@ export class AnthropicProvider implements AiProvider {
             return { status: 'unparseable', output: null, model: response.model }
         }
         return { status: 'ok', output: response.parsed_output as z.infer<Schema>, model: response.model }
+    }
+
+    /**
+     * Work through a request with tools (the SDK's tool runner calls them and feeds results back).
+     *
+     * @param input.instructions - System prompt.
+     * @param input.prompt - The request.
+     * @param input.tools - Actions the model may take.
+     * @param input.maxSteps - Most model turns before stopping.
+     * @returns The model's final text.
+     */
+    async runWithTools({
+        instructions,
+        prompt,
+        tools,
+        maxSteps = 12,
+    }: {
+        instructions: string
+        prompt: string
+        tools: AiTool[]
+        maxSteps?: number
+    }) {
+        const message = await this.client.beta.messages.toolRunner({
+            model: this.model,
+            max_tokens: 8000,
+            max_iterations: maxSteps,
+            system: instructions,
+            output_config: { effort: 'medium' },
+            tools: tools.map(tool =>
+                betaZodTool({
+                    name: tool.name,
+                    description: tool.description,
+                    inputSchema: tool.inputSchema,
+                    run: input => tool.run(input as never),
+                }),
+            ),
+            messages: [{ role: 'user', content: prompt }],
+        })
+        return message.content
+            .flatMap(block => (block.type === 'text' ? [block.text] : []))
+            .join('\n')
+            .trim()
     }
 }
 

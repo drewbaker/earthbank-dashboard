@@ -214,3 +214,19 @@ export async function listFunderMatchData() {
 export function countDraftFunders() {
     return db().funder.count({ where: { status: 'draft', archived_at: null } })
 }
+
+/**
+ * Every live funder with its contacts and opportunities, for the email-instruction assistant to search.
+ *
+ * @returns Funders.
+ */
+export function listFundersWithDetails() {
+    return db().funder.findMany({
+        where: { archived_at: null },
+        include: {
+            contacts: { where: { archived_at: null } },
+            opportunities: { where: { archived_at: null }, include: { goal: true } },
+        },
+        orderBy: { name: 'asc' },
+    })
+}

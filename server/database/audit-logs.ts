@@ -40,3 +40,14 @@ export function createAuditLogRow({
         },
     })
 }
+
+/**
+ * Whether an audit entry exists, e.g. to make sure an emailed instruction is acted on only once.
+ *
+ * @param input.action - Audit action, e.g. `email_instruction.processed`.
+ * @param input.entityId - The entity it's about.
+ * @returns True when found.
+ */
+export async function hasAuditEntry({ action, entityId }: { action: string; entityId: string }) {
+    return (await db().auditLog.count({ where: { action, entity_id: entityId } })) > 0
+}

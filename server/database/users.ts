@@ -58,6 +58,31 @@ export function findUser({ userId }: { userId: string }) {
 }
 
 /**
+ * The active team member an email address belongs to, including their alias on Earth Bank's other
+ * domains (drew@resolvefund.org is drew@theearthbank.org).
+ *
+ * @param input.email - Lowercased address.
+ * @param input.workspaceDomain - The primary domain, e.g. `theearthbank.org`.
+ * @param input.internalDomains - All of Earth Bank's domains.
+ * @returns The user, or null.
+ */
+export async function findActiveUserByEmail({
+    email,
+    workspaceDomain,
+    internalDomains,
+}: {
+    email: string
+    workspaceDomain: string
+    internalDomains: string[]
+}) {
+    const [local, domain] = email.toLowerCase().split('@')
+    if (!local || !domain || !internalDomains.includes(domain)) {
+        return null
+    }
+    return db().user.findFirst({ where: { email: `${local}@${workspaceDomain}`, deactivated_at: null } })
+}
+
+/**
  * Find a user by Google subject id.
  *
  * @param input.googleSub - Google's stable subject id.

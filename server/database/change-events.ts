@@ -205,7 +205,14 @@ export async function latestManualChangeAt({
     field: string
 }) {
     const latest = await db().changeEvent.findFirst({
-        where: { entity_type: entityType, entity_id: entityId, field, source: 'manual', status: 'applied' },
+        // Instructions someone emailed in are their own edits too, so they also win over AI reading mail.
+        where: {
+            entity_type: entityType,
+            entity_id: entityId,
+            field,
+            source: { in: ['manual', 'ai_instruction'] },
+            status: 'applied',
+        },
         orderBy: { id: 'desc' },
         select: { created_at: true },
     })

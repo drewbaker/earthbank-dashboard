@@ -17,7 +17,7 @@ defineRouteMeta({
             {
                 name: 'source',
                 in: 'query',
-                schema: { type: 'string', enum: ['manual', 'import', 'ai_email', 'ai_forward'] },
+                schema: { type: 'string', enum: ['manual', 'import', 'ai_email', 'ai_forward', 'ai_instruction'] },
             },
             {
                 name: 'status',

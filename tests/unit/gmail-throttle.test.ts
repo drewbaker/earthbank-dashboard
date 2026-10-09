@@ -79,3 +79,27 @@ describe('isGmailRateLimit', () => {
         expect(isGmailRateLimit({ error: new Error('invalid_grant') })).toBe(false)
     })
 })
+
+describe('createGmailThrottle pacing', () => {
+    it('slows down after a rate limit', async () => {
+        const clock = fakeClock()
+        const throttle = createGmailThrottle({
+            minIntervalMs: 100,
+            retryDelaysMs: [1000],
+            wait: clock.wait,
+            now: clock.now,
+        })
+        let attempts = 0
+        await throttle.run(async () => {
+            attempts++
+            if (attempts === 1) {
+                throw Object.assign(new Error('Rate Limit Exceeded'), { status: 429 })
+            }
+        })
+        clock.waits.length = 0
+        await throttle.run(async () => undefined)
+        await throttle.run(async () => undefined)
+        // Back off once more after the retry, then twice the original spacing.
+        expect(clock.waits.at(-1)).toBe(200)
+    })
+})

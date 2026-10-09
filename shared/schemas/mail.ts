@@ -36,6 +36,8 @@ export const MailboxStatus = z.object({
             sync: MailboxSyncStatus,
         })
         .nullable(),
+    /** The shared address the team emails instructions and forwards to. */
+    dashboard_address: z.string(),
     forwarding_address: z.string(),
 })
 export type MailboxStatus = z.infer<typeof MailboxStatus>

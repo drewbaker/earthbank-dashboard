@@ -194,13 +194,14 @@ describe('staff addresses', () => {
         expect(contacts.map(contact => contact.email)).toEqual(['croth@rockfound.org', 'tbelazis@rockfound.org'])
     })
 
-    it('a forward without a recognizable original is skipped, not attributed to the forwarder', async () => {
+    it('a note with no forwarded email goes to the assistant as instructions, not to funder matching', async () => {
         const { processForwardedEmail, regenerateForwardingAddress } = await import('#server/utils/mail/inbound.ts')
         const address = await regenerateForwardingAddress({ userId })
         const { provider, prompts } = fakeAi({ answers: [] })
         const result = await processForwardedEmail({
             receivedEmailId: 'rcv_plain',
             ai: provider,
+            today: '2026-10-01',
             fetchReceivedEmail: async () => ({
                 id: 'rcv_plain',
                 from: 'steve.personal@gmail.com',
@@ -209,11 +210,15 @@ describe('staff addresses', () => {
                 subject: 'note',
                 text: 'Just a note to myself',
                 html: null,
+                headers: null,
                 createdAt: '2026-10-01T00:00:00Z',
             }),
         })
-        expect(result).toBeNull()
-        expect(prompts).toEqual([])
+        // Read as instructions; with nothing to do, nothing is attributed to the person who sent it.
+        expect(result).toMatchObject({ kind: 'instructions', actions: [] })
+        expect(prompts[0]).toContain('Just a note to myself')
+        const { db } = await import('#server/utils/db.ts')
+        expect(await db().contact.count({ where: { email: 'steve.personal@gmail.com' } })).toBe(0)
     })
 })
 

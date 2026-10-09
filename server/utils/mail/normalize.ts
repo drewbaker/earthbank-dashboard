@@ -79,11 +79,7 @@ export function parseAddressList({ header }: { header: string | null | undefined
  * @returns The original sender, subject, date and the text after the header block, or null.
  */
 export function unwrapForwardedMessage({ text }: { text: string }) {
-    // Gmail, Apple Mail, older Outlook ("Original Message") and newer Outlook (an underscore rule
-    // followed by a "From:" line).
-    const marker = text.search(
-        /-{3,}\s*Forwarded message\s*-{3,}|Begin forwarded message:|-{3,}\s*Original Message\s*-{3,}|_{10,}\s*\n\s*\*?From:/i,
-    )
+    const marker = forwardMarkerIndex({ text })
     if (marker === -1) {
         return null
     }
@@ -107,4 +103,29 @@ export function unwrapForwardedMessage({ text }: { text: string }) {
             .join('\n')
             .trim(),
     }
+}
+
+/**
+ * Where a forwarded message starts in a body: Gmail, Apple Mail, older Outlook ("Original Message")
+ * and newer Outlook (an underscore rule followed by a "From:" line).
+ *
+ * @param input.text - Plain-text body.
+ * @returns The index, or -1 when there's no forwarded message.
+ */
+export function forwardMarkerIndex({ text }: { text: string }) {
+    return text.search(
+        /-{3,}\s*Forwarded message\s*-{3,}|Begin forwarded message:|-{3,}\s*Original Message\s*-{3,}|_{10,}\s*\n\s*\*?From:/i,
+    )
+}
+
+/**
+ * What the sender wrote themselves: the text above any forwarded message, without quoted replies
+ * or their signature.
+ *
+ * @param input.text - Plain-text body.
+ * @returns Their note (empty when they only forwarded).
+ */
+export function senderNote({ text }: { text: string }) {
+    const marker = forwardMarkerIndex({ text })
+    return stripQuotedText({ text: marker === -1 ? text : text.slice(0, marker) }).trim()
 }

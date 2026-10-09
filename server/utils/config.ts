@@ -102,6 +102,10 @@ export const config = {
     get defaultTimeZone() {
         return env('APP_TIME_ZONE', 'America/Los_Angeles')
     },
+    /** The one address the team emails instructions and forwards to (Workspace routes it to Resend). */
+    get dashboardEmailAddress() {
+        return env('DASHBOARD_EMAIL_ADDRESS', 'dashboard@theearthbank.org').toLowerCase()
+    },
     get inboundEmailDomain() {
         return env('INBOUND_EMAIL_DOMAIN', 'mail.theearthbank.org').toLowerCase()
     },

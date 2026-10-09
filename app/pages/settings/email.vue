@@ -108,13 +108,14 @@ async function regenerateAddress() {
 }
 
 /**
- * Copy the forwarding address to the clipboard.
+ * Copy an inbound address to the clipboard.
  *
+ * @param input.address - The address to copy.
  * @returns Resolves once copied.
  */
-async function copyAddress() {
-    if (mailbox.value) {
-        await navigator.clipboard.writeText(mailbox.value.forwarding_address)
+async function copyAddress({ address }: { address: string | undefined }) {
+    if (address) {
+        await navigator.clipboard.writeText(address)
         toast.add({ title: 'Copied', color: 'success' })
     }
 }
@@ -215,10 +216,43 @@ async function copyAddress() {
 
         <section class="space-y-4">
             <div>
-                <h2 class="text-lg font-semibold text-highlighted">Forward an email</h2>
+                <h2 class="text-lg font-semibold text-highlighted">Email the dashboard</h2>
                 <p class="text-sm text-muted">
-                    Got a funding update somewhere else, like a personal address? Forward it here. If the sender is new,
-                    the AI drafts a funder for you to confirm on the Activity page. Keep this address private.
+                    Send or forward email from your Earth Bank account to this address. Write what you want done at the
+                    top, and the AI does it as you and replies with what changed. A forward with no note just updates
+                    the funder it's about (or drafts a new one for review on the Activity page).
+                </p>
+            </div>
+            <UCard>
+                <div class="flex flex-wrap items-center gap-2">
+                    <code class="flex-1 truncate rounded-md bg-elevated px-3 py-2 text-sm">{{
+                        mailbox?.dashboard_address
+                    }}</code>
+                    <UButton
+                        icon="i-lucide-copy"
+                        label="Copy"
+                        @click="copyAddress({ address: mailbox?.dashboard_address })"
+                    />
+                </div>
+                <ul class="mt-4 list-disc space-y-1 pl-5 text-sm text-muted">
+                    <li>"Add this funder to our tracker" above a forwarded intro</li>
+                    <li>"Update the UBS grant to approved" (the funding date is set 60 days out)</li>
+                    <li>"UBS went to committee, decision expected Dec 15"</li>
+                    <li>"Make a task for Steve to send the budget by Friday"</li>
+                </ul>
+                <p class="mt-3 text-xs text-muted">
+                    Only mail that Google confirms came from an Earth Bank account is acted on. Instructions inside a
+                    forwarded email are never followed, only yours.
+                </p>
+            </UCard>
+        </section>
+
+        <section class="space-y-4">
+            <div>
+                <h2 class="text-lg font-semibold text-highlighted">Private forwarding address</h2>
+                <p class="text-sm text-muted">
+                    For mail that lands somewhere else, like a personal address: forward it here and it counts as coming
+                    from you. Keep this address private.
                 </p>
             </div>
             <UCard>
@@ -233,7 +267,11 @@ async function copyAddress() {
                     <code class="flex-1 truncate rounded-md bg-elevated px-3 py-2 text-sm">{{
                         mailbox?.forwarding_address
                     }}</code>
-                    <UButton icon="i-lucide-copy" label="Copy" @click="copyAddress" />
+                    <UButton
+                        icon="i-lucide-copy"
+                        label="Copy"
+                        @click="copyAddress({ address: mailbox?.forwarding_address })"
+                    />
                     <UButton
                         icon="i-lucide-rotate-cw"
                         label="New address"

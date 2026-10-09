@@ -94,7 +94,7 @@ export const FUNDER_KIND_LABELS: Record<FunderKind, string> = {
 export const FUNDER_STATUSES = ['active', 'draft'] as const
 export type FunderStatus = (typeof FUNDER_STATUSES)[number]
 
-export const CHANGE_SOURCES = ['manual', 'import', 'ai_email', 'ai_forward'] as const
+export const CHANGE_SOURCES = ['manual', 'import', 'ai_email', 'ai_forward', 'ai_instruction'] as const
 export type ChangeSource = (typeof CHANGE_SOURCES)[number]
 
 export const CHANGE_SOURCE_LABELS: Record<ChangeSource, string> = {
@@ -102,6 +102,7 @@ export const CHANGE_SOURCE_LABELS: Record<ChangeSource, string> = {
     import: 'Spreadsheet import',
     ai_email: 'AI from email',
     ai_forward: 'AI from forwarded email',
+    ai_instruction: 'Instruction by email',
 }
 
 export const CHANGE_STATUSES = ['applied', 'pending', 'rejected', 'reverted'] as const

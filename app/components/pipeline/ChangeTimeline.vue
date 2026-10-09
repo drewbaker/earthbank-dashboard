@@ -25,6 +25,7 @@ const SOURCE_ICONS: Record<ChangeEvent['source'], string> = {
     import: 'i-lucide-file-spreadsheet',
     ai_email: 'i-lucide-sparkles',
     ai_forward: 'i-lucide-forward',
+    ai_instruction: 'i-lucide-mail-check',
 }
 
 const STATUS_BADGES: Record<ChangeEvent['status'], { label: string; color: 'warning' | 'neutral' | 'error' } | null> = {
