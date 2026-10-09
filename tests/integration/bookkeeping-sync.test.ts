@@ -43,8 +43,8 @@ const TRANSACTIONS = [
         account: { _id: 'acc_checking' },
         counterParty: { accountName: 'Gusto' },
         entries: [
-            { amount: 42_000, type: 'CREDIT', isMain: true, parentCategory: 'CURRENT_ASSET' },
-            { amount: 42_000, type: 'DEBIT', isMain: false, parentCategory: 'EXPENSE', category: { name: 'Payroll' } },
+            { amount: 42_000, type: 'DEBIT', isMain: true, parentCategory: 'EXPENSE', category: { name: 'Payroll' } },
+            { amount: 42_000, type: 'CREDIT', isMain: false, parentCategory: 'CURRENT_ASSET' },
         ],
     },
     {
@@ -54,8 +54,8 @@ const TRANSACTIONS = [
         transactionDate: '2026-09-20',
         account: { _id: 'acc_checking' },
         entries: [
-            { amount: 100_000, type: 'DEBIT', isMain: true, parentCategory: 'CURRENT_ASSET' },
-            { amount: 100_000, type: 'CREDIT', isMain: false, parentCategory: 'INCOME', category: { name: 'Grants' } },
+            { amount: 100_000, type: 'CREDIT', isMain: true, parentCategory: 'INCOME', category: { name: 'Grants' } },
+            { amount: 100_000, type: 'DEBIT', isMain: false, parentCategory: 'CURRENT_ASSET' },
         ],
     },
 ]
@@ -98,30 +98,67 @@ describe('Bookeeping.ai sync', () => {
         expect(toExternalTransaction({ row: TRANSACTIONS[1] as never }).amountCents).toBe(10_000_000)
     })
 
-    it('finds the bank side and the category when entries have no isMain flag', async () => {
+    it('reads credit card spend, card payments and refunds the way Bookeeping.ai shapes them', async () => {
         const { describeEntryShapes, toExternalTransaction } =
             await import('#server/utils/bookkeeping/bookeeping-ai.ts')
         const base = { _id: 'tx', transactionDate: '2026-09-02T00:00:00.000Z', totalAmount: 1200 }
-        const rent = {
+        const cardSpend = {
             ...base,
             entries: [
-                { amount: 1200, type: 'CREDIT', parentCategory: 'CURRENT_ASSET', category: { name: 'Checking' } },
+                {
+                    amount: 1200,
+                    type: 'DEBIT',
+                    isMain: true,
+                    parentCategory: 'EXPENSE',
+                    category: { name: 'Software' },
+                },
+                { amount: 1200, type: 'CREDIT', isMain: false, parentCategory: 'CURRENT_LIABILITY' },
+            ],
+        }
+        const cardPayment = {
+            ...base,
+            entries: [
+                { amount: 1200, type: 'DEBIT', isMain: true, parentCategory: 'CURRENT_LIABILITY' },
+                { amount: 1200, type: 'CREDIT', isMain: false, parentCategory: 'CURRENT_ASSET' },
+            ],
+        }
+        const refund = {
+            ...base,
+            entries: [
+                {
+                    amount: 1200,
+                    type: 'CREDIT',
+                    isMain: true,
+                    parentCategory: 'EXPENSE',
+                    category: { name: 'Software' },
+                },
+                { amount: 1200, type: 'DEBIT', isMain: false, parentCategory: 'CURRENT_LIABILITY' },
+            ],
+        }
+        const noFlag = {
+            ...base,
+            entries: [
+                { amount: 1200, type: 'CREDIT', parentCategory: 'CURRENT_ASSET' },
                 { amount: 1200, type: 'DEBIT', parentCategory: 'EXPENSE', category: { name: 'Rent' } },
             ],
         }
-        expect(toExternalTransaction({ row: rent as never })).toMatchObject({
+        expect(toExternalTransaction({ row: cardSpend as never })).toMatchObject({
             amountCents: -120_000,
-            categoryName: 'Rent',
+            categoryName: 'Software',
             parentCategory: 'EXPENSE',
         })
-        const grant = {
-            ...base,
-            entries: [{ amount: 1200, type: 'CREDIT', parentCategory: 'INCOME', category: { name: 'Grants' } }],
-        }
-        expect(toExternalTransaction({ row: grant as never }).amountCents).toBe(120_000)
-        expect(describeEntryShapes({ rows: [rent, grant] as never })).toEqual({
-            'other:CURRENT_ASSET:CREDIT+other:EXPENSE:DEBIT': 1,
-            'other:INCOME:CREDIT': 1,
+        expect(toExternalTransaction({ row: cardPayment as never })).toMatchObject({
+            amountCents: -120_000,
+            parentCategory: 'CURRENT_LIABILITY',
+        })
+        expect(toExternalTransaction({ row: refund as never }).amountCents).toBe(120_000)
+        expect(toExternalTransaction({ row: noFlag as never })).toMatchObject({
+            amountCents: -120_000,
+            categoryName: 'Rent',
+        })
+        expect(describeEntryShapes({ rows: [cardSpend, cardPayment] as never })).toEqual({
+            'main:EXPENSE:DEBIT+other:CURRENT_LIABILITY:CREDIT': 1,
+            'main:CURRENT_LIABILITY:DEBIT+other:CURRENT_ASSET:CREDIT': 1,
         })
     })
 

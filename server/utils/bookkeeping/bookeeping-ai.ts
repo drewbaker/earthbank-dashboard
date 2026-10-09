@@ -176,29 +176,26 @@ export class BookeepingAiProvider implements BookkeepingProvider {
 }
 
 /**
- * Map a Bookeeping.ai transaction to ours. Transactions are double-entry: one entry is the bank
- * account side (a DEBIT there means money came in) and the other carries the category. The bank side
- * is the entry marked `isMain`; when that flag is missing, it's the entry booked to a current asset
- * (bank accounts are current assets). Without a bank side, the sign comes from the category entry:
- * an expense is a DEBIT there, so a CREDIT means money came in.
+ * Map a Bookeeping.ai transaction to ours. Transactions are double-entry: the entry marked `isMain`
+ * carries the category (Rent, Grants, a card payment's liability), and the other entry is the bank or
+ * card account it went through. On the category entry a DEBIT is money out (an expense, or paying down
+ * a card) and a CREDIT is money in (income, a refund). That holds for checking accounts and credit
+ * cards alike; a card payment from checking is categorized as a liability, so it isn't counted as
+ * spend twice.
  *
  * @param input.row - The validated payload.
- * @returns The transaction, signed from the bank account's view.
+ * @returns The transaction, signed from the account's view.
  */
 export function toExternalTransaction({ row }: { row: z.infer<typeof TransactionPayload> }): ExternalTransaction {
     const entries = row.entries ?? []
-    const bankEntry =
+    const categoryEntry =
         entries.find(entry => entry.isMain) ??
-        (entries.length > 1 ? entries.find(entry => entryParentCategory({ entry }) === BANK_PARENT_CATEGORY) : null) ??
+        entries.find(entry => !ACCOUNT_PARENT_CATEGORIES.has(entryParentCategory({ entry }) ?? '')) ??
+        entries[0] ??
         null
-    const categoryEntry = entries.find(entry => entry !== bankEntry) ?? null
     const parentCategory = categoryEntry ? entryParentCategory({ entry: categoryEntry }) : null
-    const amount = Math.abs(bankEntry?.amount ?? categoryEntry?.amount ?? row.totalAmount ?? 0)
-    const isInflow = bankEntry
-        ? bankEntry.type === 'DEBIT'
-        : categoryEntry?.type
-          ? categoryEntry.type === 'CREDIT'
-          : INCOME_CATEGORIES.has(parentCategory ?? '')
+    const amount = Math.abs(categoryEntry?.amount ?? row.totalAmount ?? 0)
+    const isInflow = categoryEntry?.type ? categoryEntry.type === 'CREDIT' : INCOME_CATEGORIES.has(parentCategory ?? '')
     return {
         externalId: row._id,
         accountExternalId: row.account?._id ?? null,
@@ -247,5 +244,6 @@ function entryParentCategory({ entry }: { entry: z.infer<typeof EntryPayload> })
     return entry.parentCategory ?? entry.category?.parentCategory ?? null
 }
 
-const BANK_PARENT_CATEGORY = 'CURRENT_ASSET'
+// Bank accounts are current assets and credit cards current liabilities: the side money moved through.
+const ACCOUNT_PARENT_CATEGORIES = new Set(['CURRENT_ASSET', 'CURRENT_LIABILITY'])
 const INCOME_CATEGORIES = new Set(['INCOME', 'OTHER_INCOME', 'SALES'])
