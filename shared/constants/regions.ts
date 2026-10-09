@@ -712,3 +712,25 @@ export const COUNTRY_CODES: string[] = [
     'ZM',
     'ZW',
 ]
+
+// Not a UN grouping: "EM" (emerging markets) as the fundraising sheet uses it. Africa, Latin America
+// & the Caribbean, the Middle East, and South, Southeast and Central Asia.
+const EMERGING_MARKET_REGIONS = [
+    'region:africa',
+    'region:latin_america',
+    'region:middle_east',
+    'region:south_asia',
+    'region:southeast_asia',
+    'region:central_asia',
+]
+GEO_REGIONS.push({
+    code: 'region:emerging_markets',
+    label: 'Emerging markets',
+    countries: [
+        ...new Set(
+            GEO_REGIONS.filter(region => EMERGING_MARKET_REGIONS.includes(region.code)).flatMap(
+                region => region.countries,
+            ),
+        ),
+    ].sort(),
+})

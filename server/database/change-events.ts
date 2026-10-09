@@ -392,3 +392,23 @@ export async function markChangeEventsSuperseded({
     })
     return count
 }
+
+/**
+ * Whether a field of a record has ever been changed (by anyone, in any status).
+ *
+ * @param input.entityType - `funder` or `opportunity`.
+ * @param input.entityId - The record.
+ * @param input.field - The field.
+ * @returns True when a change event exists.
+ */
+export async function hasFieldChangeEvents({
+    entityType,
+    entityId,
+    field,
+}: {
+    entityType: ChangeEntityType
+    entityId: string
+    field: string
+}) {
+    return (await db().changeEvent.count({ where: { entity_type: entityType, entity_id: entityId, field } })) > 0
+}

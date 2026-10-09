@@ -1,6 +1,7 @@
 import { defineNitroPlugin } from 'nitropack/runtime'
 import { ensureDefaultGoals } from '#server/database/goals.ts'
 import { supersedeAllStaleSuggestions } from '#server/utils/change-events.ts'
+import { fillFocusAreasFromGeoFocus } from '#server/utils/pipeline-import/focus-areas.ts'
 import { configureDatabase, disconnectDatabase } from '#server/utils/db.ts'
 
 export default defineNitroPlugin(async nitroApp => {
@@ -11,5 +12,9 @@ export default defineNitroPlugin(async nitroApp => {
     supersedeAllStaleSuggestions()
         .then(count => count > 0 && console.info(`[changes] retired ${count} out-of-date suggestions`))
         .catch(error => console.error('[changes] retiring out-of-date suggestions failed', error))
+    // Funders imported before opportunities had a geographic focus get it from the sheet's Geo Focus.
+    fillFocusAreasFromGeoFocus()
+        .then(count => count > 0 && console.info(`[import] filled geographic focus on ${count} opportunities`))
+        .catch(error => console.error('[import] filling geographic focus failed', error))
     nitroApp.hooks.hook('close', () => disconnectDatabase())
 })

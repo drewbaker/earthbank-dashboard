@@ -174,3 +174,16 @@ export function findOpportunityNames({ opportunityIds }: { opportunityIds: strin
         select: { id: true, name: true, funder: { select: { id: true, name: true } } },
     })
 }
+
+/**
+ * Opportunities whose funder has a "Geo Focus" from the spreadsheet, with their current focus.
+ *
+ * @param input.funderId - Only this funder (all funders when omitted).
+ * @returns Opportunity id, focus areas and the funder's geo focus text.
+ */
+export function listOpportunitiesWithFunderGeoFocus({ funderId }: { funderId?: string }) {
+    return db().opportunity.findMany({
+        where: { funder_id: funderId, archived_at: null, funder: { geo_focus: { not: null } } },
+        select: { id: true, focus_areas: true, funder: { select: { geo_focus: true } } },
+    })
+}

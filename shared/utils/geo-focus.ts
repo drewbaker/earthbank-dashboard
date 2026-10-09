@@ -65,3 +65,69 @@ export function geoFocusOptions() {
         ),
     ]
 }
+
+// Shorthand the team writes that isn't a country or region name.
+const FOCUS_ALIASES: Record<string, string> = {
+    worldwide: GLOBAL_FOCUS,
+    international: GLOBAL_FOCUS,
+    em: 'region:emerging_markets',
+    emerging: 'region:emerging_markets',
+    latam: 'region:latin_america',
+    'latin america': 'region:latin_america',
+    ssa: 'region:sub_saharan_africa',
+    us: 'US',
+    usa: 'US',
+    'united states of america': 'US',
+    america: 'US',
+    uk: 'GB',
+    'great britain': 'GB',
+    england: 'GB',
+    drc: 'CD',
+    'ivory coast': 'CI',
+}
+
+/**
+ * Read focus codes from free text like the spreadsheet's "Geo Focus" column ("Africa, India",
+ * "US, Global", "EM"). Country and region names match case-insensitively.
+ *
+ * @param input.text - The text.
+ * @returns The codes found (no duplicates) and the parts that didn't match anything.
+ */
+export function focusCodesFromText({ text }: { text: string | null }) {
+    const names = focusNameIndex()
+    const codes: string[] = []
+    const unmatched: string[] = []
+    for (const part of (text ?? '').split(/[,;/&+]|\band\b/i)) {
+        const name = part
+            .trim()
+            .toLowerCase()
+            .replace(/\./g, '')
+            .replace(/^the\s+/, '')
+        if (!name) {
+            continue
+        }
+        const code = FOCUS_ALIASES[name] ?? names.get(name)
+        if (!code) {
+            unmatched.push(part.trim())
+        } else if (!codes.includes(code)) {
+            codes.push(code)
+        }
+    }
+    return { codes, unmatched }
+}
+
+let cachedNameIndex: Map<string, string> | null = null
+
+/**
+ * Lowercased name → code for Global, every region and every country.
+ *
+ * @returns The index.
+ */
+function focusNameIndex() {
+    if (!cachedNameIndex) {
+        cachedNameIndex = new Map(
+            geoFocusOptions().map(option => [option.label.toLowerCase().replace(/\./g, ''), option.code] as const),
+        )
+    }
+    return cachedNameIndex
+}

@@ -8,6 +8,7 @@ import { applyFieldChanges } from '#server/utils/change-events.ts'
 import { addContactToFunder } from '#server/utils/contacts.ts'
 import { centsToBigInt, fromDateOnly, toDateOnly } from '#server/utils/dates.ts'
 import { createFunderWithDetails, defaultOpportunityName } from '#server/utils/funders.ts'
+import { fillFocusAreasFromGeoFocus } from '#server/utils/pipeline-import/focus-areas.ts'
 import type {
     ParsedContact,
     ParsedFunder,
@@ -63,6 +64,7 @@ export async function importMasterPipeline({ funders, importedOn }: { funders: P
             goalIds,
             summary,
         })
+        changeCount += await fillFocusAreasFromGeoFocus({ funderId })
         if (existing) {
             summary[changeCount > 0 ? 'fundersUpdated' : 'fundersUnchanged']++
         }
