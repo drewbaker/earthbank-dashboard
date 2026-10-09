@@ -76,12 +76,23 @@ function connectFolder() {
 async function syncSource({ sourceId }: { sourceId: string }) {
     busySourceId.value = sourceId
     try {
-        await api({ path: `/knowledge/sources/${sourceId}/sync`, method: 'POST' })
-        toast.add({
-            title: 'Sync started',
-            description: 'Changed documents are read in a minute or two.',
-            color: 'success',
+        const result = await api<{ status: 'queued' | 'already_queued' }>({
+            path: `/knowledge/sources/${sourceId}/sync`,
+            method: 'POST',
         })
+        toast.add(
+            result.status === 'already_queued'
+                ? {
+                      title: 'Already syncing',
+                      description: 'A sync of this folder is running. Large folders take a few minutes.',
+                      color: 'info',
+                  }
+                : {
+                      title: 'Sync started',
+                      description: 'Changed documents are read in a minute or two.',
+                      color: 'success',
+                  },
+        )
     } catch (error) {
         toast.add({ title: apiErrorMessage({ error }), color: 'error' })
     } finally {
@@ -164,9 +175,11 @@ async function updateDocument({
                         <p class="text-muted">
                             {{ source.document_count }} files · connected by
                             {{ source.connected_by?.name ?? 'someone' }}
-                            · synced
+                            ·
                             {{
-                                source.last_synced_at ? formatRelativeTime({ value: source.last_synced_at }) : 'not yet'
+                                source.last_synced_at
+                                    ? `synced ${formatRelativeTime({ value: source.last_synced_at })}`
+                                    : 'first sync in progress (large folders take a few minutes)'
                             }}
                         </p>
                         <p v-if="source.last_error" class="text-error">{{ source.last_error }}</p>

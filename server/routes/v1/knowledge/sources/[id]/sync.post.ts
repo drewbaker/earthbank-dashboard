@@ -11,7 +11,8 @@ defineRouteMeta({
     openAPI: {
         tags: ['Knowledge'],
         summary: 'Sync a Drive folder now',
-        description: 'Queues a sync; new and changed documents are read within a few minutes.',
+        description:
+            'Queues a sync; new and changed documents are read within a few minutes. `status` is `already_queued` when a sync is already waiting or running.',
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: { 202: { description: 'Sync queued' } },
     },
@@ -27,7 +28,7 @@ export default defineApiHandler(async event => {
     if (source.status !== 'active') {
         throw conflict({ message: 'Reconnect this folder before syncing it.' })
     }
-    await enqueueKnowledgeSync({ knowledgeSourceId })
+    const status = await enqueueKnowledgeSync({ knowledgeSourceId })
     await recordAudit({
         actor: ctx.actor,
         action: 'knowledge_source.sync_requested',
@@ -36,5 +37,5 @@ export default defineApiHandler(async event => {
         ip: requestIp({ event }),
     })
     setResponseStatus(event, 202)
-    return null
+    return { status }
 })
