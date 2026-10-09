@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { CurveType } from 'nuxt-charts/enums'
 import { computed } from 'vue'
-import type { ForecastEvent, RunwayProjection } from '#shared/forecast/project-runway.ts'
+import type { ForecastEvent, RunwayEnd, RunwayProjection } from '#shared/forecast/project-runway.ts'
 import { useChartPalette } from '~/composables/useChartPalette.ts'
 import { formatDate, formatMoney } from '~/utils/format.ts'
 
@@ -15,57 +16,133 @@ const props = defineProps<{
 
 const palette = useChartPalette()
 
-type ChartRow = { date: string; committed: number; weighted?: number; scenario?: number; events: ForecastEvent[] }
+type SeriesKey = 'committed' | 'weighted' | 'scenario'
+type ChartRow = {
+    /** X-axis category: "Today", then one month label per point ("Nov 26"). */
+    label: string
+    date: string
+    committed: number
+    weighted?: number
+    scenario?: number
+    events: ForecastEvent[]
+}
+
+const lineValues = computed(() => {
+    const points = props.projection.points
+    const values: Partial<Record<SeriesKey, number[]>> = {
+        committed: points.map(point => point.committed_cents / 100),
+    }
+    if (!props.committedOnly) {
+        values.weighted = points.map(point => point.weighted_cents / 100)
+    }
+    if (props.scenarioProjection) {
+        values.scenario = props.scenarioProjection.points.map(point => point.weighted_cents / 100)
+    }
+    return values
+})
 
 const rows = computed<ChartRow[]>(() =>
-    props.projection.points.map((point, index) => ({
-        date: point.date,
-        committed: point.committed_cents / 100,
-        ...(props.committedOnly ? {} : { weighted: point.weighted_cents / 100 }),
-        ...(props.scenarioProjection ? { scenario: props.scenarioProjection.points[index]!.weighted_cents / 100 } : {}),
-        // With a scenario, its events include the plan's plus the what-ifs.
-        events: (props.scenarioProjection ?? props.projection).points[index]!.events,
-    })),
+    props.projection.points.map((point, index) => {
+        const row: ChartRow = {
+            label: index === 0 ? 'Today' : monthLabel({ date: point.date }),
+            date: point.date,
+            committed: lineValues.value.committed![index]!,
+            // With a scenario, its events include the plan's plus the what-ifs.
+            events: (props.scenarioProjection ?? props.projection).points[index]!.events,
+        }
+        for (const key of ['weighted', 'scenario'] as SeriesKey[]) {
+            const values = lineValues.value[key]
+            if (values) {
+                row[key] = values[index]!
+            }
+        }
+        return row
+    }),
 )
 
-// Tooltip lines in legend order, each with its series color.
-const tooltipSeries = computed(() =>
-    Object.entries(categories.value).map(([key, category]) => ({
-        key: key as 'committed' | 'weighted' | 'scenario',
-        name: category.name,
-        color: category.color,
-    })),
-)
+const hasDeficit = computed(() => Object.values(lineValues.value).some(values => values?.some(value => value < 0)))
 
-// Lines are drawn in this order, so committed comes after weighted: where the two are equal (before
-// any pipeline money lands) the committed line stays visible on top instead of hiding underneath.
+// Series are drawn in this order: weighted, then committed (so it stays visible where the two are equal,
+// before pipeline money lands), then the scenario.
 const categories = computed(() => ({
     ...(props.committedOnly ? {} : { weighted: { name: 'Weighted pipeline', color: palette.value.weighted } }),
     committed: { name: 'Committed money only', color: palette.value.committed },
     ...(props.scenarioProjection ? { scenario: { name: 'Scenario (weighted)', color: palette.value.scenario } } : {}),
 }))
 
-// The scenario line is dashed so it isn't told apart by color alone.
-const lineDashArray = computed(() => Object.keys(categories.value).map(key => (key === 'scenario' ? [6, 4] : [])))
+// Our own legend, committed first, plus the $0 threshold when cash runs out.
+const legend = computed(() => [
+    { key: 'committed', name: 'Committed money only', color: palette.value.committed, isDashed: false },
+    ...(props.committedOnly
+        ? []
+        : [{ key: 'weighted', name: 'Weighted pipeline', color: palette.value.weighted, isDashed: false }]),
+    ...(props.scenarioProjection
+        ? [{ key: 'scenario', name: 'Scenario (weighted)', color: palette.value.scenario, isDashed: false }]
+        : []),
+    ...(hasDeficit.value
+        ? [{ key: 'below', name: '$0: out of cash', color: palette.value.deficit, isDashed: true }]
+        : []),
+])
+
+// Tooltip rows, committed first.
+const tooltipSeries = computed(
+    () => legend.value.filter(item => item.key !== 'below') as { key: SeriesKey; name: string; color: string }[],
+)
+
+// The $0 line, styled like an alert threshold, plus a dashed marker at the month each line first drops
+// below it. (The run-out dates themselves are on the runway tiles; a long label here would cross the lines.)
+const referenceLines = computed(() => {
+    const ends: { name: string; end: RunwayEnd | undefined }[] = [
+        { name: 'committed', end: props.projection.runway.committed },
+        ...(props.committedOnly ? [] : [{ name: 'weighted', end: props.projection.runway.weighted }]),
+        ...(props.scenarioProjection ? [{ name: 'scenario', end: props.scenarioProjection.runway.weighted }] : []),
+    ].filter(({ end }) => end?.out_date)
+    const lines: {
+        x?: string
+        y?: number
+        color: string
+        strokeWidth: number
+        label?: string
+        strokeDasharray?: string
+    }[] = [
+        {
+            y: 0,
+            color: palette.value.deficit,
+            strokeWidth: 1.5,
+            label: 'Out of cash',
+            strokeDasharray: '6 4',
+        },
+    ]
+    const months = new Set(ends.flatMap(({ end }) => rows.value.find(row => row.date >= end!.out_date!)?.label ?? []))
+    for (const month of months) {
+        lines.push({ x: month, color: palette.value.deficit, strokeWidth: 1, strokeDasharray: '3 3' })
+    }
+    return lines
+})
 
 /**
- * X-axis label for a point index (month name, or "Today" for the first point).
+ * Short month label for the x-axis, e.g. "Nov 26".
  *
- * @param tick - Point index.
+ * @param input.date - YYYY-MM-DD.
  * @returns The label.
  */
-function formatMonthTick(tick: number) {
-    const row = rows.value[Math.round(tick)]
-    if (!row) {
-        return ''
-    }
-    return Math.round(tick) === 0
-        ? 'Today'
-        : new Date(`${row.date}T00:00:00Z`).toLocaleDateString('en-US', {
-              month: 'short',
-              year: '2-digit',
-              timeZone: 'UTC',
-          })
+function monthLabel({ date }: { date: string }) {
+    return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', {
+        month: 'short',
+        year: '2-digit',
+        timeZone: 'UTC',
+    })
+}
+
+/**
+ * Compact dollars, with a proper minus sign for negatives.
+ *
+ * @param input.dollars - Amount in dollars.
+ * @returns e.g. "$200K" or "−$36K".
+ */
+function compactDollars({ dollars }: { dollars: number }) {
+    const text = formatMoney({ cents: Math.abs(dollars) * 100, compact: true })
+    return dollars < 0 ? `−${text}` : text
 }
 
 /**
@@ -75,7 +152,7 @@ function formatMonthTick(tick: number) {
  * @returns The label.
  */
 function formatDollarTick(tick: number) {
-    return formatMoney({ cents: tick * 100, compact: true })
+    return compactDollars({ dollars: tick })
 }
 
 /**
@@ -91,30 +168,49 @@ function formatTooltipTitle(row: ChartRow) {
 
 <template>
     <ClientOnly>
+        <div class="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+            <span v-for="item in legend" :key="item.key" class="flex items-center gap-1.5">
+                <span
+                    class="inline-block h-0.5 w-4"
+                    :style="{
+                        background: item.isDashed
+                            ? `repeating-linear-gradient(90deg, ${item.color} 0 4px, transparent 4px 7px)`
+                            : item.color,
+                    }"
+                />
+                {{ item.name }}
+            </span>
+        </div>
         <LineChart
             :data="rows"
             :categories="categories"
+            x-axis="label"
             :height="height ?? 320"
-            :x-formatter="formatMonthTick"
             :y-formatter="formatDollarTick"
             :tooltip-title-formatter="formatTooltipTitle"
-            :line-dash-array="lineDashArray"
+            :reference-lines="referenceLines"
             :line-width="2"
-            :curve-type="'linear' as never"
+            :curve-type="CurveType.Linear"
             :x-num-ticks="8"
-            :y-num-ticks="5"
+            :y-num-ticks="6"
             :y-grid-line="true"
             :x-grid-line="false"
-            :legend-position="'top-left' as never"
+            hide-legend
         >
             <template #tooltip="{ values }">
-                <div v-if="values" class="max-w-80 space-y-2 p-1 text-sm">
+                <div
+                    v-if="values"
+                    class="max-w-80 space-y-2 rounded-md border border-default bg-elevated p-3 text-sm shadow-lg"
+                >
                     <p class="font-medium text-highlighted">{{ formatTooltipTitle(values) }}</p>
                     <div v-for="series in tooltipSeries" :key="series.key" class="flex items-center gap-2">
                         <span class="size-2 shrink-0 rounded-full" :style="{ backgroundColor: series.color }" />
                         <span class="flex-1 text-muted">{{ series.name }}</span>
-                        <span class="font-medium text-highlighted">
-                            {{ formatMoney({ cents: (values[series.key] ?? 0) * 100, compact: true }) }}
+                        <span
+                            class="font-medium"
+                            :class="(values[series.key] ?? 0) < 0 ? 'text-error' : 'text-highlighted'"
+                        >
+                            {{ compactDollars({ dollars: values[series.key] ?? 0 }) }}
                         </span>
                     </div>
                     <div v-if="values.events.length" class="space-y-1 border-t border-default pt-2">

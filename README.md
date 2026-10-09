@@ -76,7 +76,7 @@ docs/          build plan, deploy runbook, API guide
 - **Prisma 7.10.0**: the CLI, `@prisma/client` and `@prisma/adapter-better-sqlite3` must match exactly. npm's `latest` tag for `prisma` points at an 8.0 release candidate, so pin explicitly.
 - **better-sqlite3 12.x**: the Prisma adapter and Sidequest's SQLite backend both require `^12`.
 - **h3 1.x**: the version Nitro 2 uses. `h3@2` is a different API.
-- **nuxt-charts 2.2.3**: npm `latest`; 3.x is only published under the `next` tag.
+- **nuxt-charts 3.1.0**: a stable release the maintainers still publish under the `next` tag (npm `latest` is 2.2.3). 3.x is needed for `referenceLines` (the runway chart's $0 "out of cash" threshold); its docs site runs on it.
 
 ## Deploying
 

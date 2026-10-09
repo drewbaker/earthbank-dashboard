@@ -112,7 +112,7 @@ Names used throughout: **Earth Bank Dashboard** (display name), `earthbank_dashb
 | CSS | Tailwind CSS (via Nuxt UI) | Theme tokens in `app/assets/css/main.css` |
 | Icons | Lucide via `@iconify-json/lucide` | `i-lucide-*` |
 | Fonts | `@nuxt/fonts` (bundled with Nuxt UI), self-hosted | Configure in `nuxt.config.ts` → `fonts.families` |
-| Charts | `nuxt-charts` | Follows Nuxt UI colors and dark mode |
+| Charts | `nuxt-charts` 3.x | Follows Nuxt UI colors and dark mode; `referenceLines` mark thresholds (the runway's $0 line) |
 | Composables | `@vueuse/core`, `@vueuse/integrations` (`useSortable` + `sortablejs` for drag-to-reorder) | |
 | Database | SQLite (WAL, 5s busy timeout, `foreign_keys = ON`) | `better-sqlite3` driver |
 | ORM | Prisma + `@prisma/adapter-better-sqlite3`, exact-pinned together | `prisma.config.ts`, ESM client generated into `server/generated/prisma` |

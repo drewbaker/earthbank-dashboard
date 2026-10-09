@@ -167,7 +167,7 @@ function describeRunway({ end }: { end: RunwayEnd }) {
 
                 <UCard v-if="baseProjection">
                     <template #header>
-                        <div class="flex items-center justify-between">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
                             <h2 class="font-medium text-highlighted">Cash runway</h2>
                             <div class="flex gap-2">
                                 <UButton

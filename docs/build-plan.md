@@ -144,7 +144,7 @@ Notes from building it:
 - The forecast only counts Design Grants and OpEx money by default (lending capital goes into the lending structure); configurable in Settings → Cash. Overdue expected receipts are modeled as landing today; undated asks are listed, not drawn.
 - The projection runs in the browser (`shared/forecast/project-runway.ts`), so scenario changes redraw instantly. Scenario adjustments also include `change_probability`.
 - Chart colors were checked with the dataviz palette validator for light and dark surfaces; the scenario line is dashed so it isn't color-only.
-- `nuxt-charts` stays on 2.2.3 (npm `latest`); 3.x is only published under the `next` tag.
+- `nuxt-charts` started on 2.2.3 (npm `latest`) and moved to 3.1.0 (stable, but tagged `next`) for reference lines.
 
 - [x] Prisma models:
     - [x] `BankAccount`: external_id, name, institution, currency, is_included (counts toward cash), last_synced_at
