@@ -53,120 +53,164 @@ Notes from building it:
 
 Goal: the spreadsheet's Master Pipeline lives in the app and can be edited, and every change is logged.
 
-- [ ] Prisma models:
-    - [ ] `Funder`: name (unique, case-insensitive via a `name_key` column), kind (`foundation | dfi | corporate | individual | government | other`), tier (`t1`–`t4`), relationship_status (`no_contact | early | active | advanced | committed | dead`), geo_focus, email_domains (JSON array), materials_sent_at, last_contact_at, notes, owner_id, status `draft | active` (drafts come from forwarded emails), archived_at
-    - [ ] `Contact`: funder_id, name, title, email (unique when present), notes
-    - [ ] `Goal`: type (`design_grant | opex | lending_capital`), name, target_amount_cents, target_date, notes. Seed the three goals in a migration-safe seed function that runs at boot when the table is empty.
-    - [ ] `Opportunity`: funder_id, goal_id, name, stage (`identified | in_discussion | proposal | due_diligence | committed | received | lost`), amount_cents, probability_override, expected_decision_at, expected_receipt_at, received_at, next_step, owner_id, archived_at
-    - [ ] `ChangeEvent`: entity_type, entity_id, field, from_value, to_value (JSON), source (`manual | import | ai_email | ai_forward`), status (`applied | pending | rejected | reverted`), actor_user_id, evidence_id, reason, confidence, created_at
-    - [ ] `Setting`: key, value JSON. `stage_probabilities` defaults: identified 5, in_discussion 15, proposal 35, due_diligence 60, committed 95, received 100, lost 0.
-- [ ] `server/utils/change-events.ts`: `applyFieldChanges({ entityType, entityId, changes, source, actorUserId, evidenceId, reason, confidence })`, the only write path for tracked fields; `revertChange({ changeEventId })`
-- [ ] zod schemas in `shared/schemas/` (`funders.ts`, `contacts.ts`, `opportunities.ts`, `goals.ts`, `settings.ts`) and constants in `shared/constants/` (stages, tiers, goal types, labels, colors)
-- [ ] `/v1` routes:
-    - [ ] funders: list (filters: tier, relationship_status, goal, owner, `q`), get, create (enqueues the backfill job once Phase 5 lands), patch, archive
-    - [ ] funders/{id}/contacts: CRUD
-    - [ ] opportunities: list, get, create, patch, archive
-    - [ ] goals: list with computed totals (committed, weighted, received), patch
-    - [ ] change-events: list by entity
-    - [ ] settings/stage-probabilities: get, put
-- [ ] Pages:
-    - [ ] `/pipeline`: `UTable` of opportunities joined with funders. Columns: funder, goal, stage, amount, weighted amount, expected receipt, next step, owner, last contact. Filters and goal tabs; toggle to a kanban by stage (drag to change stage calls `applyFieldChanges`).
-    - [ ] `/pipeline/funders/[id]`: header (tier, status, owner, domains), contacts, opportunities, notes, timeline (change events; later emails and tasks)
-    - [ ] "New funder" modal: name, contact name and email, domains (pre-filled from the email unless it's a free-mail domain), goal, optional first opportunity
-- [ ] `scripts/import-pipeline.ts <path.xlsx>`, using `read-excel-file`, sheet "Master Pipeline", header row 4. Idempotent: match on normalized org name and re-run safely.
-    - [ ] Merge duplicate rows (e.g. Nordic Development Fund, Hewlett Foundation); keep the row with more data and the higher tier
-    - [ ] Contacts: split column B on `;` and `,` and pair with column C emails by position; ignore `—`, "Not found in inbox — verify manually" and parenthetical notes (keep them in the contact's notes)
-    - [ ] `email_domains` from contact emails, skipping free-mail domains
-    - [ ] Tier `T1`–`T4` → `t1`–`t4`; status → relationship_status (Committed, Advanced, Active, Early, No Contact, Dead)
-    - [ ] Last Contact: parse the leading date (`Jun 2, 2026 (met Jun 10)`, `Jun 2026 (…)`, `Apr 2026 (…)`); keep the full text in notes
-    - [ ] Design / Grant $ > 0 → `design_grant` opportunity; Potential Follow-On $ > 0 → `lending_capital` opportunity. Stage from status: Committed→committed, Advanced→due_diligence, Active→in_discussion, Early→identified, Dead→lost. No Contact creates no opportunity.
-    - [ ] Potential Size ("Design Grant Only", "Above $10M", "Sub $10M", "TBD") goes into notes
-    - [ ] EB 3-Pager `Y` → `materials_sent_at` = the import date (the sheet has no date)
-    - [ ] Notes: full text into `funder.notes`; text after `NEXT:` into each opportunity's `next_step`
-    - [ ] All writes use `applyFieldChanges` with source `import`
-    - [ ] Print a summary: created, updated, merged, skipped
-- [ ] Tests: `import-pipeline.test.ts` (against a small fixture xlsx built in the test; idempotent on re-run), `change-events.test.ts`, `funders-api.test.ts`
+Status: built and verified locally. The real sheet imports as 70 funders, 58 contacts and 29 opportunities; a second run changes nothing.
+
+Notes from building it:
+
+- Money columns are `BigInt` (Prisma's `Int` is 32-bit, too small for $50M lending asks); serializers return plain numbers.
+- Calendar dates (expected receipt, last contact, target date) travel as `YYYY-MM-DD` and are stored at UTC midnight.
+- Contacts are soft-deleted; re-adding the same email to the same funder restores the contact.
+- The importer also creates bare prospects for the names listed under "PIPELINE TOTAL", and an amount-less design-grant opportunity for "Design Grant Only" funders in conversation.
+- Re-imports never overwrite a field someone edited by hand (any applied manual change event for that field).
+
+- [x] Prisma models:
+    - [x] `Funder`: name (unique, case-insensitive via a `name_key` column), kind (`foundation | dfi | corporate | individual | government | other`), tier (`t1`–`t4`), relationship_status (`no_contact | early | active | advanced | committed | dead`), geo_focus, email_domains (JSON array), materials_sent_at, last_contact_at, notes, owner_id, status `draft | active` (drafts come from forwarded emails), archived_at
+    - [x] `Contact`: funder_id, name, title, email (unique when present), notes
+    - [x] `Goal`: type (`design_grant | opex | lending_capital`), name, target_amount_cents, target_date, notes. Seed the three goals in a migration-safe seed function that runs at boot when the table is empty.
+    - [x] `Opportunity`: funder_id, goal_id, name, stage (`identified | in_discussion | proposal | due_diligence | committed | received | lost`), amount_cents, probability_override, expected_decision_at, expected_receipt_at, received_at, next_step, owner_id, archived_at
+    - [x] `ChangeEvent`: entity_type, entity_id, field, from_value, to_value (JSON), source (`manual | import | ai_email | ai_forward`), status (`applied | pending | rejected | reverted`), actor_user_id, evidence_id, reason, confidence, created_at
+    - [x] `Setting`: key, value JSON. `stage_probabilities` defaults: identified 5, in_discussion 15, proposal 35, due_diligence 60, committed 95, received 100, lost 0.
+- [x] `server/utils/change-events.ts`: `applyFieldChanges({ entityType, entityId, changes, source, actorUserId, evidenceId, reason, confidence })`, the only write path for tracked fields; `revertChange({ changeEventId })`
+- [x] zod schemas in `shared/schemas/` (`funders.ts`, `contacts.ts`, `opportunities.ts`, `goals.ts`, `settings.ts`) and constants in `shared/constants/` (stages, tiers, goal types, labels, colors)
+- [x] `/v1` routes:
+    - [x] funders: list (filters: tier, relationship_status, goal, owner, `q`), get, create (enqueues the backfill job once Phase 5 lands), patch, archive
+    - [x] funders/{id}/contacts: CRUD
+    - [x] opportunities: list, get, create, patch, archive
+    - [x] goals: list with computed totals (committed, weighted, received), patch
+    - [x] change-events: list by entity
+    - [x] settings/stage-probabilities: get, put
+- [x] Pages:
+    - [x] `/pipeline`: `UTable` of opportunities joined with funders. Columns: funder, goal, stage, amount, weighted amount, expected receipt, next step, owner, last contact. Filters and goal tabs; toggle to a kanban by stage (drag to change stage calls `applyFieldChanges`).
+    - [x] `/pipeline/funders/[id]`: header (tier, status, owner, domains), contacts, opportunities, notes, timeline (change events; later emails and tasks)
+    - [x] "New funder" modal: name, contact name and email, domains (pre-filled from the email unless it's a free-mail domain), goal, optional first opportunity
+- [x] `scripts/import-pipeline.ts <path.xlsx>`, using `read-excel-file`, sheet "Master Pipeline", header row 4. Idempotent: match on normalized org name and re-run safely.
+    - [x] Merge duplicate rows (e.g. Nordic Development Fund, Hewlett Foundation); keep the row with more data and the higher tier
+    - [x] Contacts: split column B on `;` and `,` and pair with column C emails by position; ignore `—`, "Not found in inbox — verify manually" and parenthetical notes (keep them in the contact's notes)
+    - [x] `email_domains` from contact emails, skipping free-mail domains
+    - [x] Tier `T1`–`T4` → `t1`–`t4`; status → relationship_status (Committed, Advanced, Active, Early, No Contact, Dead)
+    - [x] Last Contact: parse the leading date (`Jun 2, 2026 (met Jun 10)`, `Jun 2026 (…)`, `Apr 2026 (…)`); keep the full text in notes
+    - [x] Design / Grant $ > 0 → `design_grant` opportunity; Potential Follow-On $ > 0 → `lending_capital` opportunity. Stage from status: Committed→committed, Advanced→due_diligence, Active→in_discussion, Early→identified, Dead→lost. No Contact creates no opportunity.
+    - [x] Potential Size ("Design Grant Only", "Above $10M", "Sub $10M", "TBD") goes into notes
+    - [x] EB 3-Pager `Y` → `materials_sent_at` = the import date (the sheet has no date)
+    - [x] Notes: full text into `funder.notes`; text after `NEXT:` into each opportunity's `next_step`
+    - [x] All writes use `applyFieldChanges` with source `import`
+    - [x] Print a summary: created, updated, merged, skipped
+- [x] Tests: `import-pipeline.test.ts` (against a small fixture xlsx built in the test; idempotent on re-run), `change-events.test.ts`, `funders-api.test.ts`
 
 ## Phase 3: Milestones, tasks, collaboration
 
 Goal: it's obvious what each person has to do, for which milestone, by when.
 
-- [ ] Prisma models:
-    - [ ] `Milestone`: title, description, due_at, goal_id?, opportunity_id?, status (`upcoming | done | missed`), kind (`funding | event | internal`)
-    - [ ] `Task`: title, description, assignee_id, due_at, status (`todo | doing | done`), milestone_id?, opportunity_id?, sort, completed_at, created_by
-    - [ ] `Comment`: task_id, author_id, body (Markdown), edited_at, deleted_at
-    - [ ] `Attachment`: task_id, uploaded_by, filename, content_type, size_bytes, storage_key
-- [ ] `server/utils/storage.ts` (local disk under `DATA_DIR/files`, key escape checks); upload limit 25 MB
-- [ ] `/v1` routes: milestones CRUD; tasks CRUD + reorder; tasks/{id}/comments CRUD; tasks/{id}/attachments upload, list, delete; `attachments/{id}/download`
-- [ ] Notifications (`server/utils/notifications.ts` → `enqueueEmail`):
-    - [ ] Task assigned (to someone other than yourself) → email the assignee with title, milestone, due date and link
-    - [ ] Comment → email the assignee and earlier commenters, excluding the author
-    - [ ] Email templates with `html` and `text`
-- [ ] Pages:
-    - [ ] `/milestones`: timeline grouped by milestone (date order) with progress (done / total) and tasks beneath
-    - [ ] "By person" tab: each user's open tasks sorted by due date ("Drew: A, B, C before Jan 1")
-    - [ ] Task slideover: edit fields, comments thread, attachments drop zone
-    - [ ] Funder and opportunity pages show linked milestones and tasks, with "Add task" inline
-    - [ ] Overview "My tasks" card (overdue highlighted)
-- [ ] Optional `task-digest` Nitro task (weekday mornings)
-- [ ] Tests: `task-notifications.test.ts` (recipients fan-out, no self-notify), `attachments.test.ts` (storage key safety)
+Status: built and verified locally (milestones page by milestone and by person, task slideover with comments and files, funder-page tasks, emailed deep links via `?task=`).
+
+Notes from building it:
+
+- A task's funder is filled in from its opportunity (or its milestone's opportunity), so funder pages list every related task.
+- Attachments always download (`Content-Disposition: attachment`, `nosniff`) so uploaded HTML/SVG can't run in our origin; removed files are purged by `cleanup` after 30 days.
+- `POST /v1/tasks/reorder` exists; drag-to-reorder in the UI is not built yet (tasks sort by deadline, then order).
+- The weekday `task-digest` runs at 13:00 UTC.
+
+- [x] Prisma models:
+    - [x] `Milestone`: title, description, due_at, goal_id?, opportunity_id?, status (`upcoming | done | missed`), kind (`funding | event | internal`)
+    - [x] `Task`: title, description, assignee_id, due_at, status (`todo | doing | done`), milestone_id?, opportunity_id?, sort, completed_at, created_by
+    - [x] `Comment`: task_id, author_id, body (Markdown), edited_at, deleted_at
+    - [x] `Attachment`: task_id, uploaded_by, filename, content_type, size_bytes, storage_key
+- [x] `server/utils/storage.ts` (local disk under `DATA_DIR/files`, key escape checks); upload limit 25 MB
+- [x] `/v1` routes: milestones CRUD; tasks CRUD + reorder; tasks/{id}/comments CRUD; tasks/{id}/attachments upload, list, delete; `attachments/{id}/download`
+- [x] Notifications (`server/utils/notifications.ts` → `enqueueEmail`):
+    - [x] Task assigned (to someone other than yourself) → email the assignee with title, milestone, due date and link
+    - [x] Comment → email the assignee and earlier commenters, excluding the author
+    - [x] Email templates with `html` and `text`
+- [x] Pages:
+    - [x] `/milestones`: timeline grouped by milestone (date order) with progress (done / total) and tasks beneath
+    - [x] "By person" tab: each user's open tasks sorted by due date ("Drew: A, B, C before Jan 1")
+    - [x] Task slideover: edit fields, comments thread, attachments drop zone
+    - [x] Funder and opportunity pages show linked milestones and tasks, with "Add task" inline
+    - [x] Overview "My tasks" card (overdue highlighted)
+- [x] Optional `task-digest` Nitro task (weekday mornings)
+- [x] Tests: `task-notifications.test.ts` (recipients fan-out, no self-notify), `attachments.test.ts` (storage key safety)
 
 ## Phase 4: Cash, burn, forecast, scenarios
 
 Goal: one view of cash runway against the pipeline, plus what-if modeling.
 
-- [ ] Prisma models:
-    - [ ] `BankAccount`: external_id, name, institution, currency, is_included (counts toward cash), last_synced_at
-    - [ ] `BalanceSnapshot`: bank_account_id, as_of (date, unique per account), balance_cents
-    - [ ] `BankTransaction`: external_id (unique), bank_account_id, booked_on, amount_cents (negative = outflow), description, category, counterparty, is_excluded_from_burn
-    - [ ] `Scenario`: name, description, adjustments (JSON), created_by, is_pinned
-- [ ] `server/utils/bookkeeping/`: `BookkeepingProvider`, `BookeepingAiProvider` (Bearer key, paginate, back off on 429), `FixtureProvider`. Read `https://docs.bookeeping.ai/api-reference/openapi.json` first to confirm field names.
-- [ ] `SyncBookkeepingJob` + hourly `bookkeeping-sync` task: upsert accounts, today's balance snapshot, transactions since the last sync minus 7 days (catches late edits)
-- [ ] Burn (`server/utils/burn.ts`): trailing 3 full months of net outflow from included accounts, excluding transfers between own accounts, categories marked excluded in Settings, and inflows tagged as grants. Manual override in Settings (`burn_override_cents`).
-- [ ] `shared/forecast/project-runway.ts`, pure and unit-tested:
+Status: built and verified locally with a manual balance and burn (no Bookeeping.ai key yet); the sync is covered by an integration test against a fake API that mirrors Bookeeping.ai's OpenAPI spec.
+
+Notes from building it:
+
+- Bookeeping.ai transactions are double-entry: the "main" entry is the bank side (DEBIT = money in) and the other entry carries the category. Burn counts operating categories (EXPENSE, COST_OF_GOODS_SOLD, OTHER_EXPENSE, OVERHEAD, TAX, TAX_PAYABLE) plus uncategorized money out, net of refunds; transfers, loans, equity and income are left out.
+- Cash on hand prefers the bank's own balance (`institutionBalance`, via Plaid) over the ledger balance. Month-end history comes from `monthWiseBalance`. Non-deposit accounts (cards, loans) start excluded.
+- Without `BOOKEEPING_API_KEY`, Settings → Cash takes a manual balance and burn so the forecast works on day one.
+- The forecast only counts Design Grants and OpEx money by default (lending capital goes into the lending structure); configurable in Settings → Cash. Overdue expected receipts are modeled as landing today; undated asks are listed, not drawn.
+- The projection runs in the browser (`shared/forecast/project-runway.ts`), so scenario changes redraw instantly. Scenario adjustments also include `change_probability`.
+- Chart colors were checked with the dataviz palette validator for light and dark surfaces; the scenario line is dashed so it isn't color-only.
+- `nuxt-charts` stays on 2.2.3 (npm `latest`); 3.x is only published under the `next` tag.
+
+- [x] Prisma models:
+    - [x] `BankAccount`: external_id, name, institution, currency, is_included (counts toward cash), last_synced_at
+    - [x] `BalanceSnapshot`: bank_account_id, as_of (date, unique per account), balance_cents
+    - [x] `BankTransaction`: external_id (unique), bank_account_id, booked_on, amount_cents (negative = outflow), description, category, counterparty, is_excluded_from_burn
+    - [x] `Scenario`: name, description, adjustments (JSON), created_by, is_pinned
+- [x] `server/utils/bookkeeping/`: `BookkeepingProvider`, `BookeepingAiProvider` (Bearer key, paginate, back off on 429), `FixtureProvider`. Read `https://docs.bookeeping.ai/api-reference/openapi.json` first to confirm field names.
+- [x] `SyncBookkeepingJob` + hourly `bookkeeping-sync` task: upsert accounts, today's balance snapshot, transactions since the last sync minus 7 days (catches late edits)
+- [x] Burn (`server/utils/burn.ts`): trailing 3 full months of net outflow from included accounts, excluding transfers between own accounts, categories marked excluded in Settings, and inflows tagged as grants. Manual override in Settings (`burn_override_cents`).
+- [x] `shared/forecast/project-runway.ts`, pure and unit-tested:
     - Inputs: `{ startingCashCents, monthlyBurnCents, opportunities: [{ id, amountCents, expectedReceiptAt, probability, stage }], milestones, adjustments, months: 24, today }`
     - Output: `{ months: [{ month, committedCashCents, weightedCashCents }], committedRunwayOutAt, weightedRunwayOutAt, markers }`
     - Committed line counts `committed` and `received` stages only; weighted line multiplies by stage probability (or the override)
-- [ ] `shared/schemas/scenarios.ts`: adjustment union: `shift_receipt { opportunity_id, months }`, `change_amount { opportunity_id, amount_cents }`, `exclude_opportunity { opportunity_id }`, `add_recurring_cost { label, monthly_cents, starts_at, ends_at? }`, `add_one_off { label, amount_cents, at }` (positive = income), `change_burn_pct { pct, starts_at }`
-- [ ] `/v1` routes: `cash/summary` (balance, burn, runway, last sync), `cash/accounts` (toggle included), `forecast` (base projection inputs), scenarios CRUD, `settings/burn`
-- [ ] Pages:
-    - [ ] `/` Overview: KPI tiles (cash, monthly burn, runway months + date, committed $ and weighted $ per goal), goal progress bars vs target, small runway chart, upcoming milestones (next 30 days), my tasks, recent AI updates
-    - [ ] `/forecast`: line chart (committed, weighted, and the selected scenario) with milestone markers and a zero line; scenario side panel with live client-side recalculation through `projectRunway`, drag-to-shift opportunity dates, "Add hire" / "Add one-off" forms, save, compare two scenarios
-- [ ] Tests: `runway-projection.test.ts` (every adjustment kind, runway-out date, probability weighting), `burn.test.ts`, `bookkeeping-sync.test.ts` (mocked fetch, idempotent)
+- [x] `shared/schemas/scenarios.ts`: adjustment union: `shift_receipt { opportunity_id, months }`, `change_amount { opportunity_id, amount_cents }`, `exclude_opportunity { opportunity_id }`, `add_recurring_cost { label, monthly_cents, starts_at, ends_at? }`, `add_one_off { label, amount_cents, at }` (positive = income), `change_burn_pct { pct, starts_at }`
+- [x] `/v1` routes: `cash/summary` (balance, burn, runway, last sync), `cash/accounts` (toggle included), `forecast` (base projection inputs), scenarios CRUD, `settings/burn`
+- [x] Pages:
+    - [x] `/` Overview: KPI tiles (cash, monthly burn, runway months + date, committed $ and weighted $ per goal), goal progress bars vs target, small runway chart, upcoming milestones (next 30 days), my tasks, recent AI updates
+    - [x] `/forecast`: line chart (committed, weighted, and the selected scenario) with milestone markers and a zero line; scenario side panel with live client-side recalculation through `projectRunway`, drag-to-shift opportunity dates, "Add hire" / "Add one-off" forms, save, compare two scenarios
+- [x] Tests: `runway-projection.test.ts` (every adjustment kind, runway-out date, probability weighting), `burn.test.ts`, `bookkeeping-sync.test.ts` (mocked fetch, idempotent)
 
 ## Phase 5: Email intelligence
 
 Goal: the pipeline updates itself from funder email, with evidence and an easy override. See AGENTS.md §10 "Email intelligence" for the rules.
 
-- [ ] Prisma models:
-    - [ ] `MailboxConnection`: user_id (unique), google_email, refresh_token_encrypted, scopes, history_id, last_synced_at, status (`active | error | revoked`), last_error
-    - [ ] `EmailEvidence`: source (`gmail | forward`), external_message_id (unique), mailbox_user_id, from_address, to_addresses, sent_at, subject (null when sensitive), summary (≤ 300 chars), is_sensitive, funder_id?, opportunity_id?, model, processed_at
-    - [ ] `InboundAddress`: user_id, token_hash, created_at, revoked_at
-- [ ] Gmail connect: `GET /auth/google/gmail` (incremental scopes, offline, consent) and its callback branch; `DELETE /v1/mailbox` revokes at Google and deletes the row
-- [ ] `server/utils/mail/`: `GmailProvider`, `buildFunderMailQueries({ contacts, domains })` (batched under Gmail's query length limit), `normalizeEmail` (strip quoted replies, signatures and HTML; cap at about 8k characters), `matchFunder({ addresses })` (exact contact email first, then domain, never free-mail domains)
-- [ ] `server/utils/ai/`: `AiProvider`, `AnthropicProvider` (forced tool use, zod → JSON Schema, Haiku first then Sonnet when confidence < 0.6), instructions in `server/utils/ai/instructions/classify-email/*.md`
-- [ ] Jobs:
-    - [ ] `SyncMailboxJob` (incremental via `historyId`; full query fallback when the history has expired)
-    - [ ] `BackfillFunderJob` (`newer_than:12m` for one funder across all connected mailboxes)
-    - [ ] `ClassifyEmailJob` (classify → `EmailEvidence` → `applyFieldChanges` with auto-apply when confidence ≥ 0.8 and the change is not a move to `lost` or an amount decrease; otherwise pending)
-    - [ ] `mail-sync` Nitro task every 15 min
-- [ ] Rules:
-    - [ ] Manual edits win: skip AI changes to a field when the email's `sent_at` is older than the field's latest manual change
-    - [ ] Never store or log the email body
-- [ ] Forwarding:
-    - [ ] Settings → Email shows `updates+{token}@in.theearthbank.org` with copy and regenerate buttons
-    - [ ] `POST /webhooks/inbound-email`: verify the Resend signature; resolve the token; require the envelope sender to be that user's address; `parseInboundEmail` unwraps the forwarded original; enqueue `ClassifyEmailJob` with source `ai_forward`
-    - [ ] Unknown sender → the AI proposes a draft funder (status `draft`) with contact, domain, goal type and opportunity; confirming it on Activity activates it and enqueues `BackfillFunderJob`
-- [ ] `/activity` page: feed of change events (filters: source, status, funder, date). Each row shows what changed, the evidence summary, sent date and sender, the AI reason and confidence, and **Accept / Reject** (pending), **Revert** (applied), and **Edit** (opens the field). A "Needs review" count badge in the sidebar.
-- [ ] Funder timeline includes email evidence entries
-- [ ] `scripts/eval-classify-email.ts` + git-ignored `tests/fixtures/emails/*.eml` with expected outputs; prints accuracy per field
-- [ ] Tests: `email-matching.test.ts`, `classify-email.test.ts` (mocked AI: auto-apply vs pending, manual-wins rule, no body stored), `inbound-webhook.test.ts` (bad signature, bad token, wrong sender, unknown sender → draft)
+Status: built and verified locally with a fake AI (no Google OAuth client, Anthropic key or Resend inbound domain yet). Integration tests cover auto-apply vs review, manual-wins, no stored bodies, sensitive subjects, draft funders, replaced forwarding addresses and webhook signatures.
+
+Changes from the original plan (and why):
+
+- **Model**: `claude-opus-5-5` by default (`AI_MODEL` to change), via structured outputs (`beta.messages.parse` + zod) with server-side refusal fallbacks. Opus 5.5 rejects forced tool use, so the planned forced-tool + Haiku/Sonnet cascade was dropped; one model, low effort.
+- **Gmail sync** uses Gmail search with `after:` (last sync − 1 day; 90 days on first connect) instead of `historyId`: history would list every new message in the inbox, whereas search only ever returns funder mail.
+- **Dedupe** is by RFC Message-ID, so an email in two people's inboxes is read once. Forwarded copies use the Resend id.
+- **Forwarding** accepts any sender (the use case is mail that landed in a personal inbox); the secret token proves it came from a team member. Only Resend's email id is queued; the job fetches the content.
+- **Instructions** live in `server/utils/ai/instructions.ts` (bundles into Nitro and workers without file reads).
+- Email bodies never touch the database or the job queue; jobs carry ids and re-fetch.
+
+- [x] Prisma models:
+    - [x] `MailboxConnection`: user_id (unique), google_email, refresh_token_encrypted, scopes, history_id, last_synced_at, status (`active | error | revoked`), last_error
+    - [x] `EmailEvidence`: source (`gmail | forward`), external_message_id (unique), mailbox_user_id, from_address, to_addresses, sent_at, subject (null when sensitive), summary (≤ 300 chars), is_sensitive, funder_id?, opportunity_id?, model, processed_at
+    - [x] `InboundAddress`: user_id, token_hash, created_at, revoked_at
+- [x] Gmail connect: `GET /auth/google/gmail` (incremental scopes, offline, consent) and its callback branch; `DELETE /v1/mailbox` revokes at Google and deletes the row
+- [x] `server/utils/mail/`: `GmailProvider`, `buildFunderMailQueries({ contacts, domains })` (batched under Gmail's query length limit), `normalizeEmail` (strip quoted replies, signatures and HTML; cap at about 8k characters), `matchFunder({ addresses })` (exact contact email first, then domain, never free-mail domains)
+- [x] `server/utils/ai/`: `AiProvider`, `AnthropicProvider` (forced tool use, zod → JSON Schema, Haiku first then Sonnet when confidence < 0.6), instructions in `server/utils/ai/instructions/classify-email/*.md`
+- [x] Jobs:
+    - [x] `SyncMailboxJob` (incremental via `historyId`; full query fallback when the history has expired)
+    - [x] `BackfillFunderJob` (`newer_than:12m` for one funder across all connected mailboxes)
+    - [x] `ClassifyEmailJob` (classify → `EmailEvidence` → `applyFieldChanges` with auto-apply when confidence ≥ 0.8 and the change is not a move to `lost` or an amount decrease; otherwise pending)
+    - [x] `mail-sync` Nitro task every 15 min
+- [x] Rules:
+    - [x] Manual edits win: skip AI changes to a field when the email's `sent_at` is older than the field's latest manual change
+    - [x] Never store or log the email body
+- [x] Forwarding:
+    - [x] Settings → Email shows `updates+{token}@in.theearthbank.org` with copy and regenerate buttons
+    - [x] `POST /webhooks/inbound-email`: verify the Resend signature; resolve the token; require the envelope sender to be that user's address; `parseInboundEmail` unwraps the forwarded original; enqueue `ClassifyEmailJob` with source `ai_forward`
+    - [x] Unknown sender → the AI proposes a draft funder (status `draft`) with contact, domain, goal type and opportunity; confirming it on Activity activates it and enqueues `BackfillFunderJob`
+- [x] `/activity` page: feed of change events (filters: source, status, funder, date). Each row shows what changed, the evidence summary, sent date and sender, the AI reason and confidence, and **Accept / Reject** (pending), **Revert** (applied), and **Edit** (opens the field). A "Needs review" count badge in the sidebar.
+- [x] Funder timeline includes email evidence entries
+- [x] `scripts/eval-classify-email.ts` + git-ignored `tests/fixtures/emails/*.eml` with expected outputs; prints accuracy per field
+- [x] Tests: `email-matching.test.ts`, `classify-email.test.ts` (mocked AI: auto-apply vs pending, manual-wins rule, no body stored), `inbound-webhook.test.ts` (bad signature, bad token, wrong sender, unknown sender → draft)
 
 ## Phase 6: Hardening + deploy
 
-- [ ] Review every `/v1` route for `requireUser`, zod validation, serializer use and audit entries
-- [ ] Empty, loading and error states on every page; mobile-width check of Overview, Pipeline and task slideover
-- [ ] Finish `docs/deploy-runbook.md`:
+Status: hardening done; deploying needs the credentials listed in `docs/deploy-runbook.md` (Google OAuth client, Render, DNS, Resend, Anthropic, Bookeeping.ai).
+
+- [x] Review every `/v1` route for `requireUser`, zod validation, serializer use and audit entries
+- [x] Empty, loading and error states on every page; mobile-width check of Overview, Pipeline and task slideover
+- [x] Finish `docs/deploy-runbook.md`:
     1. Render: create from `render.yaml`, set the `sync: false` secrets, attach the disk
     2. DNS: CNAME `dashboard.theearthbank.org` → the Render service; add the custom domain in Render; enable edge caching
     3. Google Cloud (Earth Bank Workspace project): OAuth consent screen **Internal**; OAuth client (web) with redirect URIs `https://dashboard.theearthbank.org/auth/google/callback`, `…/auth/google/gmail/callback` and the localhost equivalents; enable the Gmail API
@@ -175,7 +219,21 @@ Goal: the pipeline updates itself from funder email, with evidence and an easy o
     6. Anthropic: set `ANTHROPIC_API_KEY`
     7. Upload the spreadsheet to `/var/data/imports/` and run `npm run import:pipeline -- /var/data/imports/pipeline.xlsx` from the Render shell
     8. Drew, Leslie and Steve sign in with Google (this creates their accounts), then each connects Gmail in Settings → Email
+- [x] Independent code review of server code; seven issues fixed with regression tests (`tests/integration/review-fixes.test.ts`): Gmail sync now resumes instead of dropping older mail past the per-run cap; Earth Bank addresses can never become funder contacts/domains; re-imports keep dashboard and AI edits and never clear a field from a blank cell; revert refuses when the field changed since and is transactional; accept records a null "from" correctly; chunked bodies without a length are refused (411); mid-month burn changes are pro-rated.
+- [x] Production build smoke test (all pages and APIs 200; jobs bundle has all five job classes; a database-touching job runs in a Sidequest worker thread)
 - [ ] Deploy, smoke-test sign-in with a non-Earth-Bank Google account (must be refused), run a Bookeeping.ai sync, forward a test email
+
+## Phase 7: Email drafts, Drive knowledge, task ordering, in-app import
+
+Status: done (requested after v1). Needs the Google Drive API enabled and people to reconnect Gmail once (the new `gmail.compose` scope).
+
+- [x] Drag-to-reorder tasks within a milestone (`TasksSortableList`, sortablejs via `@vueuse/integrations`, touch-friendly with a short press), saved through `POST /v1/tasks/reorder`
+- [x] "Reply needed" flag on funders whose latest relevant email is theirs (`awaiting_reply_since`), shown on the pipeline and funder page
+- [x] **Draft email** on the funder page and per opportunity: `POST /v1/funders/{id}/reply-draft` reads the latest thread with the funder live from the author's Gmail (nothing stored), plus the pipeline record and Drive documents, and returns a reply-all draft (recipients and subject set in code, body and "before sending" notes from the AI). `POST /v1/mailbox/drafts` saves it to Gmail drafts in the thread (`gmail.compose`; never sends)
+- [x] **Knowledge** (Settings → Knowledge): connect Drive folders (`drive.readonly`, incremental auth, token per folder); `SyncKnowledgeJob` nightly and on demand reads Google Docs/Slides (text), Sheets and .xlsx (every tab), PDFs and text files, skipping unchanged files; documents can be pinned (always read in full) or excluded. When everything fits about 300k characters it all goes to the AI (cached); otherwise pinned documents plus the best-matching passages (BM25)
+- [x] Gmail and Drive share one Google grant per person, so disconnecting either only revokes at Google when nothing else uses it; deactivating someone pauses folders they connected
+- [x] **Import** (Settings → Import): upload the .xlsx, preview, import; same importer as the CLI
+- [x] Tests: `knowledge-selection.test.ts`, `email-draft-compose.test.ts`, `email-drafts-and-knowledge.test.ts`
 
 ---
 

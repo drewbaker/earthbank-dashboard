@@ -9,10 +9,11 @@
 #   1. Add the custom domain dashboard.theearthbank.org (CNAME to the service).
 #   2. Enable edge caching (Settings → Edge Caching → "All files").
 #   3. Add https://dashboard.theearthbank.org/auth/google/callback to the Google
-#      OAuth client's redirect URIs (Internal app in the Earth Bank Workspace).
-#   4. Import the pipeline from the service shell:
-#        npm run import:pipeline -- /var/data/imports/pipeline.xlsx
-#   Accounts are created on first Google sign-in; there is no admin bootstrap.
+#      OAuth client's redirect URIs (Internal app in the Earth Bank Workspace;
+#      Gmail and Drive APIs enabled).
+#   4. Sign in with Google (accounts are created on first sign-in), then import
+#      the spreadsheet in Settings → Import.
+#   Data lives on the disk, never in the repo: deploys only apply new migrations.
 
 services:
     - type: web
@@ -52,6 +53,9 @@ services:
             sync: false
           - key: GOOGLE_WORKSPACE_DOMAIN
             value: theearthbank.org
+          # Earth Bank's other mail domains; staff addresses are never treated as funder contacts.
+          - key: INTERNAL_EMAIL_DOMAINS
+            value: resolvefund.org
           - key: BOOKEEPING_API_BASE
             value: https://api.bookeeping.ai/public-api
           - key: BOOKEEPING_API_KEY
@@ -59,9 +63,7 @@ services:
           - key: AI_PROVIDER
             value: anthropic
           - key: AI_MODEL
-            value: claude-haiku-5-5
-          - key: AI_FALLBACK_MODEL
-            value: claude-sonnet-5-5
+            value: claude-opus-5-5
           - key: ANTHROPIC_API_KEY
             sync: false
           - key: EMAIL_FROM

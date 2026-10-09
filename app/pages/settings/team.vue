@@ -81,40 +81,28 @@ async function toggleUserAccess({ user }: { user: User }) {
 </script>
 
 <template>
-    <UDashboardPanel>
-        <template #header>
-            <UDashboardNavbar title="Settings">
-                <template #leading>
-                    <UDashboardSidebarCollapse />
-                </template>
-            </UDashboardNavbar>
-        </template>
+    <div class="space-y-6">
+        <div>
+            <h2 class="text-lg font-semibold text-highlighted">Team</h2>
+            <p class="text-sm text-muted">
+                Anyone with an @theearthbank.org Google account can sign in. Their account is created the first time
+                they do. To remove someone, remove them in Google Workspace and deactivate them here.
+            </p>
+        </div>
 
-        <template #body>
-            <div class="mx-auto w-full max-w-4xl space-y-6">
-                <div>
-                    <h2 class="text-lg font-semibold text-highlighted">Team</h2>
-                    <p class="text-sm text-muted">
-                        Anyone with an @theearthbank.org Google account can sign in. Their account is created the first
-                        time they do. To remove someone, remove them in Google Workspace and deactivate them here.
-                    </p>
+        <UTable :data="team?.data ?? []" :columns="columns">
+            <template #actions-cell="{ row }">
+                <div class="flex justify-end">
+                    <UButton
+                        v-if="row.original.id !== currentUser?.id"
+                        :color="row.original.deactivated_at ? 'neutral' : 'error'"
+                        :label="row.original.deactivated_at ? 'Reactivate' : 'Deactivate'"
+                        :loading="updatingUserId === row.original.id"
+                        size="sm"
+                        @click="toggleUserAccess({ user: row.original })"
+                    />
                 </div>
-
-                <UTable :data="team?.data ?? []" :columns="columns">
-                    <template #actions-cell="{ row }">
-                        <div class="flex justify-end">
-                            <UButton
-                                v-if="row.original.id !== currentUser?.id"
-                                :color="row.original.deactivated_at ? 'neutral' : 'error'"
-                                :label="row.original.deactivated_at ? 'Reactivate' : 'Deactivate'"
-                                :loading="updatingUserId === row.original.id"
-                                size="sm"
-                                @click="toggleUserAccess({ user: row.original })"
-                            />
-                        </div>
-                    </template>
-                </UTable>
-            </div>
-        </template>
-    </UDashboardPanel>
+            </template>
+        </UTable>
+    </div>
 </template>

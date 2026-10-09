@@ -8,12 +8,32 @@ import { decryptSecret, encryptSecret, newOpaqueToken, secretsMatch } from '#ser
 const OAUTH_STATE_COOKIE_NAME = 'earthbank_dashboard_oauth'
 const OAUTH_STATE_TTL_SECONDS = 10 * 60
 const SIGN_IN_SCOPES = ['openid', 'email', 'profile']
+// Gmail: read funder mail, and save reply drafts (compose also allows sending, which the app never does).
+const GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.compose']
+// Drive: read the knowledge folder the person connects; nothing else in their Drive is listed.
+const DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+
+const OAUTH_PURPOSES = ['sign_in', 'connect_gmail', 'connect_drive'] as const
+export type OAuthPurpose = (typeof OAUTH_PURPOSES)[number]
 
 const OAuthState = z.object({
     state: z.string(),
     codeVerifier: z.string(),
     redirectPath: z.string(),
+    purpose: z.enum(OAUTH_PURPOSES).default('sign_in'),
+    driveFolderId: z.string().optional(),
 })
+
+/**
+ * Whether a connection's granted scopes include one, e.g. `gmail.compose`.
+ *
+ * @param input.grantedScopes - Space-separated scopes Google granted.
+ * @param input.scope - Short scope name.
+ * @returns True when granted.
+ */
+export function hasGoogleScope({ grantedScopes, scope }: { grantedScopes: string; scope: string }) {
+    return grantedScopes.split(/\s+/).some(granted => granted === scope || granted.endsWith(`/auth/${scope}`))
+}
 
 export type WorkspaceIdentityRejection =
     'missing_claims' | 'email_not_verified' | 'wrong_workspace' | 'wrong_email_domain'
@@ -21,12 +41,12 @@ export type WorkspaceIdentityRejection =
 export type WorkspaceIdentity = { googleSub: string; email: string; name: string; avatarUrl: string | null }
 
 /**
- * The OAuth client used for both sign-in and (later) Gmail access.
+ * The OAuth client used for both sign-in and Gmail access.
  *
  * @returns A configured `OAuth2Client`.
  * @throws Error when the Google client id or secret isn't configured.
  */
-function googleOAuthClient() {
+export function googleOAuthClient() {
     if (!config.googleClientId || !config.googleClientSecret) {
         throw new Error('GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set to sign in with Google')
     }
@@ -48,20 +68,38 @@ export function safeRedirectPath({ redirect }: { redirect: unknown }) {
 }
 
 /**
- * Build the Google sign-in URL and store the state + PKCE verifier in an encrypted, short-lived cookie.
+ * Build the Google authorization URL and store the state + PKCE verifier in an encrypted, short-lived cookie.
+ *
+ * Signing in asks only for identity. Connecting Gmail or a Drive folder asks for that access on top
+ * (incremental authorization), offline so the dashboard can sync while the person is away.
  *
  * @param input.event - The request; receives the state cookie.
- * @param input.redirectPath - Same-site path to return to after sign-in.
+ * @param input.redirectPath - Same-site path to return to afterwards.
+ * @param input.purpose - `sign_in`, `connect_gmail` or `connect_drive`.
+ * @param input.loginHint - Email to preselect in Google's account chooser.
+ * @param input.driveFolderId - The folder being connected (`connect_drive`).
  * @returns The Google authorization URL to redirect to.
  */
-export async function beginGoogleSignIn({ event, redirectPath }: { event: H3Event; redirectPath: string }) {
+export async function beginGoogleSignIn({
+    event,
+    redirectPath,
+    purpose = 'sign_in',
+    loginHint,
+    driveFolderId,
+}: {
+    event: H3Event
+    redirectPath: string
+    purpose?: OAuthPurpose
+    loginHint?: string
+    driveFolderId?: string
+}) {
     const client = googleOAuthClient()
     const { codeVerifier, codeChallenge } = await client.generateCodeVerifierAsync()
     const state = newOpaqueToken()
     setCookie(
         event,
         OAUTH_STATE_COOKIE_NAME,
-        encryptSecret({ plaintext: JSON.stringify({ state, codeVerifier, redirectPath }) }),
+        encryptSecret({ plaintext: JSON.stringify({ state, codeVerifier, redirectPath, purpose, driveFolderId }) }),
         {
             httpOnly: true,
             sameSite: 'lax',
@@ -70,14 +108,18 @@ export async function beginGoogleSignIn({ event, redirectPath }: { event: H3Even
             maxAge: OAUTH_STATE_TTL_SECONDS,
         },
     )
+    const extraScopes = purpose === 'connect_gmail' ? GMAIL_SCOPES : purpose === 'connect_drive' ? DRIVE_SCOPES : []
     return client.generateAuthUrl({
-        scope: SIGN_IN_SCOPES,
+        scope: [...SIGN_IN_SCOPES, ...extraScopes],
         state,
         code_challenge: codeChallenge,
         code_challenge_method: CodeChallengeMethod.S256,
         // A hint that skips Google's account picker for Workspace users; never trusted on its own.
         hd: config.googleWorkspaceDomain,
-        prompt: 'select_account',
+        login_hint: loginHint,
+        ...(extraScopes.length
+            ? { access_type: 'offline' as const, prompt: 'consent', include_granted_scopes: true }
+            : { prompt: 'select_account' }),
     })
 }
 
@@ -101,7 +143,14 @@ export async function completeGoogleSignIn({ event, code, state }: { event: H3Ev
         return null
     }
     const ticket = await client.verifyIdToken({ idToken: tokens.id_token, audience: config.googleClientId })
-    return { payload: ticket.getPayload() ?? null, redirectPath: stored.redirectPath }
+    return {
+        payload: ticket.getPayload() ?? null,
+        redirectPath: stored.redirectPath,
+        purpose: stored.purpose,
+        driveFolderId: stored.driveFolderId ?? null,
+        refreshToken: tokens.refresh_token ?? null,
+        grantedScopes: tokens.scope ?? '',
+    }
 }
 
 /**

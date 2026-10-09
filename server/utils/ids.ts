@@ -21,11 +21,18 @@ export const ID_PREFIXES = {
     emailEvidence: 'eml',
     changeEvent: 'chg',
     inboundAddress: 'iad',
+    knowledgeSource: 'ksr',
+    knowledgeDocument: 'kdc',
 } as const
 
 export type IdKind = keyof typeof ID_PREFIXES
 
 const CROCKFORD_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz'
+
+// Monotonic within a process: ids made in the same millisecond reuse the previous random part plus
+// one, so ids always sort in creation order (the change log and cursors rely on it).
+let lastTime = -1
+let lastRandom: number[] = []
 
 /**
  * Generate a prefixed, time-sortable id (ULID layout: 48-bit millisecond time + 80 random bits).
@@ -37,7 +44,29 @@ const CROCKFORD_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz'
  * @returns An id such as `usr_01k6x3…` (26 base32 characters after the prefix).
  */
 export function newId({ kind, now = Date.now() }: { kind: IdKind; now?: number }) {
-    return `${ID_PREFIXES[kind]}_${encodeTime({ time: now })}${encodeRandom()}`
+    if (now === lastTime) {
+        incrementRandom({ digits: lastRandom })
+    } else {
+        lastTime = now
+        lastRandom = randomDigits()
+    }
+    return `${ID_PREFIXES[kind]}_${encodeTime({ time: lastTime })}${lastRandom.map(digit => CROCKFORD_ALPHABET[digit]).join('')}`
+}
+
+/**
+ * Add one to a base-32 number held as digits (most significant first), in place.
+ *
+ * @param input.digits - 16 base-32 digits.
+ * @returns Nothing; `digits` is updated.
+ */
+function incrementRandom({ digits }: { digits: number[] }) {
+    for (let index = digits.length - 1; index >= 0; index--) {
+        if (digits[index]! < 31) {
+            digits[index]!++
+            return
+        }
+        digits[index] = 0
+    }
 }
 
 /**
@@ -57,13 +86,13 @@ function encodeTime({ time }: { time: number }) {
 }
 
 /**
- * Encode 80 random bits as 16 Crockford base32 characters.
+ * 80 random bits as 16 base-32 digits.
  *
- * @returns The random part of an id.
+ * @returns Digits 0–31, most significant first.
  */
-function encodeRandom() {
+function randomDigits() {
     // Plain numbers rather than BigInt: Nitro's esbuild target doesn't allow BigInt literals.
-    let encoded = ''
+    const digits: number[] = []
     let buffer = 0
     let bufferedBits = 0
     for (const byte of randomBytes(10)) {
@@ -71,9 +100,9 @@ function encodeRandom() {
         bufferedBits += 8
         while (bufferedBits >= 5) {
             bufferedBits -= 5
-            encoded += CROCKFORD_ALPHABET[(buffer >> bufferedBits) & 31]
+            digits.push((buffer >> bufferedBits) & 31)
         }
         buffer &= (1 << bufferedBits) - 1
     }
-    return encoded
+    return digits
 }

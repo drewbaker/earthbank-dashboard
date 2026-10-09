@@ -1,0 +1,33 @@
+{
+    "description": "Synthetic: a funder confirms a design grant and a payment date.",
+    "funder": {
+        "name": "Example Climate Foundation",
+        "relationship_status": "active",
+        "last_contact_at": "2026-09-01",
+        "contacts": [{ "name": "Pat Rivera", "email": "pat@example-climate.org", "title": "Program Director" }],
+        "opportunities": [
+            {
+                "id": "opp_sample_design",
+                "name": "Design grant",
+                "goal_type": "design_grant",
+                "stage": "due_diligence",
+                "amount_cents": 50000000,
+                "expected_decision_at": null,
+                "expected_receipt_at": null,
+                "next_step": "Wait for board decision"
+            }
+        ]
+    },
+    "email": {
+        "from": "pat@example-climate.org",
+        "to": ["drew@theearthbank.org"],
+        "sentAt": "2026-10-05T15:00:00Z",
+        "subject": "Good news on the design grant",
+        "text": "Hi Drew,\n\nOur board approved the $500,000 design grant yesterday. We'll send the grant agreement this week and expect to wire the funds by January 15.\n\nBest,\nPat"
+    },
+    "expected": {
+        "is_relevant": true,
+        "is_sensitive": false,
+        "opportunities": { "opp_sample_design": { "stage": "committed", "expected_receipt_on": "2027-01-15" } }
+    }
+}

@@ -6,9 +6,16 @@ The product spec and house conventions are in [AGENTS.md](AGENTS.md); the delive
 
 ## Features
 
+- **Overview**: cash on hand, monthly burn, runway (committed money vs weighted pipeline), goal progress, my tasks, upcoming milestones, recent changes
+- **Pipeline**: funders, contacts and opportunities by goal (Design Grants, OpEx, Lending Capital) and stage; table, funder list and drag-and-drop board; full change history with revert
+- **Milestones & Tasks**: milestones with tasks, assignees and deadlines; drag to reorder; "by person" view; comments and file attachments; email alerts on assignment and comments, plus a weekday digest
+- **Forecast**: 24-month cash projection with a live scenario builder (slip a funding date, change an amount or probability, add a hire or one-off cost, change burn); saved scenarios
+- **Email intelligence**: connect Gmail and the AI keeps funder stages, amounts, dates and next steps current from funder email only, with the email summary and reasoning behind every change; forward any email to a private address; review, accept or revert on the Activity page
+- **Email drafts**: funders waiting on a reply are flagged; **Draft email** has the AI write a reply in the thread's tone, using the pipeline and Earth Bank's Drive documents, and saves it to your Gmail drafts (never sends)
+- **Knowledge**: connect Earth Bank's Google Drive folder (business models, explainers) so drafts use the team's own facts; pin or exclude documents
+- **Bank data** from Bookeeping.ai (or entered by hand)
+- **Spreadsheet import** of the Master Pipeline tab, in Settings → Import or `npm run import:pipeline`
 - Google sign-in, limited to the Earth Bank Workspace; accounts are created on first sign-in
-- Team settings with deactivation
-- Coming next: the pipeline, milestones and tasks, cash and forecast, and email intelligence (see the build plan)
 
 ## Stack
 
@@ -60,6 +67,8 @@ docs/          build plan, deploy runbook, API guide
 | `npm test` | Vitest |
 | `npm run db:migrate` | Create and apply a migration after editing `schema.prisma` |
 | `npm run format` | Prettier |
+| `npm run import:pipeline -- file.xlsx [--dry-run]` | Import the Master Pipeline tab (safe to re-run) |
+| `npm run eval:classify-email` | Score the email classifier against labelled fixtures (calls the Anthropic API) |
 
 ## Version pins
 
@@ -67,6 +76,7 @@ docs/          build plan, deploy runbook, API guide
 - **Prisma 7.10.0**: the CLI, `@prisma/client` and `@prisma/adapter-better-sqlite3` must match exactly. npm's `latest` tag for `prisma` points at an 8.0 release candidate, so pin explicitly.
 - **better-sqlite3 12.x**: the Prisma adapter and Sidequest's SQLite backend both require `^12`.
 - **h3 1.x**: the version Nitro 2 uses. `h3@2` is a different API.
+- **nuxt-charts 2.2.3**: npm `latest`; 3.x is only published under the `next` tag.
 
 ## Deploying
 

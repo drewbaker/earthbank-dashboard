@@ -78,6 +78,32 @@ export const config = {
     get emailFrom() {
         return env('EMAIL_FROM', 'Earth Bank Dashboard <noreply@mail.theearthbank.org>')
     },
+    get bookkeepingApiBase() {
+        return env('BOOKEEPING_API_BASE', 'https://api.bookeeping.ai/public-api').replace(/\/$/, '')
+    },
+    get bookkeepingApiKey() {
+        return env('BOOKEEPING_API_KEY')
+    },
+    get anthropicApiKey() {
+        return env('ANTHROPIC_API_KEY')
+    },
+    get aiModel() {
+        return env('AI_MODEL', 'claude-opus-5-5')
+    },
+    /** Earth Bank's own mail domains (the Workspace domain plus aliases); never funder addresses. */
+    get internalEmailDomains() {
+        const domains = env('INTERNAL_EMAIL_DOMAINS', 'resolvefund.org')
+            .split(',')
+            .map(domain => domain.trim().toLowerCase())
+            .filter(Boolean)
+        return [...new Set([this.googleWorkspaceDomain, this.inboundEmailDomain, ...domains])]
+    },
+    get inboundEmailDomain() {
+        return env('INBOUND_EMAIL_DOMAIN', 'in.theearthbank.org').toLowerCase()
+    },
+    get resendWebhookSecret() {
+        return env('RESEND_WEBHOOK_SECRET')
+    },
     get runBackgroundWorkers() {
         return env('NITRO_RUN_BACKGROUND_WORKERS', 'true') === 'true'
     },
