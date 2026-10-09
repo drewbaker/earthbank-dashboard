@@ -3,7 +3,13 @@ import { computed, ref, useTemplateRef, watch } from 'vue'
 import { useAsyncData, useSeoMeta, useToast } from '#imports'
 import { GOAL_TYPE_DETAILS } from '#shared/constants/pipeline.ts'
 import type { RunwayEnd } from '#shared/forecast/project-runway.ts'
-import type { PlannedExpense, Scenario, ScenarioAdjustment, ScenarioList } from '#shared/schemas/index.ts'
+import type {
+    OpportunityList,
+    PlannedExpense,
+    Scenario,
+    ScenarioAdjustment,
+    ScenarioList,
+} from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { useForecast } from '~/composables/useForecast.ts'
 import { describeAdjustment, ADJUSTMENT_KIND_DETAILS } from '~/utils/scenario-descriptions.ts'
@@ -25,6 +31,12 @@ const { data: scenarioList, refresh: refreshScenarios } = await useAsyncData('fo
     api<ScenarioList>({ path: '/scenarios' }),
 )
 await inputs
+const { data: lendingOpportunities } = await useAsyncData('forecast.lending', () =>
+    api<OpportunityList>({
+        path: '/opportunities',
+        query: { goal_type: 'lending_capital', include_closed: true, limit: 500 },
+    }),
+)
 
 // The template reads the loaded inputs through this, so nested refs are unwrapped.
 const forecastInputs = computed(() => inputs.data.value)
@@ -225,6 +237,17 @@ async function deleteScenario() {
                             :limit="8"
                             @edit-planned-expense="plannedExpenseId => editPlannedExpense({ plannedExpenseId })"
                         />
+                    </UCard>
+
+                    <UCard>
+                        <template #header>
+                            <h2 class="font-medium text-highlighted">Lending capital</h2>
+                            <p class="text-xs text-muted">
+                                Not part of the cash runway (it goes into the lending structure). A longer timeline, by
+                                quarter.
+                            </p>
+                        </template>
+                        <ReportsLendingCapitalChart :opportunities="lendingOpportunities?.data ?? []" :height="240" />
                     </UCard>
 
                     <ForecastPlannedExpenses

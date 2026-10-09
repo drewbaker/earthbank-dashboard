@@ -26,7 +26,16 @@ const { goals, goalItems } = usePipelineReference()
 type PipelineView = 'opportunities' | 'funders' | 'board'
 const ALL = 'all'
 
+// Grants (design grants and OpEx: short-term, months) and lending capital (years) are worked very
+// differently, so each gets its own tab with its own goals, filters and totals.
+type PipelineTrack = 'grants' | 'lending'
+const TRACK_GOAL_TYPES: Record<PipelineTrack, GoalType[]> = {
+    grants: ['design_grant', 'opex'],
+    lending: ['lending_capital'],
+}
+
 // Filters live in the URL so a filtered view can be shared or bookmarked.
+const track = ref<PipelineTrack>(route.query.track === 'lending' ? 'lending' : 'grants')
 const view = ref<PipelineView>((route.query.view as PipelineView) ?? 'opportunities')
 const goalFilter = ref<GoalType | typeof ALL>((route.query.goal as GoalType) ?? ALL)
 const stageFilter = ref<OpportunityStage | typeof ALL>((route.query.stage as OpportunityStage) ?? ALL)
@@ -35,9 +44,14 @@ const searchText = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const includeClosed = ref(route.query.closed === '1')
 const debouncedSearch = useDebounce(searchText, 250)
 
-watch([view, goalFilter, stageFilter, tierFilter, debouncedSearch, includeClosed], () => {
+watch(track, () => {
+    goalFilter.value = ALL
+})
+
+watch([track, view, goalFilter, stageFilter, tierFilter, debouncedSearch, includeClosed], () => {
     router.replace({
         query: {
+            track: track.value === 'grants' ? undefined : track.value,
             view: view.value === 'opportunities' ? undefined : view.value,
             goal: goalFilter.value === ALL ? undefined : goalFilter.value,
             stage: stageFilter.value === ALL ? undefined : stageFilter.value,
@@ -54,12 +68,11 @@ const { data: opportunityList, refresh: refreshOpportunities } = await useAsyncD
         api<OpportunityList>({
             path: '/opportunities',
             query: {
-                goal_type: goalFilter.value === ALL ? undefined : goalFilter.value,
                 include_closed: includeClosed.value || view.value === 'board',
                 limit: 500,
             },
         }),
-    { watch: [goalFilter, includeClosed, view] },
+    { watch: [includeClosed, view] },
 )
 
 const { data: funderList, refresh: refreshFunders } = await useAsyncData(
@@ -68,19 +81,35 @@ const { data: funderList, refresh: refreshFunders } = await useAsyncData(
         api<FunderList>({
             path: '/funders',
             query: {
-                goal_type: goalFilter.value === ALL ? undefined : goalFilter.value,
                 tier: tierFilter.value === ALL ? undefined : tierFilter.value,
                 q: debouncedSearch.value || undefined,
                 limit: 500,
             },
         }),
-    { watch: [goalFilter, tierFilter, debouncedSearch] },
+    { watch: [tierFilter, debouncedSearch] },
+)
+
+// The goal types shown: the tab's, narrowed by the goal filter.
+const visibleGoalTypes = computed(() => (goalFilter.value === ALL ? TRACK_GOAL_TYPES[track.value] : [goalFilter.value]))
+
+// Funders in play for this tab's goals; prospects with no opportunity yet appear in both tabs.
+const visibleFunders = computed(() =>
+    (funderList.value?.data ?? []).filter(
+        funder =>
+            funder.goal_types.length === 0 ||
+            funder.goal_types.some(goalType => visibleGoalTypes.value.includes(goalType)),
+    ),
+)
+
+const visibleGoals = computed(() =>
+    (goals.data.value?.data ?? []).filter(goal => TRACK_GOAL_TYPES[track.value].includes(goal.type)),
 )
 
 const visibleOpportunities = computed(() => {
     const search = debouncedSearch.value.toLowerCase()
     return (opportunityList.value?.data ?? []).filter(
         opportunity =>
+            visibleGoalTypes.value.includes(opportunity.goal_type) &&
             (stageFilter.value === ALL || opportunity.stage === stageFilter.value) &&
             (tierFilter.value === ALL || opportunity.funder.tier === tierFilter.value) &&
             (!search ||
@@ -95,7 +124,15 @@ const viewItems = [
     { label: 'Funders', value: 'funders', icon: 'i-lucide-building-2' },
     { label: 'Board', value: 'board', icon: 'i-lucide-columns-3' },
 ]
-const goalFilterItems = [{ label: 'All goals', value: ALL }, ...goalItems]
+const trackItems = [
+    { label: 'Design Grants', value: 'grants', icon: 'i-lucide-pencil-ruler' },
+    { label: 'Lending Capital', value: 'lending', icon: 'i-lucide-landmark' },
+]
+// Within the grants tab, design grants and OpEx can be told apart; lending has one goal.
+const goalFilterItems = computed(() => [
+    { label: 'Design grants & OpEx', value: ALL },
+    ...goalItems.filter(item => TRACK_GOAL_TYPES.grants.includes(item.value)),
+])
 const stageFilterItems = [
     { label: 'All stages', value: ALL },
     ...OPPORTUNITY_STAGES.map(stage => ({ label: OPPORTUNITY_STAGE_DETAILS[stage].label, value: stage })),
@@ -168,6 +205,13 @@ const opportunityColumns: TableColumn<Opportunity>[] = [
     },
     { accessorKey: 'owner', header: 'Owner', cell: ({ row }) => row.original.owner?.name ?? '' },
 ]
+
+// Every opportunity on the lending tab has the same goal, so its column is left out there.
+const visibleOpportunityColumns = computed(() =>
+    track.value === 'lending'
+        ? opportunityColumns.filter(column => (column as { accessorKey?: string }).accessorKey !== 'goal_type')
+        : opportunityColumns,
+)
 
 const funderColumns: TableColumn<Funder>[] = [
     {
@@ -297,12 +341,15 @@ async function openCreatedFunder(funder: FunderDetail) {
                 </template>
             </UDashboardNavbar>
             <UDashboardToolbar>
+                <UTabs v-model="track" :items="trackItems" :content="false" variant="link" class="-mb-px" />
+            </UDashboardToolbar>
+            <UDashboardToolbar>
                 <template #left>
                     <UTabs v-model="view" :items="viewItems" :content="false" size="sm" />
                 </template>
                 <template #right>
                     <UInput v-model="searchText" icon="i-lucide-search" placeholder="Search" class="w-44" />
-                    <USelect v-model="goalFilter" :items="goalFilterItems" class="w-40" />
+                    <USelect v-if="track === 'grants'" v-model="goalFilter" :items="goalFilterItems" class="w-48" />
                     <USelect
                         v-if="view === 'opportunities'"
                         v-model="stageFilter"
@@ -317,12 +364,12 @@ async function openCreatedFunder(funder: FunderDetail) {
 
         <template #body>
             <div class="space-y-6">
-                <PipelineGoalSummary v-if="goals.data.value" :goals="goals.data.value.data" />
+                <PipelineGoalSummary v-if="visibleGoals.length" :goals="visibleGoals" />
 
                 <UTable
                     v-if="view === 'opportunities'"
                     :data="visibleOpportunities"
-                    :columns="opportunityColumns"
+                    :columns="visibleOpportunityColumns"
                     class="rounded-md border border-default"
                     :ui="{ tr: 'cursor-pointer' }"
                     @select="(_event: Event, row: { original: Opportunity }) => editOpportunity(row.original)"
@@ -338,7 +385,7 @@ async function openCreatedFunder(funder: FunderDetail) {
 
                 <UTable
                     v-else-if="view === 'funders'"
-                    :data="funderList?.data ?? []"
+                    :data="visibleFunders"
                     :columns="funderColumns"
                     class="rounded-md border border-default"
                 >

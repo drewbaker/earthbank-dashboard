@@ -10,6 +10,7 @@ import {
     queryBoolean,
     UserSummary,
 } from '#shared/schemas/common.ts'
+import { isGeoFocusCode } from '#shared/utils/geo-focus.ts'
 
 export const Opportunity = z.object({
     id: z.string(),
@@ -26,6 +27,8 @@ export const Opportunity = z.object({
     expected_receipt_at: DateOnly.nullable(),
     /** When it went to the funder's committee. */
     committee_on: DateOnly.nullable(),
+    /** Geographic focus: country codes ("KE"), regions ("region:eastern_africa") or "global". */
+    focus_areas: z.array(z.string()),
     received_at: DateOnly.nullable(),
     next_step: z.string().nullable(),
     owner: UserSummary.nullable(),
@@ -47,6 +50,7 @@ const OpportunityFields = {
     expected_decision_at: DateOnlyInput.nullable(),
     expected_receipt_at: DateOnlyInput.nullable(),
     committee_on: DateOnlyInput.nullable(),
+    focus_areas: z.array(z.string().refine(code => isGeoFocusCode({ code }), 'Unknown country or region.')).max(60),
     received_at: DateOnlyInput.nullable(),
     next_step: z.string().trim().max(2000).nullable(),
     owner_id: z.string().nullable(),
@@ -62,6 +66,7 @@ export const CreateOpportunityRequest = z.object({
     expected_decision_at: OpportunityFields.expected_decision_at.optional(),
     expected_receipt_at: OpportunityFields.expected_receipt_at.optional(),
     committee_on: OpportunityFields.committee_on.optional(),
+    focus_areas: OpportunityFields.focus_areas.default([]),
     received_at: OpportunityFields.received_at.optional(),
     next_step: OpportunityFields.next_step.optional(),
     owner_id: OpportunityFields.owner_id.optional(),

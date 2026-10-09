@@ -11,7 +11,8 @@ const DEFAULT_CASH_SETTINGS: CashSettings = {
     burn_override_cents: null,
     lookback_months: 3,
     excluded_categories: [],
-    include_goal_types: ['design_grant', 'opex'],
+    // Design grants fund operating costs; OpEx and lending capital money is tracked but not in cash flow.
+    include_goal_types: ['design_grant'],
 }
 
 export type BookkeepingSyncState = { last_synced_at: string | null; last_error: string | null }

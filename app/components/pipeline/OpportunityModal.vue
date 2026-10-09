@@ -9,6 +9,7 @@ import {
     OPPORTUNITY_STAGES,
 } from '#shared/constants/pipeline.ts'
 import type { Opportunity, StageProbabilities } from '#shared/schemas/index.ts'
+import { geoFocusOptions } from '#shared/utils/geo-focus.ts'
 import { defaultStageProbabilities, opportunityProbability } from '#shared/utils/probability.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { NO_OWNER, ownerIdFromSelection, usePipelineReference } from '~/composables/usePipelineReference.ts'
@@ -53,6 +54,7 @@ type OpportunityFormState = {
     expected_decision_at: string
     expected_receipt_at: string
     committee_on: string
+    focus_areas: string[]
     received_at: string
     next_step: string
     owner_id: string
@@ -62,6 +64,14 @@ const formState = reactive<OpportunityFormState>(emptyFormState())
 const errorMessage = ref<string | null>(null)
 const isSaving = ref(false)
 const isEditing = computed(() => Boolean(props.opportunity))
+// Grouped: Global, regions, then countries by name.
+const focusItems = (['Global', 'Regions', 'Countries'] as const).map(group => [
+    // Group headings aren't selectable; the value only satisfies the item type.
+    { type: 'label' as const, label: group, value: `group:${group}` },
+    ...geoFocusOptions()
+        .filter(option => option.group === group)
+        .map(option => ({ label: option.label, value: option.code })),
+])
 const stageItems = OPPORTUNITY_STAGES.map(stage => ({ label: OPPORTUNITY_STAGE_DETAILS[stage].label, value: stage }))
 
 watch(open, isOpen => {
@@ -89,6 +99,7 @@ function emptyFormState(): OpportunityFormState {
         expected_decision_at: '',
         expected_receipt_at: '',
         committee_on: '',
+        focus_areas: [],
         received_at: '',
         next_step: '',
         owner_id: NO_OWNER,
@@ -111,6 +122,7 @@ function formStateFrom({ opportunity }: { opportunity: Opportunity }): Opportuni
         expected_decision_at: opportunity.expected_decision_at ?? '',
         expected_receipt_at: opportunity.expected_receipt_at ?? '',
         committee_on: opportunity.committee_on ?? '',
+        focus_areas: [...opportunity.focus_areas],
         received_at: opportunity.received_at ?? '',
         next_step: opportunity.next_step ?? '',
         owner_id: opportunity.owner?.id ?? NO_OWNER,
@@ -134,6 +146,7 @@ async function saveOpportunity() {
         expected_decision_at: formState.expected_decision_at || null,
         expected_receipt_at: formState.expected_receipt_at || null,
         committee_on: formState.committee_on || null,
+        focus_areas: formState.focus_areas,
         received_at: formState.received_at || null,
         next_step: formState.next_step.trim() || null,
         owner_id: ownerIdFromSelection({ ownerId: formState.owner_id }),
@@ -214,6 +227,22 @@ async function saveOpportunity() {
                 </UFormField>
                 <UFormField label="Owner" name="owner_id">
                     <USelect v-model="formState.owner_id" :items="ownerItems" class="w-full" />
+                </UFormField>
+                <UFormField
+                    label="Geographic focus"
+                    name="focus_areas"
+                    help="Countries, regions, or Global. Shown on the coverage map in Reports."
+                    class="sm:col-span-2"
+                >
+                    <USelectMenu
+                        v-model="formState.focus_areas"
+                        :items="focusItems"
+                        value-key="value"
+                        multiple
+                        placeholder="Add countries or regions"
+                        :search-input="{ placeholder: 'Search countries and regions' }"
+                        class="w-full"
+                    />
                 </UFormField>
                 <UFormField label="Next step" name="next_step" class="sm:col-span-2">
                     <UTextarea v-model="formState.next_step" :rows="2" autoresize class="w-full" />

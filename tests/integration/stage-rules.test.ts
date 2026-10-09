@@ -158,3 +158,23 @@ describe('committee', () => {
         expect(StageProbabilities.safeParse(defaultStageProbabilities()).success).toBe(true)
     })
 })
+
+describe('geographic focus', () => {
+    it('is saved and logged like any other field', async () => {
+        const { applyFieldChanges } = await import('#server/utils/change-events.ts')
+        const opportunity = await createOpportunity({ name: 'Packard', stage: 'proposal' })
+        expect(opportunity.focus_areas).toEqual([])
+        const [event] = await applyFieldChanges({
+            entityType: 'opportunity',
+            entityId: opportunity.id,
+            changes: { focus_areas: ['region:eastern_africa', 'BR'] },
+            source: 'manual',
+            actorUserId: userId,
+        })
+        expect(event).toMatchObject({ field: 'focus_areas', from_value: [], to_value: ['region:eastern_africa', 'BR'] })
+        expect((await readOpportunity({ opportunityId: opportunity.id })).focus_areas).toEqual([
+            'region:eastern_africa',
+            'BR',
+        ])
+    })
+})

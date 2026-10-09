@@ -61,6 +61,7 @@ export default defineApiHandler(async event => {
         expectedDecisionAt: fromDateOnly({ value: body.expected_decision_at }),
         expectedReceiptAt: fromDateOnly({ value: body.expected_receipt_at ?? ruleDates.expected_receipt_at }),
         committeeOn: fromDateOnly({ value: body.committee_on ?? ruleDates.committee_on }),
+        focusAreas: body.focus_areas,
         receivedAt: fromDateOnly({ value: body.received_at }),
         nextStep: body.next_step ?? null,
         ownerId: body.owner_id ?? null,

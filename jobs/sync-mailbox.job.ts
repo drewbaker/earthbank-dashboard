@@ -23,6 +23,7 @@ export class SyncMailboxJob extends Job {
         }
         const startedAt = new Date()
         let isFirstUpdate = true
+        let lastPhase: string | null = null
         let result = null
         try {
             result = await syncMailbox({
@@ -30,6 +31,11 @@ export class SyncMailboxJob extends Job {
                 ai,
                 now: startedAt,
                 onProgress: async ({ phase, done, total }) => {
+                    // A line per step and every 25 emails, so syncs can be followed in the server logs too.
+                    if (phase !== lastPhase || (phase === 'reading' && done > 0 && done % 25 === 0)) {
+                        console.info(`[mail] ${mailboxConnectionId} ${phase} ${done}/${total ?? '?'}`)
+                        lastPhase = phase
+                    }
                     await recordMailboxSyncProgress({
                         mailboxConnectionId,
                         phase,

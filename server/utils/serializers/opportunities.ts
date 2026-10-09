@@ -45,6 +45,7 @@ export function serializeOpportunity({
         expected_decision_at: toDateOnly({ date: opportunity.expected_decision_at }),
         expected_receipt_at: toDateOnly({ date: opportunity.expected_receipt_at }),
         committee_on: toDateOnly({ date: opportunity.committee_on }),
+        focus_areas: Array.isArray(opportunity.focus_areas) ? (opportunity.focus_areas as string[]) : [],
         received_at: toDateOnly({ date: opportunity.received_at }),
         next_step: opportunity.next_step,
         owner: serializeUserSummary({ user: opportunity.owner }),

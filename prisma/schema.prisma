@@ -181,6 +181,8 @@ model Opportunity {
     expected_receipt_at  DateTime?
     // When it went to the funder's committee (set when the stage moves to in_committee).
     committee_on         DateTime?
+    // Geographic focus: country codes ("KE"), regions ("region:eastern_africa") or "global".
+    focus_areas          Json      @default("[]")
     received_at          DateTime?
     next_step            String?
     owner_id             String?

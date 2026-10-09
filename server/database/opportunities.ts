@@ -28,6 +28,7 @@ const OPEN_STAGES = Object.entries(OPPORTUNITY_STAGE_DETAILS)
  * @param input.expectedDecisionAt - Expected decision date.
  * @param input.expectedReceiptAt - Expected date the money lands.
  * @param input.committeeOn - When it went to committee, if it has.
+ * @param input.focusAreas - Geographic focus codes.
  * @param input.receivedAt - Date received.
  * @param input.nextStep - What happens next.
  * @param input.ownerId - Team member who owns it.
@@ -43,6 +44,7 @@ export function createOpportunityRow({
     expectedDecisionAt,
     expectedReceiptAt,
     committeeOn = null,
+    focusAreas = [],
     receivedAt,
     nextStep,
     ownerId,
@@ -56,6 +58,7 @@ export function createOpportunityRow({
     expectedDecisionAt: Date | null
     expectedReceiptAt: Date | null
     committeeOn?: Date | null
+    focusAreas?: string[]
     receivedAt: Date | null
     nextStep: string | null
     ownerId: string | null
@@ -72,6 +75,7 @@ export function createOpportunityRow({
             expected_decision_at: expectedDecisionAt,
             expected_receipt_at: expectedReceiptAt,
             committee_on: committeeOn,
+            focus_areas: focusAreas,
             received_at: receivedAt,
             next_step: nextStep,
             owner_id: ownerId,

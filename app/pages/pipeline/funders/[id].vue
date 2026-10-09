@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useAsyncData, useRoute, useSeoMeta, useToast } from '#imports'
 import { FUNDER_KIND_LABELS } from '#shared/constants/pipeline.ts'
+import { geoFocusLabel } from '#shared/utils/geo-focus.ts'
 import type { ChangeEventList, Contact, FunderDetail, Opportunity, Task, TaskList } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { useChangeEventActions } from '~/composables/useChangeEventActions.ts'
@@ -258,6 +259,15 @@ async function toggleArchived() {
                                             <PipelineGoalBadge :goal-type="opportunity.goal_type" />
                                             <PipelineStageBadge :stage="opportunity.stage" />
                                         </div>
+                                        <p v-if="opportunity.focus_areas.length" class="text-xs text-muted">
+                                            <UIcon
+                                                name="i-lucide-map-pin"
+                                                class="mr-0.5 inline size-3 align-text-bottom"
+                                            />
+                                            {{
+                                                opportunity.focus_areas.map(code => geoFocusLabel({ code })).join(', ')
+                                            }}
+                                        </p>
                                         <p v-if="opportunity.next_step" class="text-sm text-muted">
                                             Next: {{ opportunity.next_step }}
                                         </p>

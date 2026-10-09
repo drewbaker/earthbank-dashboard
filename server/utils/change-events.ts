@@ -40,6 +40,7 @@ export const TRACKED_FIELDS = {
         expected_decision_at: 'date',
         expected_receipt_at: 'date',
         committee_on: 'date',
+        focus_areas: 'json',
         received_at: 'date',
         next_step: 'text',
         owner_id: 'text',
