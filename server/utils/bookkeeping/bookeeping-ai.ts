@@ -142,6 +142,7 @@ export class BookeepingAiProvider implements BookkeepingProvider {
             query: { page, limit: PAGE_SIZE, startDate: since, sortKey: 'transactionDate', sortOrder: 1 },
         })
         const rows = z.array(TransactionPayload).parse((data as { transactions?: unknown }).transactions ?? [])
+        console.info(`[bookkeeping] transaction shapes (page ${page})`, JSON.stringify(describeEntryShapes({ rows })))
         return { transactions: rows.map(row => toExternalTransaction({ row })), hasMore: rows.length === PAGE_SIZE }
     }
 
@@ -175,19 +176,29 @@ export class BookeepingAiProvider implements BookkeepingProvider {
 }
 
 /**
- * Map a Bookeeping.ai transaction to ours. Transactions are double-entry: the "main" entry is the bank
- * account side (a DEBIT means money came in), and the other entry carries the category.
+ * Map a Bookeeping.ai transaction to ours. Transactions are double-entry: one entry is the bank
+ * account side (a DEBIT there means money came in) and the other carries the category. The bank side
+ * is the entry marked `isMain`; when that flag is missing, it's the entry booked to a current asset
+ * (bank accounts are current assets). Without a bank side, the sign comes from the category entry:
+ * an expense is a DEBIT there, so a CREDIT means money came in.
  *
  * @param input.row - The validated payload.
  * @returns The transaction, signed from the bank account's view.
  */
 export function toExternalTransaction({ row }: { row: z.infer<typeof TransactionPayload> }): ExternalTransaction {
     const entries = row.entries ?? []
-    const mainEntry = entries.find(entry => entry.isMain)
-    const categoryEntry = entries.find(entry => !entry.isMain) ?? null
-    const parentCategory = categoryEntry?.parentCategory ?? categoryEntry?.category?.parentCategory ?? null
-    const amount = Math.abs(mainEntry?.amount ?? row.totalAmount ?? 0)
-    const isInflow = mainEntry ? mainEntry.type === 'DEBIT' : INCOME_CATEGORIES.has(parentCategory ?? '')
+    const bankEntry =
+        entries.find(entry => entry.isMain) ??
+        (entries.length > 1 ? entries.find(entry => entryParentCategory({ entry }) === BANK_PARENT_CATEGORY) : null) ??
+        null
+    const categoryEntry = entries.find(entry => entry !== bankEntry) ?? null
+    const parentCategory = categoryEntry ? entryParentCategory({ entry: categoryEntry }) : null
+    const amount = Math.abs(bankEntry?.amount ?? categoryEntry?.amount ?? row.totalAmount ?? 0)
+    const isInflow = bankEntry
+        ? bankEntry.type === 'DEBIT'
+        : categoryEntry?.type
+          ? categoryEntry.type === 'CREDIT'
+          : INCOME_CATEGORIES.has(parentCategory ?? '')
     return {
         externalId: row._id,
         accountExternalId: row.account?._id ?? null,
@@ -201,4 +212,40 @@ export function toExternalTransaction({ row }: { row: z.infer<typeof Transaction
     }
 }
 
+/**
+ * Counts of how entries look (bank side or not, parent category, debit or credit), without amounts
+ * or names, so the sync log shows how Bookeeping.ai shapes this account's data.
+ *
+ * @param input.rows - Validated transactions.
+ * @returns Counts keyed like `main:CURRENT_ASSET:DEBIT`.
+ */
+export function describeEntryShapes({ rows }: { rows: z.infer<typeof TransactionPayload>[] }) {
+    const shapes: Record<string, number> = {}
+    for (const row of rows) {
+        const entries = row.entries ?? []
+        const key = entries.length
+            ? entries
+                  .map(
+                      entry =>
+                          `${entry.isMain ? 'main' : 'other'}:${entryParentCategory({ entry }) ?? 'none'}:${entry.type ?? '?'}`,
+                  )
+                  .sort()
+                  .join('+')
+            : 'no-entries'
+        shapes[key] = (shapes[key] ?? 0) + 1
+    }
+    return shapes
+}
+
+/**
+ * An entry's parent category, wherever Bookeeping.ai put it.
+ *
+ * @param input.entry - The entry.
+ * @returns The parent category, or null.
+ */
+function entryParentCategory({ entry }: { entry: z.infer<typeof EntryPayload> }) {
+    return entry.parentCategory ?? entry.category?.parentCategory ?? null
+}
+
+const BANK_PARENT_CATEGORY = 'CURRENT_ASSET'
 const INCOME_CATEGORIES = new Set(['INCOME', 'OTHER_INCOME', 'SALES'])

@@ -7,12 +7,12 @@ import {
 import type { BookkeepingProvider } from '#server/utils/bookkeeping/types.ts'
 import { readSyncState, writeSyncState } from '#server/utils/cash-settings.ts'
 import { fromDateOnly, toDateOnly } from '#server/utils/dates.ts'
-import { addDays, addMonths, lastOfMonth } from '#shared/utils/calendar-dates.ts'
+import { addMonths, lastOfMonth } from '#shared/utils/calendar-dates.ts'
 
-// The first sync reaches back a year (enough history for burn and the cash chart). Later syncs
-// re-read the last week too, because transactions get re-categorized after the fact.
-const FIRST_SYNC_MONTHS = 12
-const RESYNC_OVERLAP_DAYS = 7
+// Every sync re-reads the last year (enough history for burn and the cash chart), because
+// transactions get re-categorized after the fact, often weeks later. Earth Bank has a few hundred
+// transactions a year, so that's a couple of API reads an hour, far inside the rate limits.
+const SYNC_MONTHS = 12
 const MAX_TRANSACTION_PAGES = 40
 
 export type BookkeepingSyncResult = { accounts: number; snapshots: number; transactions: number }
@@ -29,7 +29,7 @@ export type BookkeepingSyncResult = { accounts: number; snapshots: number; trans
 export async function syncBookkeeping({ provider, now }: { provider: BookkeepingProvider; now: Date }) {
     const previous = await readSyncState()
     try {
-        const result = await pullBankData({ provider, now, lastSyncedAt: previous.last_synced_at })
+        const result = await pullBankData({ provider, now })
         await writeSyncState({ state: { last_synced_at: now.toISOString(), last_error: null } })
         console.info(`[bookkeeping] synced ${result.accounts} accounts, ${result.transactions} transactions`)
         return result
@@ -46,17 +46,14 @@ export async function syncBookkeeping({ provider, now }: { provider: Bookkeeping
  *
  * @param input.provider - Where bank data comes from.
  * @param input.now - Current time.
- * @param input.lastSyncedAt - Previous successful sync, if any.
  * @returns Counts of what was written.
  */
 async function pullBankData({
     provider,
     now,
-    lastSyncedAt,
 }: {
     provider: BookkeepingProvider
     now: Date
-    lastSyncedAt: string | null
 }): Promise<BookkeepingSyncResult> {
     const today = toDateOnly({ date: now })!
     let snapshots = 0
@@ -88,9 +85,7 @@ async function pullBankData({
         }
     }
 
-    const since = lastSyncedAt
-        ? addDays({ value: lastSyncedAt.slice(0, 10), days: -RESYNC_OVERLAP_DAYS })
-        : addMonths({ value: today, months: -FIRST_SYNC_MONTHS })
+    const since = addMonths({ value: today, months: -SYNC_MONTHS })
     const accountIds = await bankAccountIdsByExternalId()
     let transactions = 0
     for (let page = 1; page <= MAX_TRANSACTION_PAGES; page++) {

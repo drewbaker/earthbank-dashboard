@@ -98,6 +98,33 @@ describe('Bookeeping.ai sync', () => {
         expect(toExternalTransaction({ row: TRANSACTIONS[1] as never }).amountCents).toBe(10_000_000)
     })
 
+    it('finds the bank side and the category when entries have no isMain flag', async () => {
+        const { describeEntryShapes, toExternalTransaction } =
+            await import('#server/utils/bookkeeping/bookeeping-ai.ts')
+        const base = { _id: 'tx', transactionDate: '2026-09-02T00:00:00.000Z', totalAmount: 1200 }
+        const rent = {
+            ...base,
+            entries: [
+                { amount: 1200, type: 'CREDIT', parentCategory: 'CURRENT_ASSET', category: { name: 'Checking' } },
+                { amount: 1200, type: 'DEBIT', parentCategory: 'EXPENSE', category: { name: 'Rent' } },
+            ],
+        }
+        expect(toExternalTransaction({ row: rent as never })).toMatchObject({
+            amountCents: -120_000,
+            categoryName: 'Rent',
+            parentCategory: 'EXPENSE',
+        })
+        const grant = {
+            ...base,
+            entries: [{ amount: 1200, type: 'CREDIT', parentCategory: 'INCOME', category: { name: 'Grants' } }],
+        }
+        expect(toExternalTransaction({ row: grant as never }).amountCents).toBe(120_000)
+        expect(describeEntryShapes({ rows: [rent, grant] as never })).toEqual({
+            'other:CURRENT_ASSET:CREDIT+other:EXPENSE:DEBIT': 1,
+            'other:INCOME:CREDIT': 1,
+        })
+    })
+
     it('syncs accounts, balances and transactions, and is safe to run twice', async () => {
         const { syncBookkeeping } = await import('#server/utils/bookkeeping/sync.ts')
         const { loadCashSummary } = await import('#server/utils/cash.ts')
