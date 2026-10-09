@@ -58,6 +58,7 @@ const statusItems = [
     { label: 'Needs review', value: 'pending' },
     { label: 'Rejected', value: 'rejected' },
     { label: 'Reverted', value: 'reverted' },
+    { label: 'Out of date', value: 'superseded' },
 ]
 
 const { busyEventId, acceptChange, rejectChange, revertChange } = useChangeEventActions({ onChanged: reloadActivity })

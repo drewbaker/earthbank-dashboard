@@ -33,6 +33,7 @@ const STATUS_BADGES: Record<ChangeEvent['status'], { label: string; color: 'warn
     pending: { label: 'Needs review', color: 'warning' },
     rejected: { label: 'Rejected', color: 'neutral' },
     reverted: { label: 'Reverted', color: 'error' },
+    superseded: { label: 'Out of date', color: 'neutral' },
 }
 </script>
 
@@ -41,21 +42,20 @@ const STATUS_BADGES: Record<ChangeEvent['status'], { label: string; color: 'warn
         <li v-for="event in events" :key="event.id" class="flex gap-3 py-3">
             <UIcon :name="SOURCE_ICONS[event.source]" class="mt-0.5 size-4 shrink-0 text-muted" />
             <div class="min-w-0 flex-1 space-y-1">
+                <p v-if="showEntityName && event.funder_id" class="text-sm">
+                    <NuxtLink
+                        :to="`/pipeline/funders/${event.funder_id}`"
+                        class="font-medium text-highlighted hover:underline"
+                    >
+                        {{ event.entity_name }}
+                    </NuxtLink>
+                </p>
                 <p class="text-sm">
-                    <template v-if="showEntityName && event.funder_id">
-                        <NuxtLink
-                            :to="`/pipeline/funders/${event.funder_id}`"
-                            class="font-medium text-highlighted hover:underline"
-                        >
-                            {{ event.entity_name }}
-                        </NuxtLink>
-                        ·
-                    </template>
-                    <template v-else-if="event.entity_type === 'opportunity' && event.entity_name">
+                    <template v-if="!showEntityName && event.entity_type === 'opportunity' && event.entity_name">
                         <span class="text-muted">{{ event.entity_name.split(' · ').at(-1) }}:</span>
                         {{ ' ' }}
                     </template>
-                    <span class="font-medium text-highlighted">{{ changeFieldLabel({ field: event.field }) }}</span>
+                    <span class="font-medium text-highlighted">{{ changeFieldLabel({ field: event.field }) }}:</span>
                     {{ ' ' }}
                     <span class="text-muted">{{
                         formatChangeValue({ field: event.field, value: event.from_value, lookups })
@@ -72,6 +72,25 @@ const STATUS_BADGES: Record<ChangeEvent['status'], { label: string; color: 'warn
                         class="ml-2"
                     />
                 </p>
+                <!-- Actions sit right under the change they act on, so it's clear what Accept writes. -->
+                <div v-if="event.status === 'pending'" class="flex gap-2 pt-1">
+                    <UButton
+                        size="xs"
+                        color="success"
+                        icon="i-lucide-check"
+                        label="Accept"
+                        :loading="busyEventId === event.id"
+                        @click="emit('accept', event)"
+                    />
+                    <UButton
+                        size="xs"
+                        color="neutral"
+                        variant="ghost"
+                        icon="i-lucide-x"
+                        label="Reject"
+                        @click="emit('reject', event)"
+                    />
+                </div>
                 <p v-if="event.reason" class="text-xs text-muted">{{ event.reason }}</p>
                 <p class="text-xs text-dimmed">
                     {{ CHANGE_SOURCE_LABELS[event.source] }}
@@ -101,19 +120,8 @@ const STATUS_BADGES: Record<ChangeEvent['status'], { label: string; color: 'warn
                     <p class="text-muted">{{ event.evidence.summary }}</p>
                 </div>
             </div>
-            <div class="flex shrink-0 items-start gap-1">
-                <template v-if="event.status === 'pending'">
-                    <UButton
-                        size="xs"
-                        color="success"
-                        label="Accept"
-                        :loading="busyEventId === event.id"
-                        @click="emit('accept', event)"
-                    />
-                    <UButton size="xs" color="neutral" variant="ghost" label="Reject" @click="emit('reject', event)" />
-                </template>
+            <div v-if="event.status === 'applied'" class="flex shrink-0 items-start gap-1">
                 <UButton
-                    v-else-if="event.status === 'applied'"
                     size="xs"
                     color="neutral"
                     variant="ghost"

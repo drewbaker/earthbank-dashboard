@@ -257,19 +257,19 @@ describe('change log', () => {
             source: 'manual',
             actorUserId: userId,
         })
-        const [pending] = await applyFieldChanges({
-            entityType: 'opportunity',
-            entityId: opportunityId,
-            changes: { next_step: 'AI step' },
-            source: 'ai_email',
-            status: 'pending',
-        })
         await applyFieldChanges({
             entityType: 'opportunity',
             entityId: opportunityId,
             changes: { next_step: null },
             source: 'manual',
             actorUserId: userId,
+        })
+        const [pending] = await applyFieldChanges({
+            entityType: 'opportunity',
+            entityId: opportunityId,
+            changes: { next_step: 'AI step' },
+            source: 'ai_email',
+            status: 'pending',
         })
         await acceptChangeEvent({ changeEventId: pending!.id, actorUserId: userId })
         expect((await findChangeEvent({ changeEventId: pending!.id }))!.from_value).toBeNull()

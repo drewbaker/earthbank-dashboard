@@ -213,7 +213,7 @@ model ChangeEvent {
     to_value            Json?
     // manual | import | ai_email | ai_forward
     source              String
-    // applied | pending | rejected | reverted
+    // applied | pending | rejected | reverted | superseded
     status              String
     actor_user_id       String?
     evidence_id         String?

@@ -1,6 +1,7 @@
 import { defineTask } from 'nitropack/runtime'
 import { deleteAttachmentRows, listPurgeableAttachments } from '#server/database/attachments.ts'
 import { deleteExpiredSessions } from '#server/database/sessions.ts'
+import { supersedeAllStaleSuggestions } from '#server/utils/change-events.ts'
 import { config } from '#server/utils/config.ts'
 import { deleteStoredFile } from '#server/utils/storage.ts'
 
@@ -10,7 +11,8 @@ const ATTACHMENT_RETENTION_DAYS = 30
 export default defineTask({
     meta: {
         name: 'cleanup',
-        description: 'Delete expired sessions and the files of attachments removed over 30 days ago',
+        description:
+            'Delete expired sessions and the files of attachments removed over 30 days ago; retire out-of-date suggestions',
     },
     async run() {
         if (!config.runBackgroundWorkers) {
@@ -27,6 +29,9 @@ export default defineTask({
         const purgedAttachments = await deleteAttachmentRows({
             attachmentIds: purgeable.map(attachment => attachment.id),
         })
-        return { result: `deleted ${deletedSessions} expired sessions, purged ${purgedAttachments} attachments` }
+        const supersededSuggestions = await supersedeAllStaleSuggestions()
+        return {
+            result: `deleted ${deletedSessions} expired sessions, purged ${purgedAttachments} attachments, retired ${supersededSuggestions} out-of-date suggestions`,
+        }
     },
 })

@@ -105,7 +105,8 @@ export const CHANGE_SOURCE_LABELS: Record<ChangeSource, string> = {
     ai_instruction: 'Instruction by email',
 }
 
-export const CHANGE_STATUSES = ['applied', 'pending', 'rejected', 'reverted'] as const
+// superseded: a suggestion made out of date by a newer email or edit to the same field.
+export const CHANGE_STATUSES = ['applied', 'pending', 'rejected', 'reverted', 'superseded'] as const
 export type ChangeStatus = (typeof CHANGE_STATUSES)[number]
 
 export const MILESTONE_KINDS = ['funding', 'event', 'internal'] as const

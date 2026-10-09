@@ -32,6 +32,8 @@ export function useChangeEventActions({ onChanged }: { onChanged: () => Promise<
             await onChanged()
         } catch (error) {
             toast.add({ title: apiErrorMessage({ error }), color: 'error' })
+            // The server may have retired an out-of-date suggestion; show the list as it is now.
+            await onChanged()
         } finally {
             busyEventId.value = null
         }

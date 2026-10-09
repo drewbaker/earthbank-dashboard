@@ -1,6 +1,14 @@
 import type { Prisma } from '#server/generated/prisma/client.ts'
 import type { ChangeEventDraft } from '#server/database/change-events.ts'
-import { findChangeEvent, resolveChangeEvent, writeFieldChanges, writeRevert } from '#server/database/change-events.ts'
+import {
+    findChangeEvent,
+    listCompetingFieldChanges,
+    listPendingChangeFields,
+    markChangeEventsSuperseded,
+    resolveChangeEvent,
+    writeFieldChanges,
+    writeRevert,
+} from '#server/database/change-events.ts'
 import { findFunder } from '#server/database/funders.ts'
 import { findOpportunity } from '#server/database/opportunities.ts'
 import { config } from '#server/utils/config.ts'
@@ -132,6 +140,9 @@ export async function applyFieldChanges<Entity extends ChangeEntityType>({
         reason,
         confidence,
     })
+    for (const draft of drafts) {
+        await supersedeStaleSuggestions({ entityType, entityId, field: draft.field })
+    }
     const stageDraft = drafts.find(draft => draft.field === 'stage')
     // Imports carry the spreadsheet's state, not a stage change that just happened.
     if (entityType !== 'opportunity' || status !== 'applied' || !stageDraft || source === 'import') {
@@ -226,6 +237,13 @@ export async function acceptChangeEvent({
         throw badRequest({ message: 'Only pending changes can be accepted.', code: 'change_not_pending' })
     }
     const entityType = event.entity_type as ChangeEntityType
+    const supersededIds = await supersedeStaleSuggestions({ entityType, entityId: event.entity_id, field: event.field })
+    if (supersededIds.includes(changeEventId)) {
+        throw conflict({
+            message:
+                'This suggestion is out of date: the field was changed after that email, or a newer email suggests something else. It has been removed from the review list.',
+        })
+    }
     const kind = (TRACKED_FIELDS[entityType] as Record<string, FieldKind>)[event.field]!
     const current = await loadEntityValues({ entityType, entityId: event.entity_id })
     await resolveChangeEvent({
@@ -331,6 +349,76 @@ export async function revertChangeEvent({
         actorUserId,
         resolvedAt: new Date(),
     })
+}
+
+/**
+ * Retire suggestions for one field that are out of date, so nobody accepts an old email over newer
+ * information. A pending suggestion is superseded when:
+ * - the field already has the suggested value, or
+ * - another suggestion or applied change to the field is newer. "Newer" compares the date of the
+ *   email behind each one (or when it was made, for edits by hand). The spreadsheet import doesn't
+ *   count: its rows don't say when they were last true.
+ *
+ * @param input.entityType - `funder` or `opportunity`.
+ * @param input.entityId - The record.
+ * @param input.field - The field.
+ * @returns Ids of the suggestions that were superseded.
+ */
+export async function supersedeStaleSuggestions({
+    entityType,
+    entityId,
+    field,
+}: {
+    entityType: ChangeEntityType
+    entityId: string
+    field: string
+}) {
+    const events = await listCompetingFieldChanges({ entityType, entityId, field })
+    const pending = events.filter(event => event.status === 'pending')
+    if (pending.length === 0) {
+        return []
+    }
+    const kind = (TRACKED_FIELDS[entityType] as Record<string, FieldKind>)[field]!
+    const current = await loadEntityValues({ entityType, entityId })
+    const currentValue = JSON.stringify(toChangeValue({ kind, value: current[field] }))
+    const asOf = (event: (typeof events)[number]) => (event.evidence?.sent_at ?? event.created_at).getTime()
+    // Ties (two changes from one email) go to the later event.
+    const isNewer = (other: (typeof events)[number], event: (typeof events)[number]) =>
+        asOf(other) > asOf(event) || (asOf(other) === asOf(event) && other.id > event.id)
+    const staleIds = pending
+        .filter(
+            event =>
+                JSON.stringify(event.to_value ?? null) === currentValue ||
+                events.some(other => other.id !== event.id && isNewer(other, event)),
+        )
+        .map(event => event.id)
+    await markChangeEventsSuperseded({ changeEventIds: staleIds, resolvedAt: new Date() })
+    return staleIds
+}
+
+/**
+ * Run `supersedeStaleSuggestions` over every field that has a suggestion waiting (the hourly cleanup,
+ * and suggestions made before this rule existed).
+ *
+ * @returns How many suggestions were superseded.
+ */
+export async function supersedeAllStaleSuggestions() {
+    let superseded = 0
+    for (const { entity_type, entity_id, field } of await listPendingChangeFields()) {
+        try {
+            superseded += (
+                await supersedeStaleSuggestions({
+                    entityType: entity_type as ChangeEntityType,
+                    entityId: entity_id,
+                    field,
+                })
+            ).length
+        } catch (error) {
+            // A suggestion for a record that no longer exists shouldn't stop the rest.
+            console.error('[changes] could not check suggestion', entity_id, field, error)
+        }
+    }
+    return superseded
 }
 
 /**

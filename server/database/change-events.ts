@@ -319,3 +319,76 @@ export async function writeRevert({
         }),
     ])
 }
+
+/**
+ * The changes that compete over one field: pending suggestions, and applied changes other than the
+ * spreadsheet import, each with the date of the email behind it (if any).
+ *
+ * @param input.entityType - `funder` or `opportunity`.
+ * @param input.entityId - The record.
+ * @param input.field - The field.
+ * @returns The events, oldest first.
+ */
+export function listCompetingFieldChanges({
+    entityType,
+    entityId,
+    field,
+}: {
+    entityType: ChangeEntityType
+    entityId: string
+    field: string
+}) {
+    return db().changeEvent.findMany({
+        where: {
+            entity_type: entityType,
+            entity_id: entityId,
+            field,
+            OR: [{ status: 'pending' }, { status: 'applied', source: { not: 'import' } }],
+        },
+        select: {
+            id: true,
+            status: true,
+            to_value: true,
+            created_at: true,
+            evidence: { select: { sent_at: true } },
+        },
+        orderBy: { id: 'asc' },
+    })
+}
+
+/**
+ * Every record and field that has a suggestion waiting for review.
+ *
+ * @returns Distinct entity/field pairs.
+ */
+export function listPendingChangeFields() {
+    return db().changeEvent.findMany({
+        where: { status: 'pending' },
+        distinct: ['entity_type', 'entity_id', 'field'],
+        select: { entity_type: true, entity_id: true, field: true },
+    })
+}
+
+/**
+ * Mark pending suggestions as superseded (out of date), so they leave the review list.
+ *
+ * @param input.changeEventIds - The pending events.
+ * @param input.resolvedAt - When.
+ * @returns How many were marked.
+ */
+export async function markChangeEventsSuperseded({
+    changeEventIds,
+    resolvedAt,
+}: {
+    changeEventIds: string[]
+    resolvedAt: Date
+}) {
+    if (changeEventIds.length === 0) {
+        return 0
+    }
+    const { count } = await db().changeEvent.updateMany({
+        where: { id: { in: changeEventIds }, status: 'pending' },
+        data: { status: 'superseded', resolved_at: resolvedAt },
+    })
+    return count
+}

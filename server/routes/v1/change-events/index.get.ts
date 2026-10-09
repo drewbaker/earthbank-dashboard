@@ -22,7 +22,7 @@ defineRouteMeta({
             {
                 name: 'status',
                 in: 'query',
-                schema: { type: 'string', enum: ['applied', 'pending', 'rejected', 'reverted'] },
+                schema: { type: 'string', enum: ['applied', 'pending', 'rejected', 'reverted', 'superseded'] },
             },
             { name: 'cursor', in: 'query', schema: { type: 'string' } },
             { name: 'limit', in: 'query', schema: { type: 'integer', maximum: 200 } },
