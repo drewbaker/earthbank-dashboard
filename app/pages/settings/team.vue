@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '~/utils/format.ts'
 import type { TableColumn } from '@nuxt/ui'
 import { h, ref, resolveComponent } from 'vue'
 import { useAsyncData, useSeoMeta, useToast } from '#imports'
@@ -54,9 +55,7 @@ const columns: TableColumn<User>[] = [
  * @returns A short local date and time.
  */
 function formatSignIn({ signedInAt }: { signedInAt: string | null }) {
-    return signedInAt
-        ? new Date(signedInAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-        : 'Never'
+    return signedInAt ? formatDateTime({ value: signedInAt }) : 'Never'
 }
 
 /**

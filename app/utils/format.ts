@@ -1,3 +1,5 @@
+import { tryUseNuxtApp } from '#imports'
+
 const compactMoney = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -57,7 +59,8 @@ export function formatDate({
         month: 'short',
         day: 'numeric',
         year: style === 'medium' ? 'numeric' : undefined,
-        timeZone: isCalendarDate ? 'UTC' : undefined,
+        // A calendar date (a deadline) is the same day everywhere; a moment is shown in the viewer's zone.
+        timeZone: isCalendarDate ? 'UTC' : displayTimeZone(),
     })
 }
 
@@ -118,4 +121,42 @@ export function formatFileSize({ bytes }: { bytes: number }) {
     return bytes < 1024 * 1024
         ? `${Math.max(1, Math.round(bytes / 1024))} KB`
         : `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+/**
+ * The viewer's time zone: the browser's, which the time-zone plugin also shares with the server so
+ * server-rendered pages match (the server runs in UTC).
+ *
+ * @returns An IANA zone, or undefined to use the runtime's own.
+ */
+export function displayTimeZone(): string | undefined {
+    return (tryUseNuxtApp()?.$timeZone as string | undefined) ?? undefined
+}
+
+/**
+ * A moment as a short date and time in the viewer's zone, e.g. "Oct 9, 2026, 3:14 PM".
+ *
+ * @param input.value - ISO timestamp.
+ * @returns The formatted date and time.
+ */
+export function formatDateTime({ value }: { value: string }) {
+    return new Date(value).toLocaleString('en-US', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: displayTimeZone(),
+    })
+}
+
+/**
+ * Today's date in the viewer's zone.
+ *
+ * @returns YYYY-MM-DD.
+ */
+export function localToday() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: displayTimeZone(),
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(new Date())
 }

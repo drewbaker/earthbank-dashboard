@@ -4,7 +4,6 @@ import { findFunder } from '#server/database/funders.ts'
 import { findMilestone } from '#server/database/milestones.ts'
 import { findOpportunity } from '#server/database/opportunities.ts'
 import { findTask } from '#server/database/tasks.ts'
-import { todayDateOnly } from '#server/utils/dates.ts'
 import { badRequest, notFound } from '#server/utils/errors.ts'
 import { serializeTaskDetail } from '#server/utils/serializers/tasks.ts'
 
@@ -52,14 +51,15 @@ export async function resolveTaskLinks({
  * Load a task with its comments and attachments.
  *
  * @param input.taskId - The task.
+ * @param input.today - Today's date for the viewer (for overdue flags).
  * @returns The serialized task detail.
  * @throws ApiError 404 when the task doesn't exist.
  */
-export async function loadTaskDetail({ taskId }: { taskId: string }) {
+export async function loadTaskDetail({ taskId, today }: { taskId: string; today: string }) {
     const task = await findTask({ taskId })
     if (!task) {
         throw notFound({ resource: 'Task' })
     }
     const [comments, attachments] = await Promise.all([listTaskComments({ taskId }), listTaskAttachments({ taskId })])
-    return serializeTaskDetail({ task, comments, attachments, today: todayDateOnly() })
+    return serializeTaskDetail({ task, comments, attachments, today })
 }

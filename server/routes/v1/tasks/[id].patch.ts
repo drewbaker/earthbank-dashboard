@@ -9,6 +9,7 @@ import { notFound } from '#server/utils/errors.ts'
 import { notifyTaskAssigned } from '#server/utils/notifications.ts'
 import { loadTaskDetail, resolveTaskLinks } from '#server/utils/tasks.ts'
 import { assertActiveUser } from '#server/utils/users.ts'
+import { requestToday } from '#server/utils/time-zone.ts'
 import { UpdateTaskRequest } from '#shared/schemas/index.ts'
 
 defineRouteMeta({
@@ -73,7 +74,7 @@ export default defineApiHandler(async event => {
     if (body.assignee_id && body.assignee_id !== existing.assignee_id) {
         await notifyTaskAssigned({ task, assigneeId: body.assignee_id, actorUserId: ctx.user.id })
     }
-    return loadTaskDetail({ taskId })
+    return loadTaskDetail({ taskId, today: requestToday({ event }) })
 })
 
 /**

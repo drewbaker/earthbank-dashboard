@@ -11,7 +11,7 @@ import { useChangeEventActions } from '~/composables/useChangeEventActions.ts'
 import { useForecast } from '~/composables/useForecast.ts'
 import { usePipelineReference } from '~/composables/usePipelineReference.ts'
 import { useTaskActions } from '~/composables/useTaskActions.ts'
-import { formatDate, formatMoney } from '~/utils/format.ts'
+import { formatDate, formatMoney, localToday } from '~/utils/format.ts'
 
 useSeoMeta({ title: 'Overview · Earth Bank Dashboard' })
 
@@ -73,7 +73,7 @@ const { busyEventId, acceptChange, rejectChange, revertChange } = useChangeEvent
 })
 
 const upcomingMilestones = computed(() => {
-    const horizon = addDays({ value: inputs.data.value?.today ?? new Date().toISOString().slice(0, 10), days: 60 })
+    const horizon = addDays({ value: inputs.data.value?.today ?? localToday(), days: 60 })
     return (milestones.value?.data ?? []).filter(milestone => milestone.due_at <= horizon).slice(0, 6)
 })
 

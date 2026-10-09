@@ -2,8 +2,9 @@ import { defineRouteMeta } from 'nitropack/runtime'
 import { listTaskRows } from '#server/database/tasks.ts'
 import { defineApiHandler, parseQuery } from '#server/utils/api.ts'
 import { requireUser } from '#server/utils/auth.ts'
-import { fromDateOnly, todayDateOnly } from '#server/utils/dates.ts'
+import { fromDateOnly } from '#server/utils/dates.ts'
 import { serializeTask } from '#server/utils/serializers/tasks.ts'
+import { requestToday } from '#server/utils/time-zone.ts'
 import { ListTasksQuery } from '#shared/schemas/index.ts'
 
 defineRouteMeta({
@@ -40,6 +41,6 @@ export default defineApiHandler(async event => {
         includeDone: query.include_done,
         dueBefore: fromDateOnly({ value: query.due_before }) ?? undefined,
     })
-    const today = todayDateOnly()
+    const today = requestToday({ event })
     return { data: tasks.map(task => serializeTask({ task, today })), next_cursor: null, has_more: false }
 })

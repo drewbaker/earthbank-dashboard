@@ -53,6 +53,8 @@ export async function enqueueBookkeepingSync() {
 
 // Mail jobs share one queue with concurrency 1: they call the AI and write the pipeline, and running
 // them one at a time keeps change order predictable and stays well inside API rate limits.
+// Gmail calls are paced to stay under Google's per-user quota, so a first sync of a busy inbox can take
+// a while; the 45-minute timeout leaves room for it.
 
 /**
  * Queue a Gmail sync for one mailbox (one waiting sync per mailbox at a time).
@@ -67,7 +69,7 @@ export async function enqueueMailboxSync({ mailboxConnectionId }: { mailboxConne
             Sidequest.build(SyncMailboxJob)
                 .queue('mail')
                 .maxAttempts(3)
-                .timeout(15 * 60 * 1000)
+                .timeout(45 * 60 * 1000)
                 .unique({ withArgs: true })
                 .enqueue({ mailboxConnectionId }),
     })
@@ -89,7 +91,7 @@ export async function enqueueFunderBackfill({ funderId }: { funderId: string }) 
             Sidequest.build(BackfillFunderJob)
                 .queue('mail')
                 .maxAttempts(3)
-                .timeout(15 * 60 * 1000)
+                .timeout(45 * 60 * 1000)
                 .unique({ withArgs: true })
                 .enqueue({ funderId }),
     })

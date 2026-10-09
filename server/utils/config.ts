@@ -98,6 +98,10 @@ export const config = {
             .filter(Boolean)
         return [...new Set([this.googleWorkspaceDomain, this.inboundEmailDomain, ...domains])]
     },
+    /** Time zone for work with no browser behind it (emails, digests); people's own zones come from their browser. */
+    get defaultTimeZone() {
+        return env('APP_TIME_ZONE', 'America/Los_Angeles')
+    },
     get inboundEmailDomain() {
         return env('INBOUND_EMAIL_DOMAIN', 'mail.theearthbank.org').toLowerCase()
     },

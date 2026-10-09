@@ -5,7 +5,7 @@ import { defineApiHandler, parseBody, requestIp } from '#server/utils/api.ts'
 import { recordAudit } from '#server/utils/audit.ts'
 import { requireUser } from '#server/utils/auth.ts'
 import { loadCashSummary } from '#server/utils/cash.ts'
-import { todayDateOnly } from '#server/utils/dates.ts'
+import { requestToday } from '#server/utils/time-zone.ts'
 import { UpdateBankAccountRequest } from '#shared/schemas/index.ts'
 
 defineRouteMeta({
@@ -40,5 +40,5 @@ export default defineApiHandler(async event => {
         changes: body,
         ip: requestIp({ event }),
     })
-    return loadCashSummary({ today: todayDateOnly() })
+    return loadCashSummary({ today: requestToday({ event }) })
 })

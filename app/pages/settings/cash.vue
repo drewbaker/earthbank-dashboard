@@ -5,7 +5,14 @@ import type { GoalType } from '#shared/constants/pipeline.ts'
 import { GOAL_TYPE_DETAILS, GOAL_TYPES } from '#shared/constants/pipeline.ts'
 import type { CashSettings, CashSummary } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
-import { centsToDollars, dollarsToCents, formatDate, formatMoney, formatRelativeTime } from '~/utils/format.ts'
+import {
+    centsToDollars,
+    dollarsToCents,
+    formatDate,
+    formatMoney,
+    formatRelativeTime,
+    localToday,
+} from '~/utils/format.ts'
 
 useSeoMeta({ title: 'Cash settings · Earth Bank Dashboard' })
 
@@ -63,8 +70,7 @@ async function saveSettings() {
             method: 'PUT',
             body: {
                 manual_balance_cents: manualBalance,
-                manual_balance_as_of:
-                    manualBalance === null ? null : form.manual_balance_as_of || new Date().toISOString().slice(0, 10),
+                manual_balance_as_of: manualBalance === null ? null : form.manual_balance_as_of || localToday(),
                 burn_override_cents: dollarsToCents({ dollars: form.burn_override_dollars }),
                 lookback_months: form.lookback_months,
                 excluded_categories: form.excluded_categories,
@@ -235,7 +241,14 @@ async function setAccountIncluded({ accountId, isIncluded }: { accountId: string
                                 : 'No transaction history yet, so set this by hand.'
                         "
                     >
-                        <MoneyInput v-model="form.burn_override_dollars" placeholder="Use computed burn" />
+                        <MoneyInput
+                            v-model="form.burn_override_dollars"
+                            :placeholder="
+                                summary?.computed_burn_cents !== null && summary?.computed_burn_cents !== undefined
+                                    ? `Calculated: ${formatMoney({ cents: summary.computed_burn_cents })}`
+                                    : 'Not set'
+                            "
+                        />
                     </UFormField>
                     <UFormField label="Average burn over">
                         <USelect

@@ -3,6 +3,7 @@ import { defineRouteMeta } from 'nitropack/runtime'
 import { defineApiHandler } from '#server/utils/api.ts'
 import { requireUser } from '#server/utils/auth.ts'
 import { loadTaskDetail } from '#server/utils/tasks.ts'
+import { requestToday } from '#server/utils/time-zone.ts'
 
 defineRouteMeta({
     openAPI: {
@@ -21,5 +22,5 @@ defineRouteMeta({
 
 export default defineApiHandler(async event => {
     requireUser({ event })
-    return loadTaskDetail({ taskId: getRouterParam(event, 'id') ?? '' })
+    return loadTaskDetail({ taskId: getRouterParam(event, 'id') ?? '', today: requestToday({ event }) })
 })

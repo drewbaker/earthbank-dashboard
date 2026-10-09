@@ -2,7 +2,7 @@ import { defineRouteMeta } from 'nitropack/runtime'
 import { defineApiHandler } from '#server/utils/api.ts'
 import { requireUser } from '#server/utils/auth.ts'
 import { loadCashSummary } from '#server/utils/cash.ts'
-import { todayDateOnly } from '#server/utils/dates.ts'
+import { requestToday } from '#server/utils/time-zone.ts'
 
 defineRouteMeta({
     openAPI: {
@@ -21,5 +21,5 @@ defineRouteMeta({
 
 export default defineApiHandler(async event => {
     requireUser({ event })
-    return loadCashSummary({ today: todayDateOnly() })
+    return loadCashSummary({ today: requestToday({ event }) })
 })

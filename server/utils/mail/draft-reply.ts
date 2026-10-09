@@ -306,6 +306,6 @@ ${threadText}
 
 Write the email.
 - From: ${author.name} <${author.email}>
-- Today: ${todayDateOnly({ now })}
+- Today: ${todayDateOnly({ now, timeZone: config.defaultTimeZone })}
 - It should: ${ask ?? (thread ? 'reply to the latest message in the thread and move things forward' : 'reconnect and move the conversation forward')}`
 }

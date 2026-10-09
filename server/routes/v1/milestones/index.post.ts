@@ -4,9 +4,10 @@ import { createMilestoneRow } from '#server/database/milestones.ts'
 import { defineApiHandler, parseBody, requestIp } from '#server/utils/api.ts'
 import { recordAudit } from '#server/utils/audit.ts'
 import { requireUser } from '#server/utils/auth.ts'
-import { fromDateOnly, todayDateOnly } from '#server/utils/dates.ts'
+import { fromDateOnly } from '#server/utils/dates.ts'
 import { resolveMilestoneLinks } from '#server/utils/milestones.ts'
 import { serializeMilestone } from '#server/utils/serializers/milestones.ts'
+import { requestToday } from '#server/utils/time-zone.ts'
 import { CreateMilestoneRequest } from '#shared/schemas/index.ts'
 
 defineRouteMeta({
@@ -50,5 +51,5 @@ export default defineApiHandler(async event => {
         ip: requestIp({ event }),
     })
     setResponseStatus(event, 201)
-    return serializeMilestone({ milestone, today: todayDateOnly() })
+    return serializeMilestone({ milestone, today: requestToday({ event }) })
 })

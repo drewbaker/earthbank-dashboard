@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { useToast } from '#imports'
+import { useAsyncData, useToast } from '#imports'
 import type { GoalType, OpportunityStage } from '#shared/constants/pipeline.ts'
 import { OPPORTUNITY_STAGE_DETAILS, OPPORTUNITY_STAGES } from '#shared/constants/pipeline.ts'
-import type { Opportunity } from '#shared/schemas/index.ts'
+import type { Opportunity, StageProbabilities } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { NO_OWNER, ownerIdFromSelection, usePipelineReference } from '~/composables/usePipelineReference.ts'
 import { centsToDollars, dollarsToCents } from '~/utils/format.ts'
@@ -20,6 +20,18 @@ const open = defineModel<boolean>('open', { default: false })
 const api = useApi()
 const toast = useToast()
 const { ownerItems, goalItems } = usePipelineReference()
+
+// The team's probability per stage (Settings → Pipeline), so a blank override shows what it falls back to.
+const { data: stageProbabilities } = useAsyncData('settings.stage-probabilities', () =>
+    api<StageProbabilities>({ path: '/settings/stage-probabilities' }),
+)
+const stageDefault = computed(() => {
+    const stage = formState.stage
+    return {
+        label: OPPORTUNITY_STAGE_DETAILS[stage].label,
+        probability: stageProbabilities.value?.[stage] ?? OPPORTUNITY_STAGE_DETAILS[stage].defaultProbability,
+    }
+})
 
 // Amounts are typed in dollars and sent as cents; dates come straight from date inputs (YYYY-MM-DD).
 type OpportunityFormState = {
@@ -164,13 +176,13 @@ async function saveOpportunity() {
                 <UFormField
                     label="Probability override (%)"
                     name="probability_override"
-                    :help="`Leave blank to use the stage default (${formState.stage.replace('_', ' ')}).`"
+                    :help="`Leave blank to use the ${stageDefault.label} stage default: ${stageDefault.probability}%.`"
                 >
                     <UInputNumber
                         v-model="formState.probability_override"
                         :min="0"
                         :max="100"
-                        placeholder="Default"
+                        :placeholder="`Default: ${stageDefault.probability}%`"
                         class="w-full"
                     />
                 </UFormField>

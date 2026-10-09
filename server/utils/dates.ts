@@ -49,11 +49,14 @@ export function centsToBigInt({ cents }: { cents: number | null | undefined }) {
 }
 
 /**
- * Today's calendar date in UTC as `YYYY-MM-DD`.
+ * Today's calendar date in a time zone (the viewer's, so "today" and "overdue" roll over at their
+ * midnight, not UTC's).
  *
- * @param input.now - Current time (for tests).
- * @returns The date string.
+ * @param input.now - The moment to read.
+ * @param input.timeZone - IANA zone, e.g. `America/Los_Angeles`; defaults to UTC.
+ * @returns YYYY-MM-DD.
  */
-export function todayDateOnly({ now = new Date() }: { now?: Date } = {}) {
-    return now.toISOString().slice(0, 10)
+export function todayDateOnly({ now = new Date(), timeZone = 'UTC' }: { now?: Date; timeZone?: string } = {}) {
+    // en-CA formats as YYYY-MM-DD.
+    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
 }

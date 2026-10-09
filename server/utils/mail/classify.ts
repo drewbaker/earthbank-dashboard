@@ -11,8 +11,9 @@ import type { EmailClassification } from '#server/utils/ai/schemas.ts'
 import { DraftFunderProposal, EmailClassification as EmailClassificationSchema } from '#server/utils/ai/schemas.ts'
 import type { ChangeValue } from '#server/utils/change-events.ts'
 import { applyFieldChanges } from '#server/utils/change-events.ts'
+import { config } from '#server/utils/config.ts'
 import { addContactToFunder } from '#server/utils/contacts.ts'
-import { toDateOnly } from '#server/utils/dates.ts'
+import { todayDateOnly, toDateOnly } from '#server/utils/dates.ts'
 import { createFunderWithDetails, loadFunderDetail } from '#server/utils/funders.ts'
 import type { IncomingEmail } from '#server/utils/mail/types.ts'
 import type { FunderDetail } from '#shared/schemas/index.ts'
@@ -120,7 +121,7 @@ export async function proposeDraftFunder({
     const result = await ai.completeStructured({
         instructions: DRAFT_FUNDER_INSTRUCTIONS,
         prompt: [
-            `Forwarded email, sent ${email.sentAt.toISOString().slice(0, 10)}`,
+            `Forwarded email, sent ${todayDateOnly({ now: email.sentAt, timeZone: config.defaultTimeZone })}`,
             `From: ${email.from}`,
             `To: ${email.to.join(', ')}`,
             `Subject: ${email.subject}`,
@@ -212,7 +213,7 @@ export function buildClassificationPrompt({ email, funder }: { email: IncomingEm
         'What Earth Bank currently records:',
         JSON.stringify(context, null, 2),
         '',
-        `Email sent ${email.sentAt.toISOString().slice(0, 10)}`,
+        `Email sent ${todayDateOnly({ now: email.sentAt, timeZone: config.defaultTimeZone })}`,
         `From: ${email.from}`,
         `To: ${email.to.join(', ')}`,
         email.cc.length ? `Cc: ${email.cc.join(', ')}` : null,

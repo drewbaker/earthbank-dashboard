@@ -808,6 +808,7 @@ Static rules go in `routeRules`. Everything except hashed assets is private, so 
 
 - Dark mode is supported from day one, using the light/dark tokens above.
 - Dashboard layout uses Nuxt UI's dashboard components (`UDashboardGroup`, `UDashboardSidebar`, `UDashboardPanel`, `UDashboardNavbar`). The sidebar nav is defined in one constant (`app/utils/navigation.ts`), so adding a page later means adding a route and one nav entry: Overview, Pipeline, Forecast, Milestones & Tasks, Activity, Settings.
+- **Dates follow the viewer's time zone.** The browser stores its zone in the `earthbank_dashboard_tz` cookie (`app/plugins/time-zone.ts`), so server-rendered pages and the server's "today" (`requestToday`) use it; `formatDate` shows moments in that zone. Calendar dates (deadlines, expected dates) are the same day everywhere. Work with no browser (emails, digests) uses `APP_TIME_ZONE`.
 - Money is stored as integer cents (`amount_cents`) in USD and formatted in the client with one `formatMoney({ cents })` helper; compact form (`$1.5M`) on charts and tiles.
 
 ### Data fetching

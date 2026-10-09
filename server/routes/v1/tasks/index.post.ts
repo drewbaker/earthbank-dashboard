@@ -8,6 +8,7 @@ import { fromDateOnly } from '#server/utils/dates.ts'
 import { notifyTaskAssigned } from '#server/utils/notifications.ts'
 import { loadTaskDetail, resolveTaskLinks } from '#server/utils/tasks.ts'
 import { assertActiveUser } from '#server/utils/users.ts'
+import { requestToday } from '#server/utils/time-zone.ts'
 import { CreateTaskRequest } from '#shared/schemas/index.ts'
 
 defineRouteMeta({
@@ -58,5 +59,5 @@ export default defineApiHandler(async event => {
         await notifyTaskAssigned({ task, assigneeId: task.assignee_id, actorUserId: ctx.user.id })
     }
     setResponseStatus(event, 201)
-    return loadTaskDetail({ taskId: task.id })
+    return loadTaskDetail({ taskId: task.id, today: requestToday({ event }) })
 })

@@ -1,8 +1,8 @@
 import { defineRouteMeta } from 'nitropack/runtime'
 import { defineApiHandler } from '#server/utils/api.ts'
 import { requireUser } from '#server/utils/auth.ts'
-import { todayDateOnly } from '#server/utils/dates.ts'
 import { loadForecastInputs } from '#server/utils/forecast.ts'
+import { requestToday } from '#server/utils/time-zone.ts'
 
 defineRouteMeta({
     openAPI: {
@@ -21,5 +21,5 @@ defineRouteMeta({
 
 export default defineApiHandler(async event => {
     requireUser({ event })
-    return loadForecastInputs({ today: todayDateOnly() })
+    return loadForecastInputs({ today: requestToday({ event }) })
 })

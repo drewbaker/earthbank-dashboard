@@ -2,8 +2,9 @@ import { defineRouteMeta } from 'nitropack/runtime'
 import { listMilestoneRows } from '#server/database/milestones.ts'
 import { defineApiHandler, parseQuery } from '#server/utils/api.ts'
 import { requireUser } from '#server/utils/auth.ts'
-import { fromDateOnly, todayDateOnly } from '#server/utils/dates.ts'
+import { fromDateOnly } from '#server/utils/dates.ts'
 import { serializeMilestone } from '#server/utils/serializers/milestones.ts'
+import { requestToday } from '#server/utils/time-zone.ts'
 import { ListMilestonesQuery } from '#shared/schemas/index.ts'
 
 defineRouteMeta({
@@ -39,7 +40,7 @@ export default defineApiHandler(async event => {
         goalType: query.goal_type,
         dueBefore: fromDateOnly({ value: query.due_before }) ?? undefined,
     })
-    const today = todayDateOnly()
+    const today = requestToday({ event })
     return {
         data: milestones.map(milestone => serializeMilestone({ milestone, today })),
         next_cursor: null,
