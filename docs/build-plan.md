@@ -196,7 +196,7 @@ Changes from the original plan (and why):
     - [x] Manual edits win: skip AI changes to a field when the email's `sent_at` is older than the field's latest manual change
     - [x] Never store or log the email body
 - [x] Forwarding:
-    - [x] Settings → Email shows `updates+{token}@in.theearthbank.org` with copy and regenerate buttons
+    - [x] Settings → Email shows `updates+{token}@mail.theearthbank.org` with copy and regenerate buttons
     - [x] `POST /webhooks/inbound-email`: verify the Resend signature; resolve the token; require the envelope sender to be that user's address; `parseInboundEmail` unwraps the forwarded original; enqueue `ClassifyEmailJob` with source `ai_forward`
     - [x] Unknown sender → the AI proposes a draft funder (status `draft`) with contact, domain, goal type and opportunity; confirming it on Activity activates it and enqueues `BackfillFunderJob`
 - [x] `/activity` page: feed of change events (filters: source, status, funder, date). Each row shows what changed, the evidence summary, sent date and sender, the AI reason and confidence, and **Accept / Reject** (pending), **Revert** (applied), and **Edit** (opens the field). A "Needs review" count badge in the sidebar.
@@ -214,7 +214,7 @@ Status: hardening done; deploying needs the credentials listed in `docs/deploy-r
     1. Render: create from `render.yaml`, set the `sync: false` secrets, attach the disk
     2. DNS: CNAME `dashboard.theearthbank.org` → the Render service; add the custom domain in Render; enable edge caching
     3. Google Cloud (Earth Bank Workspace project): OAuth consent screen **Internal**; OAuth client (web) with redirect URIs `https://dashboard.theearthbank.org/auth/google/callback`, `…/auth/google/gmail/callback` and the localhost equivalents; enable the Gmail API
-    4. Resend: verify `mail.theearthbank.org` for sending; set up inbound on `in.theearthbank.org` (MX records) with the webhook pointing at `/webhooks/inbound-email`; copy the signing secret
+    4. Resend: verify `mail.theearthbank.org` for sending; set up inbound on `mail.theearthbank.org` (MX records) with the webhook pointing at `/webhooks/inbound-email`; copy the signing secret
     5. Bookeeping.ai: Settings → API Access → create a key; set `BOOKEEPING_API_KEY`
     6. Anthropic: set `ANTHROPIC_API_KEY`
     7. Upload the spreadsheet to `/var/data/imports/` and run `npm run import:pipeline -- /var/data/imports/pipeline.xlsx` from the Render shell

@@ -33,7 +33,7 @@ export type ReceivedEmail = {
  * A user's private forwarding address, creating one the first time.
  *
  * @param input.userId - The user.
- * @returns e.g. `updates+k3j…@in.theearthbank.org`.
+ * @returns e.g. `updates+k3j…@mail.theearthbank.org`.
  */
 export async function forwardingAddressFor({ userId }: { userId: string }) {
     const existing = await findActiveInboundAddressForUser({ userId })

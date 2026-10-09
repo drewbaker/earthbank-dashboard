@@ -92,7 +92,7 @@ describe('replyRecipients', () => {
 
     it('never includes private forwarding addresses', () => {
         const recipients = replyRecipients({
-            message: message({ cc: ['updates+secret@in.theearthbank.org'] }),
+            message: message({ cc: ['updates+secret@mail.theearthbank.org'] }),
             authorEmail: 'drew@theearthbank.org',
         })
         expect(recipients.cc).toEqual([])

@@ -79,10 +79,13 @@ describe('email text cleanup', () => {
 describe('forwardingTokenFrom', () => {
     it('finds the token in the private address', () => {
         expect(
-            forwardingTokenFrom({ recipients: ['Updates+abc123@IN.theearthbank.org'], domain: 'in.theearthbank.org' }),
+            forwardingTokenFrom({
+                recipients: ['Updates+abc123@MAIL.theearthbank.org'],
+                domain: 'mail.theearthbank.org',
+            }),
         ).toBe('abc123')
         expect(
-            forwardingTokenFrom({ recipients: ['updates@in.theearthbank.org'], domain: 'in.theearthbank.org' }),
+            forwardingTokenFrom({ recipients: ['updates@mail.theearthbank.org'], domain: 'mail.theearthbank.org' }),
         ).toBeNull()
     })
 })
