@@ -212,4 +212,31 @@ describe('Bookeeping.ai sync', () => {
             last_error: 'Bookeeping.ai /v1/accounts failed with 401',
         })
     })
+
+    it('counts credit card spend toward burn even though cards are not cash', async () => {
+        const { upsertBankAccount, upsertBankTransaction } = await import('#server/database/bank.ts')
+        const { loadCashSummary } = await import('#server/utils/cash.ts')
+        const before = (await loadCashSummary({ today: '2026-10-09' })).monthly_burn_cents ?? 0
+        const card = await upsertBankAccount({
+            externalId: 'acc_card',
+            name: 'Business card',
+            accountType: 'Credit',
+            currency: 'USD',
+            syncedAt: new Date(),
+        })
+        expect(card.is_included).toBe(false)
+        await upsertBankTransaction({
+            externalId: 'txn_card_software',
+            bankAccountId: card.id,
+            bookedOn: new Date('2026-09-10T00:00:00Z'),
+            amountCents: -900_000,
+            description: null,
+            counterpartyName: null,
+            categoryName: 'Software',
+            parentCategory: 'EXPENSE',
+            sourceUpdatedAt: null,
+        })
+        const after = (await loadCashSummary({ today: '2026-10-09' })).monthly_burn_cents ?? 0
+        expect(after).toBeGreaterThan(before)
+    })
 })

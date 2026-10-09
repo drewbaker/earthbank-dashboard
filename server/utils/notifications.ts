@@ -52,10 +52,21 @@ export async function notifyTaskAssigned({
  *
  * @param input.task - The task with relations.
  * @param input.authorId - Who commented.
- * @param input.body - The comment text.
+ * @param input.body - The comment text (may be empty when only files were attached).
+ * @param input.attachmentNames - Names of files attached to the comment.
  * @returns The user ids that were emailed.
  */
-export async function notifyTaskCommented({ task, authorId, body }: { task: TaskRow; authorId: string; body: string }) {
+export async function notifyTaskCommented({
+    task,
+    authorId,
+    body,
+    attachmentNames = [],
+}: {
+    task: TaskRow
+    authorId: string
+    body: string
+    attachmentNames?: string[]
+}) {
     const recipientIds = new Set(await listTaskCommenterIds({ taskId: task.id }))
     if (task.assignee_id) {
         recipientIds.add(task.assignee_id)
@@ -70,8 +81,8 @@ export async function notifyTaskCommented({ task, authorId, body }: { task: Task
         }
         const { html, text } = renderEmail({
             heading: `${author?.name ?? 'Someone'} commented on "${task.title}"`,
-            paragraphs: [],
-            quote: body,
+            paragraphs: attachmentNames.length ? [`Attached: ${attachmentNames.join(', ')}`] : [],
+            quote: body || undefined,
             buttonLabel: 'Reply',
             buttonUrl: taskUrl({ taskId: task.id }),
         })

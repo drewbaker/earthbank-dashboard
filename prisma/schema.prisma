@@ -313,8 +313,9 @@ model Comment {
     deleted_at DateTime?
     created_at DateTime  @default(now())
 
-    task   Task  @relation(fields: [task_id], references: [id], onDelete: Cascade)
-    author User? @relation(fields: [author_id], references: [id], onDelete: SetNull)
+    task        Task         @relation(fields: [task_id], references: [id], onDelete: Cascade)
+    author      User?        @relation(fields: [author_id], references: [id], onDelete: SetNull)
+    attachments Attachment[]
 
     @@index([task_id])
     @@map("comment")
@@ -324,6 +325,8 @@ model Comment {
 model Attachment {
     id             String    @id
     task_id        String
+    // Set when the file was attached to a comment rather than to the task itself.
+    comment_id     String?
     uploaded_by_id String?
     filename       String
     content_type   String
@@ -332,10 +335,12 @@ model Attachment {
     deleted_at     DateTime?
     created_at     DateTime  @default(now())
 
-    task        Task  @relation(fields: [task_id], references: [id], onDelete: Cascade)
-    uploaded_by User? @relation(fields: [uploaded_by_id], references: [id], onDelete: SetNull)
+    task        Task     @relation(fields: [task_id], references: [id], onDelete: Cascade)
+    comment     Comment? @relation(fields: [comment_id], references: [id], onDelete: SetNull)
+    uploaded_by User?    @relation(fields: [uploaded_by_id], references: [id], onDelete: SetNull)
 
     @@index([task_id])
+    @@index([comment_id])
     @@map("attachment")
 }
 

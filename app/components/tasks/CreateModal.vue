@@ -3,6 +3,7 @@ import { reactive, ref, watch } from 'vue'
 import { useToast } from '#imports'
 import type { TaskDetail } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
+import { useAttachmentUpload } from '~/composables/useAttachmentUpload.ts'
 import { NO_OWNER, ownerIdFromSelection, usePipelineReference } from '~/composables/usePipelineReference.ts'
 import { linkIdFromSelection, NO_LINK, useTaskReference } from '~/composables/useTaskReference.ts'
 
@@ -23,8 +24,10 @@ const formState = reactive({
     milestone_id: NO_LINK,
     opportunity_id: NO_LINK,
 })
+const files = ref<File[]>([])
 const errorMessage = ref<string | null>(null)
 const isSaving = ref(false)
+const uploadAttachments = useAttachmentUpload()
 
 watch(open, isOpen => {
     if (isOpen) {
@@ -36,12 +39,13 @@ watch(open, isOpen => {
             milestone_id: props.milestoneId ?? NO_LINK,
             opportunity_id: props.opportunityId ?? NO_LINK,
         })
+        files.value = []
         errorMessage.value = null
     }
 })
 
 /**
- * Create the task and close.
+ * Create the task, upload any files to it, and close.
  *
  * @returns Resolves once created, or once the error is shown.
  */
@@ -62,6 +66,10 @@ async function createTask() {
                 funder_id: props.funderId ?? null,
             },
         })
+        const failures = await uploadAttachments({ taskId: task.id, files: files.value })
+        for (const failure of failures) {
+            toast.add({ title: failure, color: 'error' })
+        }
         toast.add({
             title: 'Task added',
             description: task.assignee ? `${task.assignee.name} will get an email.` : undefined,
@@ -105,6 +113,9 @@ async function createTask() {
                 </div>
                 <UFormField label="Details" name="description">
                     <UTextarea v-model="formState.description" :rows="3" autoresize class="w-full" />
+                </UFormField>
+                <UFormField label="Files" name="files">
+                    <TasksPendingFiles v-model="files" />
                 </UFormField>
                 <UAlert v-if="errorMessage" color="error" :description="errorMessage" />
                 <div class="flex justify-end gap-2">

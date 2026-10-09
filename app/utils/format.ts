@@ -107,3 +107,15 @@ export function dollarsToCents({ dollars }: { dollars: number | null | undefined
 export function centsToDollars({ cents }: { cents: number | null | undefined }) {
     return cents === null || cents === undefined ? undefined : cents / 100
 }
+
+/**
+ * Human-readable file size.
+ *
+ * @param input.bytes - Size in bytes.
+ * @returns e.g. "240 KB" or "3.2 MB".
+ */
+export function formatFileSize({ bytes }: { bytes: number }) {
+    return bytes < 1024 * 1024
+        ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+        : `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}

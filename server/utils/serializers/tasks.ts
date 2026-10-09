@@ -57,13 +57,20 @@ export function serializeTask({ task, today }: { task: TaskRow; today: string })
  * @param input.comment - The comment with its author.
  * @returns The API representation.
  */
-export function serializeComment({ comment }: { comment: CommentRow & { author: UserRow | null } }): Comment {
+export function serializeComment({
+    comment,
+    attachments = [],
+}: {
+    comment: CommentRow & { author: UserRow | null }
+    attachments?: (AttachmentRow & { uploaded_by: UserRow | null })[]
+}): Comment {
     return {
         id: comment.id,
         task_id: comment.task_id,
         author: serializeUserSummary({ user: comment.author }),
         body: comment.body,
         edited_at: toIsoDateTime({ date: comment.edited_at }),
+        attachments: attachments.map(attachment => serializeAttachment({ attachment })),
         created_at: comment.created_at.toISOString(),
     }
 }
@@ -82,6 +89,7 @@ export function serializeAttachment({
     return {
         id: attachment.id,
         task_id: attachment.task_id,
+        comment_id: attachment.comment_id,
         filename: attachment.filename,
         content_type: attachment.content_type,
         size_bytes: attachment.size_bytes,
@@ -113,7 +121,14 @@ export function serializeTaskDetail({
 }): TaskDetail {
     return {
         ...serializeTask({ task, today }),
-        comments: comments.map(comment => serializeComment({ comment })),
-        attachments: attachments.map(attachment => serializeAttachment({ attachment })),
+        comments: comments.map(comment =>
+            serializeComment({
+                comment,
+                attachments: attachments.filter(attachment => attachment.comment_id === comment.id),
+            }),
+        ),
+        attachments: attachments
+            .filter(attachment => attachment.comment_id === null)
+            .map(attachment => serializeAttachment({ attachment })),
     }
 }

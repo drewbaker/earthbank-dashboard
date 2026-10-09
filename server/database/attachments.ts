@@ -7,6 +7,7 @@ export const ATTACHMENT_INCLUDE = { uploaded_by: true } as const
  *
  * @param input.attachmentId - Pre-generated id (it's part of the storage key).
  * @param input.taskId - The task.
+ * @param input.commentId - The comment it belongs to, when attached to a comment.
  * @param input.uploadedById - Who uploaded it.
  * @param input.filename - Original file name.
  * @param input.contentType - MIME type.
@@ -17,6 +18,7 @@ export const ATTACHMENT_INCLUDE = { uploaded_by: true } as const
 export function createAttachmentRow({
     attachmentId,
     taskId,
+    commentId = null,
     uploadedById,
     filename,
     contentType,
@@ -25,6 +27,7 @@ export function createAttachmentRow({
 }: {
     attachmentId: string
     taskId: string
+    commentId?: string | null
     uploadedById: string
     filename: string
     contentType: string
@@ -35,6 +38,7 @@ export function createAttachmentRow({
         data: {
             id: attachmentId,
             task_id: taskId,
+            comment_id: commentId,
             uploaded_by_id: uploadedById,
             filename,
             content_type: contentType,
@@ -101,5 +105,20 @@ export function listPurgeableAttachments({ deletedBefore }: { deletedBefore: Dat
  */
 export async function deleteAttachmentRows({ attachmentIds }: { attachmentIds: string[] }) {
     const result = await db().attachment.deleteMany({ where: { id: { in: attachmentIds } } })
+    return result.count
+}
+
+/**
+ * Soft-delete the files attached to a comment (when the comment is deleted).
+ *
+ * @param input.commentId - The comment.
+ * @param input.deletedAt - When.
+ * @returns The number marked deleted.
+ */
+export async function markCommentAttachmentsDeleted({ commentId, deletedAt }: { commentId: string; deletedAt: Date }) {
+    const result = await db().attachment.updateMany({
+        where: { comment_id: commentId, deleted_at: null },
+        data: { deleted_at: deletedAt },
+    })
     return result.count
 }

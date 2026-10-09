@@ -162,7 +162,9 @@ export function upsertBankTransaction({
 }
 
 /**
- * Transactions of included accounts in a date range, for the burn rate.
+ * Transactions that count toward the burn rate in a date range: those of accounts counted as cash,
+ * plus every credit card's. Cards aren't cash (their balance is owed), but they're where most
+ * spending happens; paying a card off from checking is a transfer, so nothing is counted twice.
  *
  * @param input.from - First day (inclusive).
  * @param input.to - Last day (exclusive).
@@ -172,7 +174,11 @@ export function listBurnTransactions({ from, to }: { from: Date; to: Date }) {
     return db().bankTransaction.findMany({
         where: {
             booked_on: { gte: from, lt: to },
-            OR: [{ bank_account_id: null }, { bank_account: { is_included: true } }],
+            OR: [
+                { bank_account_id: null },
+                { bank_account: { is_included: true } },
+                { bank_account: { account_type: 'Credit' } },
+            ],
         },
         orderBy: { booked_on: 'asc' },
     })

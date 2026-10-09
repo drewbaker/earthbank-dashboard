@@ -38,7 +38,12 @@ export default defineApiHandler(async event => {
         throw notFound({ resource: 'Task' })
     }
     const comment = await createCommentRow({ taskId, authorId: ctx.user.id, body: body.body })
-    await notifyTaskCommented({ task, authorId: ctx.user.id, body: body.body })
+    await notifyTaskCommented({
+        task,
+        authorId: ctx.user.id,
+        body: body.body,
+        attachmentNames: body.attachment_names,
+    })
     await recordAudit({
         actor: ctx.actor,
         action: 'comment.created',

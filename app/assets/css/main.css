@@ -34,3 +34,11 @@
         cursor: pointer;
     }
 }
+
+/* Chart tooltips follow the theme; the chart library defaults to a light box in both modes. Set on
+   body because the library injects its own :root defaults at runtime, after this file. */
+body {
+    --vis-tooltip-background-color: var(--ui-bg-elevated);
+    --vis-tooltip-border-color: var(--ui-border);
+    --vis-tooltip-text-color: var(--ui-text);
+}

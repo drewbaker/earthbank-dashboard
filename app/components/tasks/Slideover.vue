@@ -4,10 +4,11 @@ import { useToast } from '#imports'
 import { TASK_STATUS_DETAILS, TASK_STATUSES } from '#shared/constants/pipeline.ts'
 import type { Attachment, Comment, TaskDetail } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
+import { useAttachmentUpload } from '~/composables/useAttachmentUpload.ts'
 import { useAuth } from '~/composables/useAuth.ts'
 import { NO_OWNER, ownerIdFromSelection, usePipelineReference } from '~/composables/usePipelineReference.ts'
 import { linkIdFromSelection, NO_LINK, useTaskReference } from '~/composables/useTaskReference.ts'
-import { formatRelativeTime } from '~/utils/format.ts'
+import { formatFileSize, formatRelativeTime } from '~/utils/format.ts'
 
 const props = defineProps<{ taskId: string | null }>()
 const emit = defineEmits<{ changed: [] }>()
@@ -23,7 +24,9 @@ const task = ref<TaskDetail | null>(null)
 const isLoading = ref(false)
 const isSavingField = ref(false)
 const newComment = ref('')
+const commentFiles = ref<File[]>([])
 const isPostingComment = ref(false)
+const uploadAttachments = useAttachmentUpload()
 const isUploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 
@@ -149,22 +152,31 @@ async function saveField({ field }: { field: keyof typeof draft }) {
 }
 
 /**
- * Post the comment in the composer.
+ * Post the comment in the composer, then upload its files to it.
  *
  * @returns Resolves once posted and the task reloaded.
  */
 async function postComment() {
-    if (!task.value || !newComment.value.trim()) {
+    if (!task.value || (!newComment.value.trim() && commentFiles.value.length === 0)) {
         return
     }
     isPostingComment.value = true
     try {
-        await api<Comment>({
+        const comment = await api<Comment>({
             path: `/tasks/${task.value.id}/comments`,
             method: 'POST',
-            body: { body: newComment.value },
+            body: { body: newComment.value, attachment_names: commentFiles.value.map(file => file.name) },
         })
+        const failures = await uploadAttachments({
+            taskId: task.value.id,
+            files: commentFiles.value,
+            commentId: comment.id,
+        })
+        for (const failure of failures) {
+            toast.add({ title: failure, color: 'error' })
+        }
         newComment.value = ''
+        commentFiles.value = []
         await loadTask({ taskId: task.value.id })
         emit('changed')
     } catch (error) {
@@ -203,11 +215,9 @@ async function uploadFiles(event: Event) {
     }
     isUploading.value = true
     try {
-        for (const file of files) {
-            const form = new FormData()
-            form.append('file', file)
-            // FormData can't go through the JSON helper; $fetch sends it as multipart.
-            await $fetch(`/v1/tasks/${task.value.id}/attachments`, { method: 'POST', body: form })
+        const failures = await uploadAttachments({ taskId: task.value.id, files })
+        for (const failure of failures) {
+            toast.add({ title: failure, color: 'error' })
         }
         await loadTask({ taskId: task.value.id })
         emit('changed')
@@ -251,18 +261,6 @@ async function deleteTask() {
     } catch (error) {
         toast.add({ title: apiErrorMessage({ error }), color: 'error' })
     }
-}
-
-/**
- * Human-readable file size.
- *
- * @param input.bytes - Size in bytes.
- * @returns e.g. "240 KB".
- */
-function formatFileSize({ bytes }: { bytes: number }) {
-    return bytes < 1024 * 1024
-        ? `${Math.max(1, Math.round(bytes / 1024))} KB`
-        : `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 </script>
 
@@ -414,7 +412,25 @@ function formatFileSize({ bytes }: { bytes: number }) {
                                         @click="deleteComment({ comment })"
                                     />
                                 </p>
-                                <p class="text-sm whitespace-pre-line">{{ comment.body }}</p>
+                                <p v-if="comment.body" class="text-sm whitespace-pre-line">{{ comment.body }}</p>
+                                <ul v-if="comment.attachments.length" class="mt-1 space-y-1">
+                                    <li
+                                        v-for="attachment in comment.attachments"
+                                        :key="attachment.id"
+                                        class="flex items-center gap-2 text-sm"
+                                    >
+                                        <UIcon name="i-lucide-paperclip" class="size-3.5 text-muted" />
+                                        <a
+                                            :href="attachment.download_url"
+                                            class="min-w-0 truncate text-primary hover:underline"
+                                        >
+                                            {{ attachment.filename }}
+                                        </a>
+                                        <span class="text-xs text-muted">{{
+                                            formatFileSize({ bytes: attachment.size_bytes })
+                                        }}</span>
+                                    </li>
+                                </ul>
                             </div>
                         </li>
                     </ul>
@@ -428,13 +444,14 @@ function formatFileSize({ bytes }: { bytes: number }) {
                             @keydown.meta.enter="postComment"
                             @keydown.ctrl.enter="postComment"
                         />
-                        <div class="flex justify-end">
+                        <div class="flex items-start justify-between gap-2">
+                            <TasksPendingFiles v-model="commentFiles" label="Attach" />
                             <UButton
                                 type="submit"
                                 size="sm"
                                 label="Comment"
                                 :loading="isPostingComment"
-                                :disabled="!newComment.trim()"
+                                :disabled="!newComment.trim() && commentFiles.length === 0"
                             />
                         </div>
                     </UForm>

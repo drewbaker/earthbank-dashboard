@@ -27,19 +27,11 @@ export type Task = z.infer<typeof Task>
 export const TaskList = listOf(Task)
 export type TaskList = z.infer<typeof TaskList>
 
-export const Comment = z.object({
-    id: z.string(),
-    task_id: z.string(),
-    author: UserSummary.nullable(),
-    body: z.string(),
-    edited_at: IsoDateTime.nullable(),
-    created_at: IsoDateTime,
-})
-export type Comment = z.infer<typeof Comment>
-
 export const Attachment = z.object({
     id: z.string(),
     task_id: z.string(),
+    /** Set when the file belongs to a comment rather than the task. */
+    comment_id: z.string().nullable(),
     filename: z.string(),
     content_type: z.string(),
     size_bytes: z.number().int(),
@@ -49,8 +41,20 @@ export const Attachment = z.object({
 })
 export type Attachment = z.infer<typeof Attachment>
 
+export const Comment = z.object({
+    id: z.string(),
+    task_id: z.string(),
+    author: UserSummary.nullable(),
+    body: z.string(),
+    edited_at: IsoDateTime.nullable(),
+    attachments: z.array(Attachment),
+    created_at: IsoDateTime,
+})
+export type Comment = z.infer<typeof Comment>
+
 export const TaskDetail = Task.extend({
     comments: z.array(Comment),
+    /** Files attached to the task itself; comment files are on their comments. */
     attachments: z.array(Attachment),
 })
 export type TaskDetail = z.infer<typeof TaskDetail>
@@ -93,8 +97,18 @@ export const ListTasksQuery = z.object({
     due_before: DateOnly.optional(),
 })
 
-export const CreateCommentRequest = z.object({ body: z.string().trim().min(1, 'Write a comment.').max(10000) })
+// A comment needs text, files, or both. The files are uploaded right after the comment is created
+// (POST /v1/tasks/{id}/attachments with its comment_id); their names come along here for the email.
+export const CreateCommentRequest = z
+    .object({
+        body: z.string().trim().max(10000).default(''),
+        attachment_names: z.array(z.string().trim().min(1).max(200)).max(20).default([]),
+    })
+    .refine(comment => comment.body.length > 0 || comment.attachment_names.length > 0, {
+        message: 'Write a comment or attach a file.',
+        path: ['body'],
+    })
 export type CreateCommentRequest = z.infer<typeof CreateCommentRequest>
 
-export const UpdateCommentRequest = CreateCommentRequest
+export const UpdateCommentRequest = z.object({ body: z.string().trim().min(1, 'Write a comment.').max(10000) })
 export type UpdateCommentRequest = z.infer<typeof UpdateCommentRequest>

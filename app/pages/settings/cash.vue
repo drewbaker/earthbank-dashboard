@@ -151,9 +151,12 @@ async function setAccountIncluded({ accountId, isIncluded }: { accountId: string
                     description="Create an API key in Bookeeping.ai (Settings → API Access) and set BOOKEEPING_API_KEY on the server. Until then, enter cash and burn by hand below."
                 />
 
+                <p v-if="summary?.accounts.length" class="mt-4 text-xs text-muted">
+                    Switched-on accounts count toward cash on hand. Credit card spending always counts toward burn.
+                </p>
                 <ul
                     v-if="summary?.accounts.length"
-                    class="mt-4 divide-y divide-default rounded-md border border-default"
+                    class="mt-2 divide-y divide-default rounded-md border border-default"
                 >
                     <li
                         v-for="account in summary.accounts"

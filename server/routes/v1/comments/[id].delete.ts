@@ -1,5 +1,6 @@
 import { getRouterParam, setResponseStatus } from 'h3'
 import { defineRouteMeta } from 'nitropack/runtime'
+import { markCommentAttachmentsDeleted } from '#server/database/attachments.ts'
 import { findComment, updateCommentRow } from '#server/database/comments.ts'
 import { defineApiHandler, requestIp } from '#server/utils/api.ts'
 import { recordAudit } from '#server/utils/audit.ts'
@@ -26,7 +27,10 @@ export default defineApiHandler(async event => {
     if (comment.author_id !== ctx.user.id) {
         throw forbidden({ message: 'Only the author can delete a comment.', code: 'not_comment_author' })
     }
-    await updateCommentRow({ commentId, deletedAt: new Date() })
+    const deletedAt = new Date()
+    await updateCommentRow({ commentId, deletedAt })
+    // Its files go with it.
+    await markCommentAttachmentsDeleted({ commentId, deletedAt })
     await recordAudit({
         actor: ctx.actor,
         action: 'comment.deleted',
