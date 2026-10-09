@@ -31,6 +31,8 @@ export const ScenarioAdjustment = z.discriminatedUnion('kind', [
         at: DateOnly,
     }),
     z.object({ kind: z.literal('change_burn_pct'), pct: z.number().min(-90).max(500), starts_at: DateOnly }),
+    // "What if we don't do it": leave a planned expense out of this scenario.
+    z.object({ kind: z.literal('exclude_planned_expense'), planned_expense_id: z.string() }),
 ])
 export type ScenarioAdjustment = z.infer<typeof ScenarioAdjustment>
 

@@ -8,6 +8,7 @@ import { dollarsToCents } from '~/utils/format.ts'
 
 const props = defineProps<{
     opportunities: { id: string; label: string }[]
+    plannedExpenses: { id: string; label: string }[]
     today: string
 }>()
 const emit = defineEmits<{ add: [adjustment: ScenarioAdjustment] }>()
@@ -15,6 +16,7 @@ const emit = defineEmits<{ add: [adjustment: ScenarioAdjustment] }>()
 const kind = ref<AdjustmentKind>('shift_receipt')
 const fields = reactive({
     opportunity_id: '',
+    planned_expense_id: '',
     months: 3,
     amount_dollars: undefined as number | undefined,
     probability: 50,
@@ -39,6 +41,9 @@ const needsOpportunity = computed(() =>
 const opportunityItems = computed(() =>
     props.opportunities.map(opportunity => ({ label: opportunity.label, value: opportunity.id })),
 )
+const plannedExpenseItems = computed(() =>
+    props.plannedExpenses.map(expense => ({ label: expense.label, value: expense.id })),
+)
 
 /**
  * Build the adjustment from the form, validate it with the shared schema and emit it.
@@ -50,7 +55,11 @@ function addAdjustment() {
     const parsed = ScenarioAdjustmentSchema.safeParse(buildAdjustment())
     if (!parsed.success) {
         errorMessage.value =
-            needsOpportunity.value && !fields.opportunity_id ? 'Choose an opportunity.' : 'Fill in every field.'
+            needsOpportunity.value && !fields.opportunity_id
+                ? 'Choose an opportunity.'
+                : kind.value === 'exclude_planned_expense' && !fields.planned_expense_id
+                  ? 'Choose a planned expense.'
+                  : 'Fill in every field.'
         return
     }
     emit('add', parsed.data)
@@ -96,6 +105,8 @@ function buildAdjustment() {
         }
         case 'change_burn_pct':
             return { kind: kind.value, pct: fields.pct, starts_at: startsAt }
+        case 'exclude_planned_expense':
+            return { kind: kind.value, planned_expense_id: fields.planned_expense_id }
     }
 }
 </script>
@@ -110,6 +121,16 @@ function buildAdjustment() {
             <USelectMenu
                 v-model="fields.opportunity_id"
                 :items="opportunityItems"
+                value-key="value"
+                placeholder="Choose…"
+                class="w-full"
+            />
+        </UFormField>
+
+        <UFormField v-if="kind === 'exclude_planned_expense'" label="Planned expense">
+            <USelectMenu
+                v-model="fields.planned_expense_id"
+                :items="plannedExpenseItems"
                 value-key="value"
                 placeholder="Choose…"
                 class="w-full"

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { GOAL_TYPES, MILESTONE_KINDS, OPPORTUNITY_STAGES } from '#shared/constants/pipeline.ts'
 import { DateOnly } from '#shared/schemas/common.ts'
+import { PLANNED_EXPENSE_KINDS } from '#shared/schemas/planned-expenses.ts'
 
 // Everything the browser needs to run the runway projection itself (live as scenarios change).
 export const ForecastInputs = z.object({
@@ -22,6 +23,16 @@ export const ForecastInputs = z.object({
     ),
     milestones: z.array(
         z.object({ id: z.string(), title: z.string(), due_at: DateOnly, kind: z.enum(MILESTONE_KINDS) }),
+    ),
+    planned_expenses: z.array(
+        z.object({
+            id: z.string(),
+            label: z.string(),
+            kind: z.enum(PLANNED_EXPENSE_KINDS),
+            amount_cents: z.number().int(),
+            starts_on: DateOnly,
+            ends_on: DateOnly.nullable(),
+        }),
     ),
 })
 export type ForecastInputs = z.infer<typeof ForecastInputs>

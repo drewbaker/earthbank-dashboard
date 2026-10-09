@@ -41,6 +41,12 @@ const opportunityChoices = computed(() =>
         })),
 )
 const opportunityNames = computed(() => new Map(opportunityChoices.value.map(choice => [choice.id, choice.label])))
+const plannedExpenseChoices = computed(() =>
+    (inputs.data.value?.planned_expenses ?? []).map(expense => ({ id: expense.id, label: expense.label })),
+)
+const plannedExpenseNames = computed(
+    () => new Map(plannedExpenseChoices.value.map(choice => [choice.id, choice.label])),
+)
 const scenarioItems = computed(() => [
     { label: 'New scenario', value: NEW_SCENARIO },
     ...(scenarioList.value?.data ?? []).map(scenario => ({ label: scenario.name, value: scenario.id })),
@@ -187,6 +193,20 @@ async function deleteScenario() {
                     </UCard>
 
                     <UCard :ui="{ body: 'p-0 sm:p-0' }">
+                        <template #header>
+                            <h2 class="font-medium text-highlighted">What moves the line</h2>
+                            <p class="text-xs text-muted">
+                                Money landing and planned spending, in date order{{
+                                    scenarioProjection ? ', including the scenario' : ''
+                                }}. Hover the chart to see them month by month.
+                            </p>
+                        </template>
+                        <ForecastEventList :events="(scenarioProjection ?? baseProjection).events" :limit="8" />
+                    </UCard>
+
+                    <ForecastPlannedExpenses :today="forecastInputs!.today" @changed="inputs.refresh()" />
+
+                    <UCard :ui="{ body: 'p-0 sm:p-0' }">
                         <table class="w-full text-sm">
                             <thead class="text-left text-muted">
                                 <tr class="border-b border-default">
@@ -308,7 +328,9 @@ async function deleteScenario() {
                                 :name="ADJUSTMENT_KIND_DETAILS[adjustment.kind].icon"
                                 class="mt-0.5 size-4 shrink-0 text-muted"
                             />
-                            <span class="flex-1">{{ describeAdjustment({ adjustment, opportunityNames }) }}</span>
+                            <span class="flex-1">{{
+                                describeAdjustment({ adjustment, opportunityNames, plannedExpenseNames })
+                            }}</span>
                             <UButton
                                 icon="i-lucide-x"
                                 size="xs"
@@ -325,6 +347,7 @@ async function deleteScenario() {
 
                     <ForecastAdjustmentForm
                         :opportunities="opportunityChoices"
+                        :planned-expenses="plannedExpenseChoices"
                         :today="forecastInputs!.today"
                         @add="adjustment => (adjustments = [...adjustments, adjustment])"
                     />

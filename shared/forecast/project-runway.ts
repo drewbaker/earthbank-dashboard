@@ -20,11 +20,39 @@ export type ForecastOpportunity = {
 
 export type ForecastMilestone = { id: string; title: string; due_at: string; kind: MilestoneKind }
 
+export type ForecastPlannedExpense = {
+    id: string
+    label: string
+    kind: 'one_off' | 'monthly'
+    /** Positive: the one-off amount, or the amount per month. */
+    amount_cents: number
+    /** Payment date (one-off) or first month (monthly). */
+    starts_on: string
+    /** Last month of a monthly expense, or null for open-ended. */
+    ends_on: string | null
+}
+
+/** Something that moves the lines, so the chart can say why. Amounts are signed (+ in, − out). */
+export type ForecastEvent = {
+    date: string
+    label: string
+    source: 'pipeline' | 'planned_expense' | 'scenario'
+    /** Effect on the committed line (0 when only the weighted line moves). */
+    committed_cents: number
+    weighted_cents: number
+    /** A monthly cost that starts here; the amounts are per month. */
+    is_monthly: boolean
+    /** Extra context, e.g. "35% likely" or "Expected date has passed". */
+    note: string | null
+}
+
 export type ForecastPoint = {
     /** Last day of the month (the first point is today). */
     date: string
     committed_cents: number
     weighted_cents: number
+    /** What happened in this month (or, for the first point, nothing: it's today's cash). */
+    events: ForecastEvent[]
 }
 
 export type ForecastInflow = {
@@ -54,12 +82,15 @@ export type RunwayProjection = {
     /** Pipeline money that counts toward runway but has no expected date, so it isn't in the lines. */
     undated: { opportunity_id: string; label: string; committed_cents: number; weighted_cents: number }[]
     costs: { label: string; date: string; amount_cents: number }[]
+    /** Every dated event in the horizon, in date order. */
+    events: ForecastEvent[]
     markers: { id: string; title: string; date: string; kind: MilestoneKind }[]
 }
 
 /**
- * Project cash month by month: start from cash on hand, take off the monthly burn, add pipeline money
- * when it's expected to land. Two lines: committed money only, and the probability-weighted pipeline.
+ * Project cash month by month: start from cash on hand, take off the monthly burn and planned
+ * expenses, add pipeline money when it's expected to land. Two lines: committed money only, and the
+ * probability-weighted pipeline. Planned expenses are decisions already made, so both lines include them.
  *
  * Only goals in `includeGoalTypes` count (by default Design Grants and OpEx: lending capital goes
  * into the lending structure, not the operating account). Received money is already in the bank.
@@ -69,6 +100,7 @@ export type RunwayProjection = {
  * @param input.monthlyBurnCents - Average monthly operating outflow.
  * @param input.opportunities - Pipeline opportunities.
  * @param input.milestones - Milestones shown as markers.
+ * @param input.plannedExpenses - Spending the team has decided on (one-off or monthly).
  * @param input.adjustments - Scenario what-ifs to apply.
  * @param input.includeGoalTypes - Goals whose money funds operations.
  * @param input.months - Horizon in months (default 24).
@@ -80,6 +112,7 @@ export function projectRunway({
     monthlyBurnCents,
     opportunities,
     milestones = [],
+    plannedExpenses = [],
     adjustments = [],
     includeGoalTypes = ['design_grant', 'opex'],
     months = 24,
@@ -89,6 +122,7 @@ export function projectRunway({
     monthlyBurnCents: number
     opportunities: ForecastOpportunity[]
     milestones?: ForecastMilestone[]
+    plannedExpenses?: ForecastPlannedExpense[]
     adjustments?: ScenarioAdjustment[]
     includeGoalTypes?: GoalType[]
     months?: number
@@ -96,10 +130,21 @@ export function projectRunway({
     const horizonEnd = lastOfMonth({ value: addMonths({ value: firstOfMonth({ value: today }), months: months - 1 }) })
     const adjusted = applyOpportunityAdjustments({ opportunities, adjustments })
     const { inflows, undated } = buildInflows({ today, opportunities: adjusted, includeGoalTypes })
-    const costs = buildOneOffs({ adjustments })
+    // Planned expenses run through the same machinery as scenario costs, so they're pro-rated alike.
+    const excludedExpenses = new Set(
+        adjustments.flatMap(adjustment =>
+            adjustment.kind === 'exclude_planned_expense' ? [adjustment.planned_expense_id] : [],
+        ),
+    )
+    const plannedAdjustments = plannedExpenseAdjustments({
+        plannedExpenses: plannedExpenses.filter(expense => !excludedExpenses.has(expense.id)),
+    })
+    const costAdjustments = [...plannedAdjustments, ...adjustments]
+    const costs = buildOneOffs({ adjustments: costAdjustments })
+    const events = buildEvents({ today, horizonEnd, inflows, adjustments: costAdjustments, plannedAdjustments })
 
     const points: ForecastPoint[] = [
-        { date: today, committed_cents: startingCashCents, weighted_cents: startingCashCents },
+        { date: today, committed_cents: startingCashCents, weighted_cents: startingCashCents, events: [] },
     ]
     const ends = { committed: emptyRunwayEnd(), weighted: emptyRunwayEnd() }
     let committedCash = startingCashCents
@@ -109,7 +154,13 @@ export function projectRunway({
         const monthStart = addMonths({ value: firstOfMonth({ value: today }), months: monthIndex })
         const monthEnd = lastOfMonth({ value: monthStart })
         const windowStart = monthIndex === 0 ? today : monthStart
-        const outflow = monthOutflow({ windowStart, monthStart, monthEnd, monthlyBurnCents, adjustments })
+        const outflow = monthOutflow({
+            windowStart,
+            monthStart,
+            monthEnd,
+            monthlyBurnCents,
+            adjustments: costAdjustments,
+        })
         const oneOffs = sumWithin({ items: costs, windowStart, monthEnd, amount: cost => cost.amount_cents })
         const committedIn = sumWithin({
             items: inflows,
@@ -143,6 +194,7 @@ export function projectRunway({
             date: monthEnd,
             committed_cents: Math.round(committedCash),
             weighted_cents: Math.round(weightedCash),
+            events: events.filter(event => event.date >= windowStart && event.date <= monthEnd),
         })
     }
 
@@ -154,6 +206,7 @@ export function projectRunway({
         inflows,
         undated,
         costs,
+        events,
         markers: milestones
             .filter(milestone => milestone.due_at >= today && milestone.due_at <= horizonEnd)
             .map(milestone => ({
@@ -262,6 +315,112 @@ function buildInflows({
     }
     inflows.sort((first, second) => first.date.localeCompare(second.date))
     return { inflows, undated }
+}
+
+/**
+ * Planned expenses as cost adjustments: one-offs as negative one-off amounts, monthly ones as
+ * recurring costs from the first of their start month to the end of their last month. Each keeps a
+ * `planned_expense_id` so events can tell them apart from scenario costs.
+ *
+ * @param input.plannedExpenses - Planned expenses.
+ * @returns Adjustments, tagged with the planned expense id.
+ */
+function plannedExpenseAdjustments({ plannedExpenses }: { plannedExpenses: ForecastPlannedExpense[] }) {
+    return plannedExpenses.map((expense): ScenarioAdjustment & { planned_expense_id: string } =>
+        expense.kind === 'one_off'
+            ? {
+                  kind: 'add_one_off',
+                  label: expense.label,
+                  amount_cents: -Math.abs(expense.amount_cents),
+                  at: expense.starts_on,
+                  planned_expense_id: expense.id,
+              }
+            : {
+                  kind: 'add_recurring_cost',
+                  label: expense.label,
+                  monthly_cents: Math.abs(expense.amount_cents),
+                  starts_at: firstOfMonth({ value: expense.starts_on }),
+                  ends_at: expense.ends_on ? lastOfMonth({ value: expense.ends_on }) : null,
+                  planned_expense_id: expense.id,
+              },
+    )
+}
+
+/**
+ * Everything that moves the lines, dated, for explaining the chart: pipeline money landing, one-off
+ * costs and income, and the month a recurring cost or burn change starts.
+ *
+ * @param input.today - Today's date.
+ * @param input.horizonEnd - Last day projected.
+ * @param input.inflows - Dated pipeline inflows.
+ * @param input.adjustments - Planned-expense and scenario cost adjustments.
+ * @param input.plannedAdjustments - The planned-expense subset (to label the source).
+ * @returns Events in date order.
+ */
+function buildEvents({
+    today,
+    horizonEnd,
+    inflows,
+    adjustments,
+    plannedAdjustments,
+}: {
+    today: string
+    horizonEnd: string
+    inflows: ForecastInflow[]
+    adjustments: ScenarioAdjustment[]
+    plannedAdjustments: ScenarioAdjustment[]
+}) {
+    const planned = new Set<ScenarioAdjustment>(plannedAdjustments)
+    const events: ForecastEvent[] = inflows.map(inflow => ({
+        date: inflow.date,
+        label: inflow.label,
+        source: 'pipeline',
+        committed_cents: inflow.committed_cents,
+        weighted_cents: inflow.weighted_cents,
+        is_monthly: false,
+        note: inflow.is_overdue
+            ? 'Expected date has passed; counted as landing now'
+            : inflow.committed_cents === 0 && inflow.weighted_cents > 0
+              ? 'Weighted by its chance of landing'
+              : null,
+    }))
+    for (const adjustment of adjustments) {
+        const source = planned.has(adjustment) ? 'planned_expense' : 'scenario'
+        if (adjustment.kind === 'add_one_off') {
+            events.push({
+                date: adjustment.at < today ? today : adjustment.at,
+                label: adjustment.label,
+                source,
+                committed_cents: adjustment.amount_cents,
+                weighted_cents: adjustment.amount_cents,
+                is_monthly: false,
+                note: null,
+            })
+        } else if (adjustment.kind === 'add_recurring_cost') {
+            events.push({
+                date: adjustment.starts_at < today ? today : adjustment.starts_at,
+                label: adjustment.label,
+                source,
+                committed_cents: -adjustment.monthly_cents,
+                weighted_cents: -adjustment.monthly_cents,
+                is_monthly: true,
+                note: adjustment.ends_at ? `Monthly until ${adjustment.ends_at.slice(0, 7)}` : 'Monthly, ongoing',
+            })
+        } else if (adjustment.kind === 'change_burn_pct') {
+            events.push({
+                date: adjustment.starts_at < today ? today : adjustment.starts_at,
+                label: `Burn ${adjustment.pct >= 0 ? 'up' : 'down'} ${Math.abs(adjustment.pct)}%`,
+                source,
+                committed_cents: 0,
+                weighted_cents: 0,
+                is_monthly: true,
+                note: null,
+            })
+        }
+    }
+    return events
+        .filter(event => event.date <= horizonEnd)
+        .sort((first, second) => first.date.localeCompare(second.date))
 }
 
 /**

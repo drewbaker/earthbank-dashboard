@@ -11,6 +11,7 @@ export const ADJUSTMENT_KIND_DETAILS: Record<AdjustmentKind, { label: string; ic
     add_recurring_cost: { label: 'New hire or monthly cost', icon: 'i-lucide-user-plus' },
     add_one_off: { label: 'One-off cost or income', icon: 'i-lucide-receipt' },
     change_burn_pct: { label: 'Burn changes by %', icon: 'i-lucide-trending-up' },
+    exclude_planned_expense: { label: "A planned expense doesn't happen", icon: 'i-lucide-ban' },
 }
 
 /**
@@ -18,14 +19,17 @@ export const ADJUSTMENT_KIND_DETAILS: Record<AdjustmentKind, { label: string; ic
  *
  * @param input.adjustment - The adjustment.
  * @param input.opportunityNames - Opportunity id → "Funder · Name".
+ * @param input.plannedExpenseNames - Planned expense id → label.
  * @returns The description.
  */
 export function describeAdjustment({
     adjustment,
     opportunityNames,
+    plannedExpenseNames = new Map(),
 }: {
     adjustment: ScenarioAdjustment
     opportunityNames: Map<string, string>
+    plannedExpenseNames?: Map<string, string>
 }) {
     const opportunity =
         'opportunity_id' in adjustment
@@ -46,5 +50,7 @@ export function describeAdjustment({
             return `${adjustment.label}: ${adjustment.amount_cents >= 0 ? '+' : '−'}${formatMoney({ cents: Math.abs(adjustment.amount_cents) })} on ${formatDate({ value: adjustment.at })}`
         case 'change_burn_pct':
             return `Burn ${adjustment.pct >= 0 ? 'up' : 'down'} ${Math.abs(adjustment.pct)}% from ${formatDate({ value: adjustment.starts_at })}`
+        case 'exclude_planned_expense':
+            return `${plannedExpenseNames.get(adjustment.planned_expense_id) ?? 'A removed planned expense'} doesn't happen`
     }
 }

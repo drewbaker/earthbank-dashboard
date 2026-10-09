@@ -44,6 +44,7 @@ model User {
     comments             Comment[]
     attachments          Attachment[]
     scenarios            Scenario[]
+    planned_expenses     PlannedExpense[]
     mailbox_connection   MailboxConnection?
     inbound_addresses    InboundAddress[]
     email_evidence       EmailEvidence[]
@@ -526,4 +527,29 @@ model KnowledgeDocument {
 
     @@index([source_id])
     @@map("knowledge_document")
+}
+
+// A spending decision the team has made but not paid yet (a research study, an event, a new
+// contract). Part of the base forecast, unlike scenario what-ifs.
+model PlannedExpense {
+    id            String    @id
+    label         String
+    // one_off | monthly
+    kind          String
+    // Positive cents: the one-off amount, or the amount per month.
+    amount_cents  BigInt
+    // The payment date (one-off) or the first month (monthly).
+    starts_on     DateTime
+    // Last month of a monthly expense; null = open-ended. Unused for one-offs.
+    ends_on       DateTime?
+    notes         String?
+    created_by_id String?
+    archived_at   DateTime?
+    created_at    DateTime  @default(now())
+    updated_at    DateTime  @updatedAt
+
+    created_by User? @relation(fields: [created_by_id], references: [id], onDelete: SetNull)
+
+    @@index([starts_on])
+    @@map("planned_expense")
 }

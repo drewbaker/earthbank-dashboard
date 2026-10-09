@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { RunwayProjection } from '#shared/forecast/project-runway.ts'
+import type { ForecastEvent, RunwayProjection } from '#shared/forecast/project-runway.ts'
 import { useChartPalette } from '~/composables/useChartPalette.ts'
 import { formatDate, formatMoney } from '~/utils/format.ts'
 
@@ -15,7 +15,7 @@ const props = defineProps<{
 
 const palette = useChartPalette()
 
-type ChartRow = { date: string; committed: number; weighted?: number; scenario?: number }
+type ChartRow = { date: string; committed: number; weighted?: number; scenario?: number; events: ForecastEvent[] }
 
 const rows = computed<ChartRow[]>(() =>
     props.projection.points.map((point, index) => ({
@@ -23,6 +23,17 @@ const rows = computed<ChartRow[]>(() =>
         committed: point.committed_cents / 100,
         ...(props.committedOnly ? {} : { weighted: point.weighted_cents / 100 }),
         ...(props.scenarioProjection ? { scenario: props.scenarioProjection.points[index]!.weighted_cents / 100 } : {}),
+        // With a scenario, its events include the plan's plus the what-ifs.
+        events: (props.scenarioProjection ?? props.projection).points[index]!.events,
+    })),
+)
+
+// Tooltip lines in legend order, each with its series color.
+const tooltipSeries = computed(() =>
+    Object.entries(categories.value).map(([key, category]) => ({
+        key: key as 'committed' | 'weighted' | 'scenario',
+        name: category.name,
+        color: category.color,
     })),
 )
 
@@ -93,7 +104,34 @@ function formatTooltipTitle(row: ChartRow) {
             :y-grid-line="true"
             :x-grid-line="false"
             :legend-position="'top-left' as never"
-        />
+        >
+            <template #tooltip="{ values }">
+                <div v-if="values" class="max-w-80 space-y-2 p-1 text-sm">
+                    <p class="font-medium text-highlighted">{{ formatTooltipTitle(values) }}</p>
+                    <div v-for="series in tooltipSeries" :key="series.key" class="flex items-center gap-2">
+                        <span class="size-2 shrink-0 rounded-full" :style="{ backgroundColor: series.color }" />
+                        <span class="flex-1 text-muted">{{ series.name }}</span>
+                        <span class="font-medium text-highlighted">
+                            {{ formatMoney({ cents: (values[series.key] ?? 0) * 100, compact: true }) }}
+                        </span>
+                    </div>
+                    <div v-if="values.events.length" class="space-y-1 border-t border-default pt-2">
+                        <p class="text-xs text-muted">What changed this month</p>
+                        <div
+                            v-for="(event, index) in values.events.slice(0, 5)"
+                            :key="index"
+                            class="flex items-start justify-between gap-3"
+                        >
+                            <span class="min-w-0 text-highlighted">{{ event.label }}</span>
+                            <ForecastEventAmount :event="event" class="text-right" />
+                        </div>
+                        <p v-if="values.events.length > 5" class="text-xs text-muted">
+                            and {{ values.events.length - 5 }} more
+                        </p>
+                    </div>
+                </div>
+            </template>
+        </LineChart>
         <template #fallback>
             <USkeleton :style="{ height: `${height ?? 320}px` }" class="w-full" />
         </template>

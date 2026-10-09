@@ -11,6 +11,12 @@ import { ErrorResponse, UserSummary } from '#shared/schemas/common.ts'
 import { Contact, CreateContactRequest, UpdateContactRequest } from '#shared/schemas/contacts.ts'
 import { CreateFunderRequest, Funder, FunderDetail, FunderList, UpdateFunderRequest } from '#shared/schemas/funders.ts'
 import { ForecastInputs } from '#shared/schemas/forecast.ts'
+import {
+    CreatePlannedExpenseRequest,
+    PlannedExpense,
+    PlannedExpenseList,
+    UpdatePlannedExpenseRequest,
+} from '#shared/schemas/planned-expenses.ts'
 import { PipelineImportPreview, PipelineImportResponse, PipelineImportResult } from '#shared/schemas/imports.ts'
 import {
     KnowledgeDocument,
@@ -77,6 +83,7 @@ export * from '#shared/schemas/knowledge.ts'
 export * from '#shared/schemas/mail.ts'
 export * from '#shared/schemas/milestones.ts'
 export * from '#shared/schemas/opportunities.ts'
+export * from '#shared/schemas/planned-expenses.ts'
 export * from '#shared/schemas/scenarios.ts'
 export * from '#shared/schemas/settings.ts'
 export * from '#shared/schemas/tasks.ts'
@@ -150,4 +157,8 @@ export const openapiSchemas: Record<string, z.ZodType> = {
     PipelineImportPreview,
     PipelineImportResult,
     PipelineImportResponse,
+    PlannedExpense,
+    PlannedExpenseList,
+    CreatePlannedExpenseRequest,
+    UpdatePlannedExpenseRequest,
 }

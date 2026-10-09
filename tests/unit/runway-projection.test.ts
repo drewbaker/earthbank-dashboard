@@ -1,5 +1,5 @@
-// Covers the runway math: burn, committed vs weighted inflows, the runway-out date, and every
-// scenario adjustment.
+// Covers the runway math: burn, committed vs weighted inflows, the runway-out date, every scenario
+// adjustment, planned expenses, and the events that explain each month.
 import { describe, expect, it } from 'vitest'
 import type { ForecastOpportunity } from '#shared/forecast/project-runway.ts'
 import { projectRunway } from '#shared/forecast/project-runway.ts'
@@ -36,7 +36,12 @@ describe('projectRunway', () => {
             monthlyBurnCents: MILLION / 4,
             opportunities: [],
         })
-        expect(projection.points[0]).toEqual({ date: TODAY, committed_cents: MILLION, weighted_cents: MILLION })
+        expect(projection.points[0]).toEqual({
+            date: TODAY,
+            committed_cents: MILLION,
+            weighted_cents: MILLION,
+            events: [],
+        })
         expect(projection.points[1]).toMatchObject({ date: '2026-11-30', committed_cents: 75_000_000 })
         expect(projection.points[4]!.committed_cents).toBe(0)
         expect(projection.runway.committed.out_date).toBe('2027-03-01')
@@ -202,5 +207,100 @@ describe('scenario adjustments', () => {
             ],
         })
         expect(projection.markers.map(marker => marker.id)).toEqual(['m1'])
+    })
+})
+
+describe('planned expenses and events', () => {
+    it('takes one-off and monthly planned expenses off both lines', () => {
+        const projection = projectRunway({
+            today: TODAY,
+            startingCashCents: MILLION,
+            monthlyBurnCents: 0,
+            opportunities: [],
+            plannedExpenses: [
+                {
+                    id: 'pex_study',
+                    label: 'Market research study',
+                    kind: 'one_off',
+                    amount_cents: 20_000_000,
+                    starts_on: '2026-12-10',
+                    ends_on: null,
+                },
+                {
+                    id: 'pex_hire',
+                    label: 'Analyst',
+                    kind: 'monthly',
+                    amount_cents: 1_000_000,
+                    starts_on: '2027-01-15',
+                    ends_on: '2027-02-01',
+                },
+            ],
+        })
+        // Nov: nothing. Dec: −$200K. Jan and Feb: −$10K each (whole months). Mar: nothing.
+        expect(projection.points.slice(1, 6).map(point => point.committed_cents)).toEqual([
+            MILLION,
+            80_000_000,
+            79_000_000,
+            78_000_000,
+            78_000_000,
+        ])
+        expect(projection.points[2]!.weighted_cents).toBe(80_000_000)
+        expect(projection.points[2]!.events).toEqual([
+            expect.objectContaining({
+                label: 'Market research study',
+                source: 'planned_expense',
+                committed_cents: -20_000_000,
+                is_monthly: false,
+            }),
+        ])
+        expect(projection.points[3]!.events[0]).toMatchObject({
+            label: 'Analyst',
+            date: '2027-01-01',
+            committed_cents: -1_000_000,
+            is_monthly: true,
+        })
+    })
+
+    it('explains pipeline money landing, weighted when not committed', () => {
+        const projection = projectRunway({
+            today: TODAY,
+            startingCashCents: MILLION,
+            monthlyBurnCents: 0,
+            opportunities: [opportunity({ funder_name: 'Shell Foundation', stage: 'proposal', probability: 30 })],
+        })
+        const january = projection.points.find(point => point.date === '2027-01-31')!
+        expect(january.events).toEqual([
+            expect.objectContaining({
+                label: 'Shell Foundation · Design grant',
+                source: 'pipeline',
+                committed_cents: 0,
+                weighted_cents: 30_000_000,
+                note: 'Weighted by its chance of landing',
+            }),
+        ])
+        expect(projection.events).toHaveLength(1)
+    })
+
+    it('lets a scenario leave a planned expense out', () => {
+        const plannedExpenses = [
+            {
+                id: 'pex_study',
+                label: 'Market research study',
+                kind: 'one_off' as const,
+                amount_cents: 20_000_000,
+                starts_on: '2026-12-10',
+                ends_on: null,
+            },
+        ]
+        const projection = projectRunway({
+            today: TODAY,
+            startingCashCents: MILLION,
+            monthlyBurnCents: 0,
+            opportunities: [],
+            plannedExpenses,
+            adjustments: [{ kind: 'exclude_planned_expense', planned_expense_id: 'pex_study' }],
+        })
+        expect(projection.points.at(-1)!.committed_cents).toBe(MILLION)
+        expect(projection.events).toEqual([])
     })
 })

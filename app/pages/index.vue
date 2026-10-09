@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { navigateTo, useAsyncData, useSeoMeta } from '#imports'
 import { MILESTONE_KIND_DETAILS } from '#shared/constants/pipeline.ts'
 import type { RunwayEnd } from '#shared/forecast/project-runway.ts'
@@ -19,6 +19,7 @@ const api = useApi()
 const { currentUser } = useAuth()
 const { goals } = usePipelineReference()
 const { inputs, isReady, baseProjection } = useForecast()
+const isPlannedExpenseOpen = ref(false)
 
 const { data: cash } = await useAsyncData('overview.cash', () => api<CashSummary>({ path: '/cash/summary' }))
 
@@ -149,16 +150,35 @@ function describeRunway({ end }: { end: RunwayEnd }) {
                     <template #header>
                         <div class="flex items-center justify-between">
                             <h2 class="font-medium text-highlighted">Cash runway</h2>
-                            <UButton
-                                to="/forecast"
-                                label="Model a scenario"
-                                size="sm"
-                                trailing-icon="i-lucide-arrow-right"
-                            />
+                            <div class="flex gap-2">
+                                <UButton
+                                    label="Plan an expense"
+                                    icon="i-lucide-receipt"
+                                    size="sm"
+                                    color="neutral"
+                                    @click="isPlannedExpenseOpen = true"
+                                />
+                                <UButton
+                                    to="/forecast"
+                                    label="Model a scenario"
+                                    size="sm"
+                                    trailing-icon="i-lucide-arrow-right"
+                                />
+                            </div>
                         </div>
                     </template>
                     <ForecastRunwayChart :projection="baseProjection" :height="240" />
+                    <template v-if="baseProjection.events.length" #footer>
+                        <p class="mb-1 text-xs font-medium text-muted">Coming up</p>
+                        <ForecastEventList :events="baseProjection.events" :limit="4" class="-mx-4" />
+                    </template>
                 </UCard>
+                <ForecastPlannedExpenseModal
+                    v-if="inputs.data.value"
+                    v-model:open="isPlannedExpenseOpen"
+                    :today="inputs.data.value.today"
+                    @saved="inputs.refresh()"
+                />
 
                 <PipelineGoalSummary v-if="goals.data.value" :goals="goals.data.value.data" />
 

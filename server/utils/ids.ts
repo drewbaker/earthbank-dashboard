@@ -23,6 +23,7 @@ export const ID_PREFIXES = {
     inboundAddress: 'iad',
     knowledgeSource: 'ksr',
     knowledgeDocument: 'kdc',
+    plannedExpense: 'pex',
 } as const
 
 export type IdKind = keyof typeof ID_PREFIXES

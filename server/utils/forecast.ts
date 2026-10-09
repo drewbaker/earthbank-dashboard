@@ -1,26 +1,29 @@
 import { listMilestoneRows } from '#server/database/milestones.ts'
 import { listOpportunityRows } from '#server/database/opportunities.ts'
+import { listPlannedExpenseRows } from '#server/database/planned-expenses.ts'
 import { loadCashSummary } from '#server/utils/cash.ts'
 import { readCashSettings } from '#server/utils/cash-settings.ts'
 import { fromDateOnly, toDateOnly } from '#server/utils/dates.ts'
 import { serializeOpportunity } from '#server/utils/serializers/opportunities.ts'
+import { serializePlannedExpense } from '#server/utils/serializers/planned-expenses.ts'
 import { readStageProbabilities } from '#server/utils/settings.ts'
 import type { MilestoneKind } from '#shared/constants/pipeline.ts'
 import type { ForecastInputs } from '#shared/schemas/forecast.ts'
 
 /**
- * Gather the inputs for the runway projection: cash, burn, pipeline and milestones.
+ * Gather the inputs for the runway projection: cash, burn, pipeline, milestones and planned expenses.
  *
  * @param input.today - Today's date (YYYY-MM-DD).
  * @returns The forecast inputs.
  */
 export async function loadForecastInputs({ today }: { today: string }): Promise<ForecastInputs> {
-    const [cash, settings, stageProbabilities, opportunities, milestones] = await Promise.all([
+    const [cash, settings, stageProbabilities, opportunities, milestones, plannedExpenses] = await Promise.all([
         loadCashSummary({ today }),
         readCashSettings(),
         readStageProbabilities(),
         listOpportunityRows({ includeClosed: true, includeArchived: false }),
         listMilestoneRows({ includeDone: false, dueAfter: fromDateOnly({ value: today })! }),
+        listPlannedExpenseRows(),
     ])
     return {
         today,
@@ -46,5 +49,16 @@ export async function loadForecastInputs({ today }: { today: string }): Promise<
             due_at: toDateOnly({ date: milestone.due_at })!,
             kind: milestone.kind as MilestoneKind,
         })),
+        planned_expenses: plannedExpenses.map(row => {
+            const expense = serializePlannedExpense({ plannedExpense: row })
+            return {
+                id: expense.id,
+                label: expense.label,
+                kind: expense.kind,
+                amount_cents: expense.amount_cents,
+                starts_on: expense.starts_on,
+                ends_on: expense.ends_on,
+            }
+        }),
     }
 }

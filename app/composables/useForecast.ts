@@ -37,6 +37,7 @@ export function useForecast({ adjustments }: { adjustments?: Ref<ScenarioAdjustm
             monthlyBurnCents: data.monthly_burn_cents ?? 0,
             opportunities: data.opportunities,
             milestones: data.milestones,
+            plannedExpenses: data.planned_expenses,
             includeGoalTypes: data.include_goal_types,
             adjustments: withAdjustments,
         })
