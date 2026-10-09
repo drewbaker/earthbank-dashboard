@@ -19,3 +19,12 @@ describe('newId', () => {
         expect(new Set(prefixes).size).toBe(prefixes.length)
     })
 })
+
+describe('newId within one millisecond', () => {
+    it('still sorts in creation order', () => {
+        const now = Date.UTC(2026, 5, 1)
+        const ids = Array.from({ length: 50 }, () => newId({ kind: 'changeEvent', now }))
+        expect([...ids].sort()).toEqual(ids)
+        expect(new Set(ids).size).toBe(50)
+    })
+})

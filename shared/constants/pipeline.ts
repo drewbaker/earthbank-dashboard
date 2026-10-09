@@ -97,3 +97,24 @@ export const CHANGE_SOURCE_LABELS: Record<ChangeSource, string> = {
 
 export const CHANGE_STATUSES = ['applied', 'pending', 'rejected', 'reverted'] as const
 export type ChangeStatus = (typeof CHANGE_STATUSES)[number]
+
+export const MILESTONE_KINDS = ['funding', 'event', 'internal'] as const
+export type MilestoneKind = (typeof MILESTONE_KINDS)[number]
+
+export const MILESTONE_KIND_DETAILS: Record<MilestoneKind, { label: string; icon: string }> = {
+    funding: { label: 'Funding', icon: 'i-lucide-landmark' },
+    event: { label: 'Event', icon: 'i-lucide-calendar-days' },
+    internal: { label: 'Internal', icon: 'i-lucide-flag' },
+}
+
+export const MILESTONE_STATUSES = ['open', 'done'] as const
+export type MilestoneStatus = (typeof MILESTONE_STATUSES)[number]
+
+export const TASK_STATUSES = ['todo', 'doing', 'done'] as const
+export type TaskStatus = (typeof TASK_STATUSES)[number]
+
+export const TASK_STATUS_DETAILS: Record<TaskStatus, { label: string; color: BadgeColor; icon: string }> = {
+    todo: { label: 'To do', color: 'neutral', icon: 'i-lucide-circle' },
+    doing: { label: 'In progress', color: 'info', icon: 'i-lucide-circle-dot' },
+    done: { label: 'Done', color: 'success', icon: 'i-lucide-circle-check' },
+}

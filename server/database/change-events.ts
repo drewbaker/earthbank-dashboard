@@ -78,7 +78,8 @@ export async function writeFieldChanges({
         )
     }
     await db().$transaction(writes)
-    return db().changeEvent.findMany({ where: { id: { in: eventIds } }, include: CHANGE_EVENT_INCLUDE })
+    const events = await db().changeEvent.findMany({ where: { id: { in: eventIds } }, include: CHANGE_EVENT_INCLUDE })
+    return events.sort((first, second) => eventIds.indexOf(first.id) - eventIds.indexOf(second.id))
 }
 
 /**

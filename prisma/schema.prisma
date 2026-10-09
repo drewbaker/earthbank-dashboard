@@ -38,6 +38,11 @@ model User {
     owned_opportunities  Opportunity[]
     change_events        ChangeEvent[] @relation("change_event_actor")
     resolved_changes     ChangeEvent[] @relation("change_event_resolver")
+    assigned_tasks       Task[]        @relation("task_assignee")
+    created_tasks        Task[]        @relation("task_creator")
+    created_milestones   Milestone[]
+    comments             Comment[]
+    attachments          Attachment[]
 
     @@map("user")
 }
@@ -107,6 +112,8 @@ model Funder {
     owner         User?         @relation(fields: [owner_id], references: [id], onDelete: SetNull)
     contacts      Contact[]
     opportunities Opportunity[]
+    milestones    Milestone[]
+    tasks         Task[]
 
     @@index([tier])
     @@index([relationship_status])
@@ -146,6 +153,7 @@ model Goal {
     updated_at          DateTime  @updatedAt
 
     opportunities Opportunity[]
+    milestones    Milestone[]
 
     @@map("goal")
 }
@@ -170,9 +178,11 @@ model Opportunity {
     created_at           DateTime  @default(now())
     updated_at           DateTime  @updatedAt
 
-    funder Funder @relation(fields: [funder_id], references: [id], onDelete: Cascade)
-    goal   Goal   @relation(fields: [goal_id], references: [id])
-    owner  User?  @relation(fields: [owner_id], references: [id], onDelete: SetNull)
+    funder     Funder      @relation(fields: [funder_id], references: [id], onDelete: Cascade)
+    goal       Goal        @relation(fields: [goal_id], references: [id])
+    owner      User?       @relation(fields: [owner_id], references: [id], onDelete: SetNull)
+    milestones Milestone[]
+    tasks      Task[]
 
     @@index([funder_id])
     @@index([goal_id, stage])
@@ -217,4 +227,106 @@ model Setting {
     updated_at DateTime @updatedAt
 
     @@map("setting")
+}
+
+// A dated funding milestone or event ("UBS decision", "NY Climate Week") that tasks roll up to.
+// It also appears as a marker on the runway forecast.
+model Milestone {
+    id             String    @id
+    title          String
+    description    String?
+    due_at         DateTime
+    // funding | event | internal
+    kind           String    @default("funding")
+    // open | done
+    status         String    @default("open")
+    goal_id        String?
+    opportunity_id String?
+    // Set from the opportunity when there is one, so funder pages find their milestones directly.
+    funder_id      String?
+    created_by_id  String?
+    archived_at    DateTime?
+    created_at     DateTime  @default(now())
+    updated_at     DateTime  @updatedAt
+
+    goal        Goal?        @relation(fields: [goal_id], references: [id], onDelete: SetNull)
+    opportunity Opportunity? @relation(fields: [opportunity_id], references: [id], onDelete: SetNull)
+    funder      Funder?      @relation(fields: [funder_id], references: [id], onDelete: SetNull)
+    created_by  User?        @relation(fields: [created_by_id], references: [id], onDelete: SetNull)
+    tasks       Task[]
+
+    @@index([due_at])
+    @@index([funder_id])
+    @@map("milestone")
+}
+
+// Something a person has to do, usually for a milestone.
+model Task {
+    id             String    @id
+    title          String
+    description    String?
+    // todo | doing | done
+    status         String    @default("todo")
+    assignee_id    String?
+    due_at         DateTime?
+    milestone_id   String?
+    opportunity_id String?
+    // Set from the opportunity (or milestone) when there is one.
+    funder_id      String?
+    // Order within a milestone; lower first.
+    sort           Int       @default(0)
+    completed_at   DateTime?
+    created_by_id  String?
+    archived_at    DateTime?
+    created_at     DateTime  @default(now())
+    updated_at     DateTime  @updatedAt
+
+    assignee    User?        @relation("task_assignee", fields: [assignee_id], references: [id], onDelete: SetNull)
+    created_by  User?        @relation("task_creator", fields: [created_by_id], references: [id], onDelete: SetNull)
+    milestone   Milestone?   @relation(fields: [milestone_id], references: [id], onDelete: SetNull)
+    opportunity Opportunity? @relation(fields: [opportunity_id], references: [id], onDelete: SetNull)
+    funder      Funder?      @relation(fields: [funder_id], references: [id], onDelete: SetNull)
+    comments    Comment[]
+    attachments Attachment[]
+
+    @@index([assignee_id, status])
+    @@index([milestone_id])
+    @@index([funder_id])
+    @@index([due_at])
+    @@map("task")
+}
+
+model Comment {
+    id         String    @id
+    task_id    String
+    author_id  String?
+    body       String
+    edited_at  DateTime?
+    deleted_at DateTime?
+    created_at DateTime  @default(now())
+
+    task   Task  @relation(fields: [task_id], references: [id], onDelete: Cascade)
+    author User? @relation(fields: [author_id], references: [id], onDelete: SetNull)
+
+    @@index([task_id])
+    @@map("comment")
+}
+
+// A file on a task. The bytes live on disk under DATA_DIR/files at storage_key.
+model Attachment {
+    id             String    @id
+    task_id        String
+    uploaded_by_id String?
+    filename       String
+    content_type   String
+    size_bytes     Int
+    storage_key    String
+    deleted_at     DateTime?
+    created_at     DateTime  @default(now())
+
+    task        Task  @relation(fields: [task_id], references: [id], onDelete: Cascade)
+    uploaded_by User? @relation(fields: [uploaded_by_id], references: [id], onDelete: SetNull)
+
+    @@index([task_id])
+    @@map("attachment")
 }

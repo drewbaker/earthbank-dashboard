@@ -10,7 +10,26 @@ import {
     OpportunityList,
     UpdateOpportunityRequest,
 } from '#shared/schemas/opportunities.ts'
+import {
+    CreateMilestoneRequest,
+    Milestone,
+    MilestoneList,
+    OpportunityReference,
+    UpdateMilestoneRequest,
+} from '#shared/schemas/milestones.ts'
 import { StageProbabilities } from '#shared/schemas/settings.ts'
+import {
+    Attachment,
+    Comment,
+    CreateCommentRequest,
+    CreateTaskRequest,
+    ReorderTasksRequest,
+    Task,
+    TaskDetail,
+    TaskList,
+    UpdateCommentRequest,
+    UpdateTaskRequest,
+} from '#shared/schemas/tasks.ts'
 import { CurrentUser, User, UserList } from '#shared/schemas/users.ts'
 
 export * from '#shared/schemas/change-events.ts'
@@ -18,8 +37,10 @@ export * from '#shared/schemas/common.ts'
 export * from '#shared/schemas/contacts.ts'
 export * from '#shared/schemas/funders.ts'
 export * from '#shared/schemas/goals.ts'
+export * from '#shared/schemas/milestones.ts'
 export * from '#shared/schemas/opportunities.ts'
 export * from '#shared/schemas/settings.ts'
+export * from '#shared/schemas/tasks.ts'
 export * from '#shared/schemas/users.ts'
 
 // Every schema referenced as #/components/schemas/<Name> in route meta. The OpenAPI plugin turns
@@ -48,4 +69,19 @@ export const openapiSchemas: Record<string, z.ZodType> = {
     ChangeEvent,
     ChangeEventList,
     StageProbabilities,
+    OpportunityReference,
+    Milestone,
+    MilestoneList,
+    CreateMilestoneRequest,
+    UpdateMilestoneRequest,
+    Task,
+    TaskList,
+    TaskDetail,
+    CreateTaskRequest,
+    UpdateTaskRequest,
+    ReorderTasksRequest,
+    Comment,
+    CreateCommentRequest,
+    UpdateCommentRequest,
+    Attachment,
 }

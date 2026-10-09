@@ -101,25 +101,34 @@ Notes from building it:
 
 Goal: it's obvious what each person has to do, for which milestone, by when.
 
-- [ ] Prisma models:
-    - [ ] `Milestone`: title, description, due_at, goal_id?, opportunity_id?, status (`upcoming | done | missed`), kind (`funding | event | internal`)
-    - [ ] `Task`: title, description, assignee_id, due_at, status (`todo | doing | done`), milestone_id?, opportunity_id?, sort, completed_at, created_by
-    - [ ] `Comment`: task_id, author_id, body (Markdown), edited_at, deleted_at
-    - [ ] `Attachment`: task_id, uploaded_by, filename, content_type, size_bytes, storage_key
-- [ ] `server/utils/storage.ts` (local disk under `DATA_DIR/files`, key escape checks); upload limit 25 MB
-- [ ] `/v1` routes: milestones CRUD; tasks CRUD + reorder; tasks/{id}/comments CRUD; tasks/{id}/attachments upload, list, delete; `attachments/{id}/download`
-- [ ] Notifications (`server/utils/notifications.ts` → `enqueueEmail`):
-    - [ ] Task assigned (to someone other than yourself) → email the assignee with title, milestone, due date and link
-    - [ ] Comment → email the assignee and earlier commenters, excluding the author
-    - [ ] Email templates with `html` and `text`
-- [ ] Pages:
-    - [ ] `/milestones`: timeline grouped by milestone (date order) with progress (done / total) and tasks beneath
-    - [ ] "By person" tab: each user's open tasks sorted by due date ("Drew: A, B, C before Jan 1")
-    - [ ] Task slideover: edit fields, comments thread, attachments drop zone
-    - [ ] Funder and opportunity pages show linked milestones and tasks, with "Add task" inline
-    - [ ] Overview "My tasks" card (overdue highlighted)
-- [ ] Optional `task-digest` Nitro task (weekday mornings)
-- [ ] Tests: `task-notifications.test.ts` (recipients fan-out, no self-notify), `attachments.test.ts` (storage key safety)
+Status: built and verified locally (milestones page by milestone and by person, task slideover with comments and files, funder-page tasks, emailed deep links via `?task=`).
+
+Notes from building it:
+
+- A task's funder is filled in from its opportunity (or its milestone's opportunity), so funder pages list every related task.
+- Attachments always download (`Content-Disposition: attachment`, `nosniff`) so uploaded HTML/SVG can't run in our origin; removed files are purged by `cleanup` after 30 days.
+- `POST /v1/tasks/reorder` exists; drag-to-reorder in the UI is not built yet (tasks sort by deadline, then order).
+- The weekday `task-digest` runs at 13:00 UTC.
+
+- [x] Prisma models:
+    - [x] `Milestone`: title, description, due_at, goal_id?, opportunity_id?, status (`upcoming | done | missed`), kind (`funding | event | internal`)
+    - [x] `Task`: title, description, assignee_id, due_at, status (`todo | doing | done`), milestone_id?, opportunity_id?, sort, completed_at, created_by
+    - [x] `Comment`: task_id, author_id, body (Markdown), edited_at, deleted_at
+    - [x] `Attachment`: task_id, uploaded_by, filename, content_type, size_bytes, storage_key
+- [x] `server/utils/storage.ts` (local disk under `DATA_DIR/files`, key escape checks); upload limit 25 MB
+- [x] `/v1` routes: milestones CRUD; tasks CRUD + reorder; tasks/{id}/comments CRUD; tasks/{id}/attachments upload, list, delete; `attachments/{id}/download`
+- [x] Notifications (`server/utils/notifications.ts` → `enqueueEmail`):
+    - [x] Task assigned (to someone other than yourself) → email the assignee with title, milestone, due date and link
+    - [x] Comment → email the assignee and earlier commenters, excluding the author
+    - [x] Email templates with `html` and `text`
+- [x] Pages:
+    - [x] `/milestones`: timeline grouped by milestone (date order) with progress (done / total) and tasks beneath
+    - [x] "By person" tab: each user's open tasks sorted by due date ("Drew: A, B, C before Jan 1")
+    - [x] Task slideover: edit fields, comments thread, attachments drop zone
+    - [x] Funder and opportunity pages show linked milestones and tasks, with "Add task" inline
+    - [x] Overview "My tasks" card (overdue highlighted)
+- [x] Optional `task-digest` Nitro task (weekday mornings)
+- [x] Tests: `task-notifications.test.ts` (recipients fan-out, no self-notify), `attachments.test.ts` (storage key safety)
 
 ## Phase 4: Cash, burn, forecast, scenarios
 

@@ -47,3 +47,13 @@ export function centsToNumber({ cents }: { cents: bigint | null | undefined }) {
 export function centsToBigInt({ cents }: { cents: number | null | undefined }) {
     return cents === null || cents === undefined ? null : BigInt(Math.round(cents))
 }
+
+/**
+ * Today's calendar date in UTC as `YYYY-MM-DD`.
+ *
+ * @param input.now - Current time (for tests).
+ * @returns The date string.
+ */
+export function todayDateOnly({ now = new Date() }: { now?: Date } = {}) {
+    return now.toISOString().slice(0, 10)
+}

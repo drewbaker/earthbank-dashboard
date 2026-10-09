@@ -56,6 +56,8 @@ export default defineNuxtConfig({
             '0 * * * *': ['cleanup'],
             // 03:00 UTC is overnight across the US.
             '0 3 * * *': ['backup'],
+            // 13:00 UTC is early morning on the US east coast (9am EDT / 8am EST), weekdays only.
+            '0 13 * * 1-5': ['task-digest'],
         },
         openAPI: {
             production: 'runtime',

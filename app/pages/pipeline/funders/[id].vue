@@ -2,9 +2,10 @@
 import { computed, ref } from 'vue'
 import { useAsyncData, useRoute, useSeoMeta, useToast } from '#imports'
 import { FUNDER_KIND_LABELS } from '#shared/constants/pipeline.ts'
-import type { ChangeEventList, Contact, FunderDetail, Opportunity } from '#shared/schemas/index.ts'
+import type { ChangeEventList, Contact, FunderDetail, Opportunity, Task, TaskList } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { useChangeEventActions } from '~/composables/useChangeEventActions.ts'
+import { useTaskActions } from '~/composables/useTaskActions.ts'
 import { formatDate, formatMoney } from '~/utils/format.ts'
 
 const route = useRoute()
@@ -21,7 +22,27 @@ const { data: changeLog, refresh: refreshChangeLog } = await useAsyncData(`funde
     api<ChangeEventList>({ path: '/change-events', query: { funder_id: funderId.value, limit: 50 } }),
 )
 
+const { data: taskList, refresh: refreshTasks } = await useAsyncData(`funder.${funderId.value}.tasks`, () =>
+    api<TaskList>({ path: '/tasks', query: { funder_id: funderId.value, include_done: true } }),
+)
+
 useSeoMeta({ title: () => `${funder.value?.name ?? 'Funder'} · Earth Bank Dashboard` })
+
+const isTaskModalOpen = ref(false)
+const openTaskId = ref<string | null>(null)
+const isTaskOpen = ref(false)
+const { updatingTaskId, toggleDone } = useTaskActions({ onChanged: () => refreshTasks() })
+
+/**
+ * Show a task in the slideover.
+ *
+ * @param task - The task.
+ * @returns Nothing.
+ */
+function openTask(task: Task) {
+    openTaskId.value = task.id
+    isTaskOpen.value = true
+}
 
 const isFunderModalOpen = ref(false)
 const isOpportunityModalOpen = ref(false)
@@ -53,7 +74,7 @@ const details = computed(() => {
  * @returns Resolves once both are fresh.
  */
 async function reloadFunder() {
-    await Promise.all([refreshFunder(), refreshChangeLog()])
+    await Promise.all([refreshFunder(), refreshChangeLog(), refreshTasks()])
 }
 
 /**
@@ -242,6 +263,27 @@ async function toggleArchived() {
                         <p v-else class="px-4 py-6 text-center text-sm text-muted">No opportunities yet.</p>
                     </UCard>
 
+                    <UCard :ui="{ body: 'p-0 sm:p-0' }">
+                        <template #header>
+                            <div class="flex items-center justify-between">
+                                <h2 class="font-medium text-highlighted">Tasks</h2>
+                                <UButton size="sm" icon="i-lucide-plus" label="Add" @click="isTaskModalOpen = true" />
+                            </div>
+                        </template>
+                        <div v-if="taskList?.data.length" class="divide-y divide-default">
+                            <TasksRow
+                                v-for="task in taskList.data"
+                                :key="task.id"
+                                :task="task"
+                                show-milestone
+                                :is-updating="updatingTaskId === task.id"
+                                @open="openTask"
+                                @toggle-done="toggleDone"
+                            />
+                        </div>
+                        <p v-else class="px-4 py-6 text-center text-sm text-muted">No tasks for this funder.</p>
+                    </UCard>
+
                     <UCard v-if="funder.notes">
                         <template #header>
                             <h2 class="font-medium text-highlighted">Notes</h2>
@@ -364,6 +406,13 @@ async function toggleArchived() {
                     :funder-name="funder.name"
                     @saved="reloadFunder"
                 />
+                <TasksCreateModal
+                    v-model:open="isTaskModalOpen"
+                    :funder-id="funder.id"
+                    :opportunity-id="funder.opportunities.length === 1 ? funder.opportunities[0]!.id : null"
+                    @created="() => refreshTasks()"
+                />
+                <TasksSlideover v-model:open="isTaskOpen" :task-id="openTaskId" @changed="() => refreshTasks()" />
                 <PipelineContactModal
                     v-model:open="isContactModalOpen"
                     :funder-id="funder.id"
