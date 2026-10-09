@@ -321,7 +321,17 @@ async function applyClassification({
                 review[field] = value
             }
         }
-        const common = { entityType, entityId, source: changeSource, evidenceId, reason, confidence } as const
+        // Stage rules (approval → funding 60 days later) date from when the email was sent.
+        const effectiveOn = todayDateOnly({ now: email.sentAt, timeZone: config.defaultTimeZone })
+        const common = {
+            entityType,
+            entityId,
+            source: changeSource,
+            evidenceId,
+            reason,
+            confidence,
+            effectiveOn,
+        } as const
         applied += (await applyFieldChanges({ ...common, changes: safe as never, status: 'applied' })).length
         pending += (await applyFieldChanges({ ...common, changes: review as never, status: 'pending' })).length
     }

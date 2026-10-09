@@ -269,6 +269,12 @@ async function toggleArchived() {
                                                     unknown: 'date not set',
                                                 })
                                             }}
+                                            <template
+                                                v-if="opportunity.stage === 'in_committee' && opportunity.committee_on"
+                                            >
+                                                · in committee since
+                                                {{ formatDate({ value: opportunity.committee_on }) }}</template
+                                            >
                                             <template v-if="opportunity.owner">
                                                 · {{ opportunity.owner.name }}</template
                                             >

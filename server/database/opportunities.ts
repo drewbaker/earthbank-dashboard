@@ -27,6 +27,7 @@ const OPEN_STAGES = Object.entries(OPPORTUNITY_STAGE_DETAILS)
  * @param input.probabilityOverride - 0–100 override, or null.
  * @param input.expectedDecisionAt - Expected decision date.
  * @param input.expectedReceiptAt - Expected date the money lands.
+ * @param input.committeeOn - When it went to committee, if it has.
  * @param input.receivedAt - Date received.
  * @param input.nextStep - What happens next.
  * @param input.ownerId - Team member who owns it.
@@ -41,6 +42,7 @@ export function createOpportunityRow({
     probabilityOverride,
     expectedDecisionAt,
     expectedReceiptAt,
+    committeeOn = null,
     receivedAt,
     nextStep,
     ownerId,
@@ -53,6 +55,7 @@ export function createOpportunityRow({
     probabilityOverride: number | null
     expectedDecisionAt: Date | null
     expectedReceiptAt: Date | null
+    committeeOn?: Date | null
     receivedAt: Date | null
     nextStep: string | null
     ownerId: string | null
@@ -68,6 +71,7 @@ export function createOpportunityRow({
             probability_override: probabilityOverride,
             expected_decision_at: expectedDecisionAt,
             expected_receipt_at: expectedReceiptAt,
+            committee_on: committeeOn,
             received_at: receivedAt,
             next_step: nextStep,
             owner_id: ownerId,

@@ -11,12 +11,13 @@ const emit = defineEmits<{
     select: [opportunity: Opportunity]
 }>()
 
-// "Lost" is left off the board; move an opportunity there from its edit form.
+// "Declined" (lost) is left off the board; move an opportunity there from its edit form.
 const BOARD_STAGES: OpportunityStage[] = [
     'identified',
     'in_discussion',
     'proposal',
     'due_diligence',
+    'in_committee',
     'committed',
     'received',
 ]

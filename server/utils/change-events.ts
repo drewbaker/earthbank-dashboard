@@ -3,8 +3,10 @@ import type { ChangeEventDraft } from '#server/database/change-events.ts'
 import { findChangeEvent, resolveChangeEvent, writeFieldChanges, writeRevert } from '#server/database/change-events.ts'
 import { findFunder } from '#server/database/funders.ts'
 import { findOpportunity } from '#server/database/opportunities.ts'
-import { centsToBigInt, centsToNumber, fromDateOnly, toDateOnly } from '#server/utils/dates.ts'
+import { config } from '#server/utils/config.ts'
+import { centsToBigInt, centsToNumber, fromDateOnly, todayDateOnly, toDateOnly } from '#server/utils/dates.ts'
 import { badRequest, conflict, notFound } from '#server/utils/errors.ts'
+import { stageRuleChanges } from '#server/utils/stage-rules.ts'
 import type { ChangeSource } from '#shared/constants/pipeline.ts'
 import type { ChangeEntityType } from '#shared/schemas/index.ts'
 import { funderNameKey } from '#shared/utils/funder-names.ts'
@@ -37,6 +39,7 @@ export const TRACKED_FIELDS = {
         probability_override: 'integer',
         expected_decision_at: 'date',
         expected_receipt_at: 'date',
+        committee_on: 'date',
         received_at: 'date',
         next_step: 'text',
         owner_id: 'text',
@@ -46,6 +49,8 @@ export const TRACKED_FIELDS = {
 export type TrackedField<Entity extends ChangeEntityType> = keyof (typeof TRACKED_FIELDS)[Entity]
 
 export type ChangeValue = string | number | string[] | null
+
+type WrittenChangeEvents = Awaited<ReturnType<typeof writeFieldChanges>>
 
 /**
  * Apply changes to tracked fields of a funder or opportunity and log each one.
@@ -62,7 +67,9 @@ export type ChangeValue = string | number | string[] | null
  * @param input.evidenceId - Email evidence id, if any.
  * @param input.reason - Why it changed.
  * @param input.confidence - AI confidence 0–1, if any.
- * @returns The change events written (empty when nothing changed).
+ * @param input.effectiveOn - The day the change happened (YYYY-MM-DD): the email's date for AI
+ *   changes, else today. Stage rules date from it (approval → funding 60 days later).
+ * @returns The change events written (empty when nothing changed), including any from stage rules.
  * @throws ApiError 404 when the entity doesn't exist; 400 for an untracked field.
  */
 export async function applyFieldChanges<Entity extends ChangeEntityType>({
@@ -75,6 +82,7 @@ export async function applyFieldChanges<Entity extends ChangeEntityType>({
     evidenceId = null,
     reason = null,
     confidence = null,
+    effectiveOn,
 }: {
     entityType: Entity
     entityId: string
@@ -85,7 +93,8 @@ export async function applyFieldChanges<Entity extends ChangeEntityType>({
     evidenceId?: string | null
     reason?: string | null
     confidence?: number | null
-}) {
+    effectiveOn?: string
+}): Promise<WrittenChangeEvents> {
     const current = await loadEntityValues({ entityType, entityId })
     const fieldKinds = TRACKED_FIELDS[entityType] as Record<string, FieldKind>
     const drafts: ChangeEventDraft[] = []
@@ -110,7 +119,7 @@ export async function applyFieldChanges<Entity extends ChangeEntityType>({
     if (drafts.length === 0) {
         return []
     }
-    return writeFieldChanges({
+    const written = await writeFieldChanges({
         entityType,
         entityId,
         columnUpdates,
@@ -122,6 +131,75 @@ export async function applyFieldChanges<Entity extends ChangeEntityType>({
         reason,
         confidence,
     })
+    const stageDraft = drafts.find(draft => draft.field === 'stage')
+    // Imports carry the spreadsheet's state, not a stage change that just happened.
+    if (entityType !== 'opportunity' || status !== 'applied' || !stageDraft || source === 'import') {
+        return written
+    }
+    const ruleEvents = await applyStageRules({
+        opportunityId: entityId,
+        fromStage: stageDraft.fromValue as string | null,
+        toStage: stageDraft.toValue as string,
+        on: effectiveOn ?? todayDateOnly({ timeZone: config.defaultTimeZone }),
+        hasCommitteeDate: current.committee_on !== null && current.committee_on !== undefined,
+        explicitFields: new Set(drafts.map(draft => draft.field)),
+        source,
+        actorUserId,
+        evidenceId,
+    })
+    return [...written, ...ruleEvents]
+}
+
+/**
+ * Apply the dates that follow from a stage change (see `stageRuleChanges`), each logged with its reason.
+ *
+ * @param input.opportunityId - The opportunity.
+ * @param input.fromStage - Stage before.
+ * @param input.toStage - Stage after.
+ * @param input.on - The day the stage changed.
+ * @param input.hasCommitteeDate - Whether a committee date was already recorded.
+ * @param input.explicitFields - Fields the stage change already set.
+ * @param input.source - Source of the stage change (the follow-on changes share it).
+ * @param input.actorUserId - Who made it.
+ * @param input.evidenceId - Email evidence, if any.
+ * @returns The change events written.
+ */
+async function applyStageRules({
+    opportunityId,
+    fromStage,
+    toStage,
+    on,
+    hasCommitteeDate,
+    explicitFields,
+    source,
+    actorUserId,
+    evidenceId,
+}: {
+    opportunityId: string
+    fromStage: string | null
+    toStage: string
+    on: string
+    hasCommitteeDate: boolean
+    explicitFields: Set<string>
+    source: ChangeSource
+    actorUserId: string | null
+    evidenceId: string | null
+}): Promise<WrittenChangeEvents> {
+    const events: WrittenChangeEvents = []
+    for (const rule of stageRuleChanges({ fromStage, toStage, on, hasCommitteeDate, explicitFields })) {
+        events.push(
+            ...(await applyFieldChanges({
+                entityType: 'opportunity',
+                entityId: opportunityId,
+                changes: { [rule.field]: rule.value },
+                source,
+                actorUserId,
+                evidenceId,
+                reason: rule.reason,
+            })),
+        )
+    }
+    return events
 }
 
 /**
@@ -161,6 +239,19 @@ export async function acceptChangeEvent({
             data: toColumnUpdates({ entityType, field: event.field, kind, value: event.to_value as ChangeValue }),
         },
     })
+    if (entityType === 'opportunity' && event.field === 'stage') {
+        await applyStageRules({
+            opportunityId: event.entity_id,
+            fromStage: current.stage as string | null,
+            toStage: event.to_value as string,
+            on: todayDateOnly({ timeZone: config.defaultTimeZone }),
+            hasCommitteeDate: current.committee_on !== null && current.committee_on !== undefined,
+            explicitFields: new Set(),
+            source: event.source as ChangeSource,
+            actorUserId,
+            evidenceId: event.evidence_id,
+        })
+    }
 }
 
 /**

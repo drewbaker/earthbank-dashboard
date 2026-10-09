@@ -1,5 +1,5 @@
 import type { OpportunityStage } from '#shared/constants/pipeline.ts'
-import { OPPORTUNITY_STAGE_DETAILS } from '#shared/constants/pipeline.ts'
+import { COMMITTEE_MIN_PROBABILITY, OPPORTUNITY_STAGE_DETAILS } from '#shared/constants/pipeline.ts'
 
 export type StageProbabilities = Record<OpportunityStage, number>
 
@@ -15,7 +15,8 @@ export function defaultStageProbabilities(): StageProbabilities {
 }
 
 /**
- * The probability an opportunity lands: its override, else its stage's probability.
+ * The probability an opportunity lands: its override, else its stage's probability. Once it's in
+ * committee it's never below `COMMITTEE_MIN_PROBABILITY`, whatever the override says.
  *
  * @param input.stage - Opportunity stage.
  * @param input.probabilityOverride - Per-opportunity override (0–100), or null.
@@ -31,7 +32,8 @@ export function opportunityProbability({
     probabilityOverride: number | null
     stageProbabilities: StageProbabilities
 }) {
-    return probabilityOverride ?? stageProbabilities[stage]
+    const probability = probabilityOverride ?? stageProbabilities[stage]
+    return stage === 'in_committee' ? Math.max(COMMITTEE_MIN_PROBABILITY, probability) : probability
 }
 
 /**

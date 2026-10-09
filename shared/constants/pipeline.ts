@@ -29,6 +29,7 @@ export const OPPORTUNITY_STAGES = [
     'in_discussion',
     'proposal',
     'due_diligence',
+    'in_committee',
     'committed',
     'received',
     'lost',
@@ -43,10 +44,18 @@ export const OPPORTUNITY_STAGE_DETAILS: Record<
     in_discussion: { label: 'In discussion', color: 'info', isOpen: true, defaultProbability: 15 },
     proposal: { label: 'Proposal', color: 'secondary', isOpen: true, defaultProbability: 35 },
     due_diligence: { label: 'Due diligence', color: 'warning', isOpen: true, defaultProbability: 60 },
-    committed: { label: 'Committed', color: 'success', isOpen: false, defaultProbability: 95 },
+    in_committee: { label: 'In committee', color: 'info', isOpen: true, defaultProbability: 80 },
+    // Stored as `committed` (the spreadsheet's word); the team calls it approved.
+    committed: { label: 'Approved', color: 'success', isOpen: false, defaultProbability: 95 },
     received: { label: 'Received', color: 'primary', isOpen: false, defaultProbability: 100 },
-    lost: { label: 'Lost', color: 'error', isOpen: false, defaultProbability: 0 },
+    lost: { label: 'Declined', color: 'error', isOpen: false, defaultProbability: 0 },
 }
+
+/** Once an ask has gone to the funder's committee, it's at least this likely (0–100). */
+export const COMMITTEE_MIN_PROBABILITY = 80
+
+/** Approved money is expected to arrive this many days after approval, unless a date is known. */
+export const APPROVAL_TO_FUNDING_DAYS = 60
 
 export const FUNDER_TIERS = ['t1', 't2', 't3', 't4'] as const
 export type FunderTier = (typeof FUNDER_TIERS)[number]

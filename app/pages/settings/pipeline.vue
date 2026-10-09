@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue'
 import { useAsyncData, useSeoMeta, useToast } from '#imports'
-import { GOAL_TYPE_DETAILS, OPPORTUNITY_STAGE_DETAILS, OPPORTUNITY_STAGES } from '#shared/constants/pipeline.ts'
+import {
+    COMMITTEE_MIN_PROBABILITY,
+    GOAL_TYPE_DETAILS,
+    OPPORTUNITY_STAGES,
+    OPPORTUNITY_STAGE_DETAILS,
+} from '#shared/constants/pipeline.ts'
 import type { Goal, StageProbabilities } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { usePipelineReference } from '~/composables/usePipelineReference.ts'
@@ -130,7 +135,13 @@ async function saveProbabilities() {
                         :key="stage"
                         :label="`${OPPORTUNITY_STAGE_DETAILS[stage].label} (%)`"
                     >
-                        <UInputNumber v-model="probabilityForm[stage]" :min="0" :max="100" :step="5" class="w-full" />
+                        <UInputNumber
+                            v-model="probabilityForm[stage]"
+                            :min="stage === 'in_committee' ? COMMITTEE_MIN_PROBABILITY : 0"
+                            :max="100"
+                            :step="5"
+                            class="w-full"
+                        />
                     </UFormField>
                 </div>
                 <div class="mt-4 flex justify-end">

@@ -12,6 +12,7 @@ import { notFound } from '#server/utils/errors.ts'
 import { serializeOpportunity } from '#server/utils/serializers/opportunities.ts'
 import { readStageProbabilities } from '#server/utils/settings.ts'
 import { assertActiveUser } from '#server/utils/users.ts'
+import { requestToday } from '#server/utils/time-zone.ts'
 import type { UpdateOpportunityRequest } from '#shared/schemas/index.ts'
 import { UpdateOpportunityRequest as UpdateOpportunityRequestSchema } from '#shared/schemas/index.ts'
 
@@ -51,6 +52,7 @@ export default defineApiHandler(async event => {
         changes,
         source: 'manual',
         actorUserId: ctx.user.id,
+        effectiveOn: requestToday({ event }),
     })
     if (events.length > 0) {
         await recordAudit({

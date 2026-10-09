@@ -171,13 +171,16 @@ model Opportunity {
     funder_id            String
     goal_id              String
     name                 String
-    // identified | in_discussion | proposal | due_diligence | committed | received | lost
+    // identified | in_discussion | proposal | due_diligence | in_committee | committed (shown as
+    // "Approved") | received | lost (shown as "Declined")
     stage                String    @default("identified")
     amount_cents         BigInt?
     // 0–100; when null the stage's default probability applies.
     probability_override Int?
     expected_decision_at DateTime?
     expected_receipt_at  DateTime?
+    // When it went to the funder's committee (set when the stage moves to in_committee).
+    committee_on         DateTime?
     received_at          DateTime?
     next_step            String?
     owner_id             String?

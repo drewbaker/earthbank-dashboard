@@ -2,8 +2,14 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useAsyncData, useToast } from '#imports'
 import type { GoalType, OpportunityStage } from '#shared/constants/pipeline.ts'
-import { OPPORTUNITY_STAGE_DETAILS, OPPORTUNITY_STAGES } from '#shared/constants/pipeline.ts'
+import {
+    APPROVAL_TO_FUNDING_DAYS,
+    COMMITTEE_MIN_PROBABILITY,
+    OPPORTUNITY_STAGE_DETAILS,
+    OPPORTUNITY_STAGES,
+} from '#shared/constants/pipeline.ts'
 import type { Opportunity, StageProbabilities } from '#shared/schemas/index.ts'
+import { defaultStageProbabilities, opportunityProbability } from '#shared/utils/probability.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { NO_OWNER, ownerIdFromSelection, usePipelineReference } from '~/composables/usePipelineReference.ts'
 import { centsToDollars, dollarsToCents } from '~/utils/format.ts'
@@ -29,7 +35,11 @@ const stageDefault = computed(() => {
     const stage = formState.stage
     return {
         label: OPPORTUNITY_STAGE_DETAILS[stage].label,
-        probability: stageProbabilities.value?.[stage] ?? OPPORTUNITY_STAGE_DETAILS[stage].defaultProbability,
+        probability: opportunityProbability({
+            stage,
+            probabilityOverride: null,
+            stageProbabilities: stageProbabilities.value ?? defaultStageProbabilities(),
+        }),
     }
 })
 
@@ -42,6 +52,7 @@ type OpportunityFormState = {
     probability_override: number | undefined
     expected_decision_at: string
     expected_receipt_at: string
+    committee_on: string
     received_at: string
     next_step: string
     owner_id: string
@@ -77,6 +88,7 @@ function emptyFormState(): OpportunityFormState {
         probability_override: undefined,
         expected_decision_at: '',
         expected_receipt_at: '',
+        committee_on: '',
         received_at: '',
         next_step: '',
         owner_id: NO_OWNER,
@@ -98,6 +110,7 @@ function formStateFrom({ opportunity }: { opportunity: Opportunity }): Opportuni
         probability_override: opportunity.probability_override ?? undefined,
         expected_decision_at: opportunity.expected_decision_at ?? '',
         expected_receipt_at: opportunity.expected_receipt_at ?? '',
+        committee_on: opportunity.committee_on ?? '',
         received_at: opportunity.received_at ?? '',
         next_step: opportunity.next_step ?? '',
         owner_id: opportunity.owner?.id ?? NO_OWNER,
@@ -120,6 +133,7 @@ async function saveOpportunity() {
         probability_override: formState.probability_override ?? null,
         expected_decision_at: formState.expected_decision_at || null,
         expected_receipt_at: formState.expected_receipt_at || null,
+        committee_on: formState.committee_on || null,
         received_at: formState.received_at || null,
         next_step: formState.next_step.trim() || null,
         owner_id: ownerIdFromSelection({ ownerId: formState.owner_id }),
@@ -167,7 +181,19 @@ async function saveOpportunity() {
                 <UFormField label="Expected decision" name="expected_decision_at">
                     <UInput v-model="formState.expected_decision_at" type="date" class="w-full" />
                 </UFormField>
-                <UFormField label="Expected to land" name="expected_receipt_at" help="Drives the runway forecast.">
+                <UFormField
+                    v-if="formState.stage === 'in_committee' || formState.committee_on"
+                    label="Went to committee"
+                    name="committee_on"
+                    :help="`Filled in when the stage moves to In committee; it then counts as at least ${COMMITTEE_MIN_PROBABILITY}% likely.`"
+                >
+                    <UInput v-model="formState.committee_on" type="date" class="w-full" />
+                </UFormField>
+                <UFormField
+                    label="Expected to land"
+                    name="expected_receipt_at"
+                    :help="`Drives the runway forecast. Moving to Approved sets it ${APPROVAL_TO_FUNDING_DAYS} days out unless you give a date.`"
+                >
                     <UInput v-model="formState.expected_receipt_at" type="date" class="w-full" />
                 </UFormField>
                 <UFormField v-if="formState.stage === 'received'" label="Received on" name="received_at">

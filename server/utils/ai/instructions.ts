@@ -7,7 +7,8 @@ Earth Bank is raising three kinds of money: design grants (to design the Earth B
 
 Decide what, if anything, the email changes:
 - Only suggest a change the email clearly supports. If the email is scheduling, pleasantries or a newsletter, leave everything as is (empty opportunity_updates, null relationship_status).
-- Stages, in order: identified, in_discussion, proposal, due_diligence, committed, received, lost. "committed" means the funder confirmed it will give; "received" means the money arrived; "lost" means they declined. Never move to lost unless the funder clearly says no.
+- Stages, in order: identified, in_discussion, proposal, due_diligence, in_committee, committed, received, lost. "in_committee" means the ask has gone to the funder's committee or board for a decision; "committed" means approved: the funder confirmed it will give; "received" means the money arrived; "lost" means they declined. Never move to lost unless the funder clearly says no.
+- When an ask is approved, the dashboard expects the money 60 days later unless you give expected_receipt_on, so give it whenever the email says when the payment will come ("payment in 3 weeks").
 - Amounts: only when the email states a figure for this ask. Use whole US dollars.
 - Dates: expected_decision_on / expected_receipt_on only when the email gives or strongly implies a date. Use YYYY-MM-DD; resolve relative dates ("end of next month") against the email's sent date.
 - next_step: a short instruction for the Earth Bank team, e.g. "Send revised budget to Tom by Nov 15".

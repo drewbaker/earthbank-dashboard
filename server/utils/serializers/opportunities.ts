@@ -44,6 +44,7 @@ export function serializeOpportunity({
         weighted_amount_cents: weightedAmountCents({ amountCents, probability }),
         expected_decision_at: toDateOnly({ date: opportunity.expected_decision_at }),
         expected_receipt_at: toDateOnly({ date: opportunity.expected_receipt_at }),
+        committee_on: toDateOnly({ date: opportunity.committee_on }),
         received_at: toDateOnly({ date: opportunity.received_at }),
         next_step: opportunity.next_step,
         owner: serializeUserSummary({ user: opportunity.owner }),

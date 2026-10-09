@@ -11,6 +11,8 @@ import { notFound } from '#server/utils/errors.ts'
 import { serializeOpportunity } from '#server/utils/serializers/opportunities.ts'
 import { readStageProbabilities } from '#server/utils/settings.ts'
 import { assertActiveUser } from '#server/utils/users.ts'
+import { stageRuleChanges } from '#server/utils/stage-rules.ts'
+import { requestToday } from '#server/utils/time-zone.ts'
 import { CreateOpportunityRequest } from '#shared/schemas/index.ts'
 
 defineRouteMeta({
@@ -39,6 +41,16 @@ export default defineApiHandler(async event => {
     }
     await assertActiveUser({ userId: body.owner_id })
     const goalIds = await goalIdsByType()
+    // An ask created already approved or in committee gets the same dates as one moved there.
+    const ruleDates = Object.fromEntries(
+        stageRuleChanges({
+            fromStage: null,
+            toStage: body.stage,
+            on: requestToday({ event }),
+            hasCommitteeDate: Boolean(body.committee_on),
+            explicitFields: new Set(body.expected_receipt_at ? ['expected_receipt_at'] : []),
+        }).map(rule => [rule.field, rule.value]),
+    )
     const opportunity = await createOpportunityRow({
         funderId: funder.id,
         goalId: goalIds.get(body.goal_type)!,
@@ -47,7 +59,8 @@ export default defineApiHandler(async event => {
         amountCents: centsToBigInt({ cents: body.amount_cents }),
         probabilityOverride: body.probability_override ?? null,
         expectedDecisionAt: fromDateOnly({ value: body.expected_decision_at }),
-        expectedReceiptAt: fromDateOnly({ value: body.expected_receipt_at }),
+        expectedReceiptAt: fromDateOnly({ value: body.expected_receipt_at ?? ruleDates.expected_receipt_at }),
+        committeeOn: fromDateOnly({ value: body.committee_on ?? ruleDates.committee_on }),
         receivedAt: fromDateOnly({ value: body.received_at }),
         nextStep: body.next_step ?? null,
         ownerId: body.owner_id ?? null,
