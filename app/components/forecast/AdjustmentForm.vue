@@ -145,13 +145,7 @@ function buildAdjustment() {
         </UFormField>
 
         <UFormField v-if="kind === 'change_amount'" label="New amount (USD)">
-            <UInputNumber
-                v-model="fields.amount_dollars"
-                :min="0"
-                :step="50000"
-                :format-options="{ style: 'currency', currency: 'USD', maximumFractionDigits: 0 }"
-                class="w-full"
-            />
+            <MoneyInput v-model="fields.amount_dollars" />
         </UFormField>
 
         <UFormField v-if="kind === 'change_probability'" :label="`Probability: ${fields.probability}%`">
@@ -163,13 +157,7 @@ function buildAdjustment() {
                 <UInput v-model="fields.label" placeholder="Head of Partnerships" class="w-full" />
             </UFormField>
             <UFormField label="Monthly cost, fully loaded (USD)">
-                <UInputNumber
-                    v-model="fields.monthly_dollars"
-                    :min="0"
-                    :step="1000"
-                    :format-options="{ style: 'currency', currency: 'USD', maximumFractionDigits: 0 }"
-                    class="w-full"
-                />
+                <MoneyInput v-model="fields.monthly_dollars" />
             </UFormField>
             <div class="grid grid-cols-2 gap-2">
                 <UFormField label="Starts">
@@ -195,13 +183,7 @@ function buildAdjustment() {
             </UFormField>
             <div class="grid grid-cols-2 gap-2">
                 <UFormField label="Amount (USD)">
-                    <UInputNumber
-                        v-model="fields.amount_dollars"
-                        :min="0"
-                        :step="1000"
-                        :format-options="{ style: 'currency', currency: 'USD', maximumFractionDigits: 0 }"
-                        class="w-full"
-                    />
+                    <MoneyInput v-model="fields.amount_dollars" />
                 </UFormField>
                 <UFormField label="Date">
                     <UInput v-model="fields.at" type="date" class="w-full" />

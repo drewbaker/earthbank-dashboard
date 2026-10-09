@@ -277,14 +277,7 @@ function newFunderExtras() {
                             <USelect v-model="formState.opportunity_stage" :items="stageItems" class="w-full" />
                         </UFormField>
                         <UFormField label="Amount (USD)" name="opportunity_amount_dollars">
-                            <UInputNumber
-                                v-model="formState.opportunity_amount_dollars"
-                                :min="0"
-                                :step="1000"
-                                :format-options="{ style: 'currency', currency: 'USD', maximumFractionDigits: 0 }"
-                                placeholder="Unknown"
-                                class="w-full"
-                            />
+                            <MoneyInput v-model="formState.opportunity_amount_dollars" placeholder="Unknown" />
                         </UFormField>
                         <UFormField label="Expected to land" name="opportunity_expected_receipt_at">
                             <UInput v-model="formState.opportunity_expected_receipt_at" type="date" class="w-full" />

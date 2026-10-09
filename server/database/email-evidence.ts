@@ -101,19 +101,29 @@ export function linkEmailEvidenceToFunder({
 }
 
 /**
- * A funder's emails, newest first.
+ * A funder's emails, newest first, with who synced each and how many pipeline changes it caused.
  *
  * @param input.funderId - The funder.
- * @param input.limit - How many.
- * @returns Evidence rows with the mailbox owner.
+ * @param input.limit - Most to return.
+ * @returns Evidence rows.
  */
 export function listFunderEmailEvidence({ funderId, limit }: { funderId: string; limit: number }) {
     return db().emailEvidence.findMany({
         where: { funder_id: funderId },
-        include: { mailbox_user: true },
-        orderBy: { sent_at: 'desc' },
+        include: { mailbox_user: true, _count: { select: { change_events: true } } },
+        orderBy: [{ sent_at: 'desc' }, { id: 'desc' }],
         take: limit,
     })
+}
+
+/**
+ * How many emails are recorded for a funder.
+ *
+ * @param input.funderId - The funder.
+ * @returns The count.
+ */
+export function countFunderEmailEvidence({ funderId }: { funderId: string }) {
+    return db().emailEvidence.count({ where: { funder_id: funderId } })
 }
 
 /**

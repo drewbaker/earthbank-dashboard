@@ -12,7 +12,8 @@ defineRouteMeta({
     openAPI: {
         tags: ['Email'],
         summary: 'Sync my Gmail now',
-        description: 'Queues a sync of funder email (it also runs every 15 minutes).',
+        description:
+            'Queues a sync of funder email (it also runs every 15 minutes). `status` is `already_queued` when one is waiting or running; follow progress on GET /v1/mailbox.',
         responses: { 202: { description: 'Sync queued' } },
     },
 })
@@ -29,7 +30,7 @@ export default defineApiHandler(async event => {
     if (!connection || connection.status !== 'active') {
         throw badRequest({ message: 'Connect Gmail first.', code: 'mailbox_not_connected' })
     }
-    await enqueueMailboxSync({ mailboxConnectionId: connection.id })
+    const status = await enqueueMailboxSync({ mailboxConnectionId: connection.id })
     await recordAudit({
         actor: ctx.actor,
         action: 'mailbox.sync_requested',
@@ -38,5 +39,5 @@ export default defineApiHandler(async event => {
         ip: requestIp({ event }),
     })
     setResponseStatus(event, 202)
-    return { queued: true }
+    return { status }
 })

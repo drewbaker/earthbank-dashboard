@@ -2,15 +2,7 @@
 import { computed, ref } from 'vue'
 import { useAsyncData, useRoute, useSeoMeta, useToast } from '#imports'
 import { FUNDER_KIND_LABELS } from '#shared/constants/pipeline.ts'
-import type {
-    ChangeEventList,
-    Contact,
-    EmailEvidenceList,
-    FunderDetail,
-    Opportunity,
-    Task,
-    TaskList,
-} from '#shared/schemas/index.ts'
+import type { ChangeEventList, Contact, FunderDetail, Opportunity, Task, TaskList } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { useChangeEventActions } from '~/composables/useChangeEventActions.ts'
 import { useTaskActions } from '~/composables/useTaskActions.ts'
@@ -32,10 +24,6 @@ const { data: changeLog, refresh: refreshChangeLog } = await useAsyncData(`funde
 
 const { data: taskList, refresh: refreshTasks } = await useAsyncData(`funder.${funderId.value}.tasks`, () =>
     api<TaskList>({ path: '/tasks', query: { funder_id: funderId.value, include_done: true } }),
-)
-
-const { data: emails } = await useAsyncData(`funder.${funderId.value}.emails`, () =>
-    api<EmailEvidenceList>({ path: '/email-evidence', query: { funder_id: funderId.value } }),
 )
 
 useSeoMeta({ title: () => `${funder.value?.name ?? 'Funder'} · Earth Bank Dashboard` })
@@ -315,6 +303,8 @@ async function toggleArchived() {
                         <p v-else class="px-4 py-6 text-center text-sm text-muted">No opportunities yet.</p>
                     </UCard>
 
+                    <PipelineFunderEmails :funder-id="funder.id" />
+
                     <UCard :ui="{ body: 'p-0 sm:p-0' }">
                         <template #header>
                             <div class="flex items-center justify-between">
@@ -341,29 +331,6 @@ async function toggleArchived() {
                             <h2 class="font-medium text-highlighted">Notes</h2>
                         </template>
                         <p class="text-sm whitespace-pre-line">{{ funder.notes }}</p>
-                    </UCard>
-
-                    <UCard v-if="emails?.data.length" :ui="{ body: 'p-0 sm:p-0' }">
-                        <template #header>
-                            <h2 class="font-medium text-highlighted">Emails</h2>
-                            <p class="text-xs text-muted">
-                                Summaries of email with this funder. The emails themselves aren't stored.
-                            </p>
-                        </template>
-                        <ul class="divide-y divide-default">
-                            <li v-for="email in emails.data" :key="email.id" class="px-4 py-3 text-sm">
-                                <p class="text-xs text-muted">
-                                    <UIcon
-                                        :name="email.source === 'forward' ? 'i-lucide-forward' : 'i-lucide-mail'"
-                                        class="mr-1 inline size-3.5 align-text-bottom"
-                                    />
-                                    {{ email.from_address }} · {{ formatDate({ value: email.sent_at }) }}
-                                    <template v-if="email.mailbox_user"> · via {{ email.mailbox_user.name }}</template>
-                                </p>
-                                <p v-if="email.subject" class="font-medium text-highlighted">{{ email.subject }}</p>
-                                <p :class="email.is_relevant ? '' : 'text-muted'">{{ email.summary }}</p>
-                            </li>
-                        </ul>
                     </UCard>
 
                     <UCard>

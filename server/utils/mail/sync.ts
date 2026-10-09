@@ -22,6 +22,12 @@ const MAX_SEARCH_RESULTS = 1000
 
 export type MailboxSyncResult = { matched: number; processed: number; applied: number; pending: number }
 
+export type MailboxSyncProgress = {
+    phase: 'searching' | 'checking' | 'reading'
+    done: number
+    total: number | null
+}
+
 type ReadResult = MailboxSyncResult & { resumeFrom: Date | null }
 
 /** What sync needs from a mailbox (Gmail in production, a fake in tests). */
@@ -43,6 +49,7 @@ export type MailboxReader = {
  * @param input.funderId - Limit to one funder and look back a year (backfill after adding a funder).
  * @param input.mailbox - Mailbox to read (defaults to the connection's Gmail; tests pass a fake).
  * @param input.maxMessagesPerRun - How many emails to read this run.
+ * @param input.onProgress - Called as the sync moves along (for the progress shown in Settings).
  * @returns Counts of what happened.
  * @throws Rethrows Gmail errors after recording them on the connection.
  */
@@ -53,6 +60,7 @@ export async function syncMailbox({
     funderId,
     mailbox,
     maxMessagesPerRun = MAX_MESSAGES_PER_RUN,
+    onProgress,
 }: {
     connection: MailboxConnection
     ai: AiProvider
@@ -60,6 +68,7 @@ export async function syncMailbox({
     funderId?: string
     mailbox?: MailboxReader
     maxMessagesPerRun?: number
+    onProgress?: (progress: MailboxSyncProgress) => Promise<void>
 }): Promise<MailboxSyncResult> {
     const refreshToken = decryptSecret({ encrypted: connection.refresh_token_encrypted })
     if (!refreshToken) {
@@ -78,6 +87,7 @@ export async function syncMailbox({
             now,
             funderId,
             maxMessagesPerRun,
+            onProgress: onProgress ?? (async () => undefined),
         })
         // When mail was left for the next run, only advance the sync point to the oldest email still
         // waiting, so the next run's search window still includes it.
@@ -113,6 +123,7 @@ export async function syncMailbox({
  * @param input.ai - The AI provider.
  * @param input.now - Current time.
  * @param input.funderId - Optional single funder (backfill).
+ * @param input.onProgress - Progress callback.
  * @returns Counts of what happened, and where the next run should resume when mail was left over.
  */
 async function readFunderMail({
@@ -122,6 +133,7 @@ async function readFunderMail({
     now,
     funderId,
     maxMessagesPerRun,
+    onProgress,
 }: {
     mailbox: MailboxReader
     connection: MailboxConnection
@@ -129,6 +141,7 @@ async function readFunderMail({
     now: Date
     funderId?: string
     maxMessagesPerRun: number
+    onProgress: (progress: MailboxSyncProgress) => Promise<void>
 }): Promise<ReadResult> {
     const allFunders = await listFunderMatchData()
     const funders = funderId ? allFunders.filter(funder => funder.id === funderId) : allFunders
@@ -145,15 +158,22 @@ async function readFunderMail({
     })
 
     const gmailIds = new Set<string>()
-    for (const query of queries) {
+    await onProgress({ phase: 'searching', done: 0, total: queries.length })
+    for (const [queryIndex, query] of queries.entries()) {
         for (const id of await mailbox.searchMessageIds({ query, limit: MAX_SEARCH_RESULTS })) {
             gmailIds.add(id)
         }
+        await onProgress({ phase: 'searching', done: queryIndex + 1, total: queries.length })
     }
 
     // Headers first (cheap): keep only funder mail not yet read in any inbox, oldest first.
     const candidates = []
-    for (const gmailId of [...gmailIds].slice(0, MAX_SEARCH_RESULTS)) {
+    const toCheck = [...gmailIds].slice(0, MAX_SEARCH_RESULTS)
+    for (const [checkIndex, gmailId] of toCheck.entries()) {
+        // Headers are quick to read; report every 25 so progress writes stay cheap.
+        if (checkIndex % 25 === 0) {
+            await onProgress({ phase: 'checking', done: checkIndex, total: toCheck.length })
+        }
         const headers = await mailbox.getMessageHeaders({ gmailId })
         const matchedFunderId = matchFunder({ index, from: headers.from, recipients: headers.recipients })
         if (matchedFunderId && (!funderId || matchedFunderId === funderId)) {
@@ -172,7 +192,8 @@ async function readFunderMail({
     const resumeFrom = !funderId && unread.length > maxMessagesPerRun ? unread[maxMessagesPerRun]!.sentAt : null
 
     const result: ReadResult = { matched: unread.length, processed: 0, applied: 0, pending: 0, resumeFrom }
-    for (const candidate of batch) {
+    for (const [readIndex, candidate] of batch.entries()) {
+        await onProgress({ phase: 'reading', done: readIndex, total: batch.length })
         const email = await mailbox.getMessage({ gmailId: candidate.gmailId })
         const outcome = await processFunderEmail({
             email,

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { useIntervalFn } from '@vueuse/core'
+import { computed, ref, watch } from 'vue'
 import { useAsyncData, useRoute, useSeoMeta, useToast } from '#imports'
 import type { MailboxStatus } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
@@ -16,6 +17,21 @@ const { data: mailbox, refresh } = await useAsyncData('settings.mailbox', () =>
 )
 const isSyncing = ref(false)
 const isDisconnecting = ref(false)
+
+// While a sync is waiting or running, refresh every 2 seconds so its progress moves.
+const isSyncActive = computed(() => ['queued', 'running'].includes(mailbox.value?.connection?.sync.state ?? 'idle'))
+const syncPolling = useIntervalFn(() => refresh(), 2000, { immediate: false })
+watch(
+    isSyncActive,
+    isActive => {
+        if (isActive) {
+            syncPolling.resume()
+        } else {
+            syncPolling.pause()
+        }
+    },
+    { immediate: true },
+)
 const isRegenerating = ref(false)
 
 const connectResult = computed(() => {
@@ -43,12 +59,11 @@ const connectResult = computed(() => {
 async function syncNow() {
     isSyncing.value = true
     try {
-        await api({ path: '/mailbox/sync', method: 'POST' })
-        toast.add({
-            title: 'Sync started',
-            description: 'New funder email is processed in a minute or two.',
-            color: 'success',
-        })
+        const result = await api<{ status: 'queued' | 'already_queued' }>({ path: '/mailbox/sync', method: 'POST' })
+        if (result.status === 'already_queued') {
+            toast.add({ title: 'Already syncing', description: 'Progress is shown below.', color: 'info' })
+        }
+        await refresh()
     } catch (error) {
         toast.add({ title: apiErrorMessage({ error }), color: 'error' })
     } finally {
@@ -138,7 +153,7 @@ async function copyAddress() {
                                 class="ml-1"
                             />
                         </p>
-                        <p class="text-muted">
+                        <p v-if="!mailbox.connection.sync.last_result" class="text-muted">
                             Last synced
                             {{
                                 mailbox.connection.last_synced_at
@@ -146,6 +161,11 @@ async function copyAddress() {
                                     : 'not yet'
                             }}
                         </p>
+                        <EmailSyncProgress
+                            :sync="mailbox.connection.sync"
+                            :is-first-sync="!mailbox.connection.last_synced_at"
+                            class="mt-2"
+                        />
                         <p v-if="mailbox.connection.last_error" class="text-error">
                             {{ mailbox.connection.last_error }}
                         </p>
@@ -164,8 +184,9 @@ async function copyAddress() {
                         <UButton
                             v-if="mailbox.connection.status === 'active'"
                             icon="i-lucide-refresh-cw"
-                            label="Sync now"
-                            :loading="isSyncing"
+                            :label="isSyncActive ? 'Syncing…' : 'Sync now'"
+                            :loading="isSyncing || isSyncActive"
+                            :disabled="isSyncActive"
                             @click="syncNow"
                         />
                         <UButton

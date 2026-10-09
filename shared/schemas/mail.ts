@@ -1,6 +1,27 @@
 import { z } from 'zod'
 import { IsoDateTime, listOf, UserSummary } from '#shared/schemas/common.ts'
 
+export const MailboxSyncStatus = z.object({
+    /** idle, queued (waiting for a worker), or running. */
+    state: z.enum(['idle', 'queued', 'running']),
+    /** While running: searching Gmail, checking which emails are funder mail, or reading them. */
+    phase: z.enum(['searching', 'checking', 'reading']).nullable(),
+    done: z.number().int(),
+    total: z.number().int().nullable(),
+    started_at: IsoDateTime.nullable(),
+    /** What the last finished sync did. */
+    last_result: z
+        .object({
+            matched: z.number().int(),
+            processed: z.number().int(),
+            applied: z.number().int(),
+            pending: z.number().int(),
+            finished_at: IsoDateTime,
+        })
+        .nullable(),
+})
+export type MailboxSyncStatus = z.infer<typeof MailboxSyncStatus>
+
 export const MailboxStatus = z.object({
     is_ai_configured: z.boolean(),
     is_inbound_configured: z.boolean(),
@@ -12,6 +33,7 @@ export const MailboxStatus = z.object({
             last_error: z.string().nullable(),
             /** False for connections made before drafting existed; reconnecting grants it. */
             can_create_drafts: z.boolean(),
+            sync: MailboxSyncStatus,
         })
         .nullable(),
     forwarding_address: z.string(),
@@ -21,7 +43,11 @@ export type MailboxStatus = z.infer<typeof MailboxStatus>
 export const EmailEvidence = z.object({
     id: z.string(),
     source: z.enum(['gmail', 'forward']),
+    /** Sent by Earth Bank, or received from the funder. */
+    direction: z.enum(['sent', 'received']),
     from_address: z.string(),
+    /** The other side: who it was sent to, or who sent it. */
+    counterpart: z.string().nullable(),
     sent_at: IsoDateTime,
     /** Null when the AI marked the email sensitive. */
     subject: z.string().nullable(),
@@ -30,10 +56,14 @@ export const EmailEvidence = z.object({
     is_sensitive: z.boolean(),
     funder_id: z.string().nullable(),
     mailbox_user: UserSummary.nullable(),
+    /** Pipeline changes this email caused (null where not loaded). */
+    change_count: z.number().int().nullable(),
+    /** Finds the email in the viewer's Gmail. */
+    gmail_url: z.string().nullable(),
 })
 export type EmailEvidence = z.infer<typeof EmailEvidence>
 
-export const EmailEvidenceList = listOf(EmailEvidence)
+export const EmailEvidenceList = listOf(EmailEvidence).extend({ total: z.number().int() })
 export type EmailEvidenceList = z.infer<typeof EmailEvidenceList>
 
 export const ActivitySummary = z.object({

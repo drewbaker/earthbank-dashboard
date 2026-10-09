@@ -150,14 +150,7 @@ async function saveOpportunity() {
                     <USelect v-model="formState.stage" :items="stageItems" class="w-full" />
                 </UFormField>
                 <UFormField label="Amount (USD)" name="amount_dollars">
-                    <UInputNumber
-                        v-model="formState.amount_dollars"
-                        :min="0"
-                        :step="1000"
-                        :format-options="{ style: 'currency', currency: 'USD', maximumFractionDigits: 0 }"
-                        placeholder="Unknown"
-                        class="w-full"
-                    />
+                    <MoneyInput v-model="formState.amount_dollars" placeholder="Unknown" />
                 </UFormField>
                 <UFormField label="Expected decision" name="expected_decision_at">
                     <UInput v-model="formState.expected_decision_at" type="date" class="w-full" />

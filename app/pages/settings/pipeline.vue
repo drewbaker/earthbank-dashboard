@@ -100,14 +100,7 @@ async function saveProbabilities() {
                         <p class="text-xs text-muted">{{ GOAL_TYPE_DETAILS[goal.type].description }}</p>
                     </div>
                     <UFormField label="Target (USD)">
-                        <UInputNumber
-                            v-model="goalForms[goal.id]!.target_dollars"
-                            :min="0"
-                            :step="100000"
-                            :format-options="{ style: 'currency', currency: 'USD', maximumFractionDigits: 0 }"
-                            placeholder="No target"
-                            class="w-full"
-                        />
+                        <MoneyInput v-model="goalForms[goal.id]!.target_dollars" placeholder="No target" />
                     </UFormField>
                     <UFormField label="Target date">
                         <UInput v-model="goalForms[goal.id]!.target_date" type="date" class="w-full" />

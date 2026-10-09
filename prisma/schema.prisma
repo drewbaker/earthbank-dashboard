@@ -431,6 +431,15 @@ model MailboxConnection {
     status                  String    @default("active")
     last_synced_at          DateTime?
     last_error              String?
+    // Progress of the current sync, for Settings → Email: idle | queued | running
+    sync_state              String    @default("idle")
+    // searching | checking | reading (while running)
+    sync_phase              String?
+    sync_done               Int       @default(0)
+    sync_total              Int?
+    sync_started_at         DateTime?
+    // { matched, processed, applied, pending, finished_at } of the last finished sync
+    last_sync_result        Json?
     created_at              DateTime  @default(now())
     updated_at              DateTime  @updatedAt
 

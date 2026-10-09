@@ -121,8 +121,20 @@ describe('mailbox sync', () => {
         expect(afterFirst.last_synced_at?.toISOString()).toBe('2026-09-10T00:00:00.000Z')
         expect(searchQueries[0]).not.toContain('theearthbank.org')
 
-        const second = await syncMailbox({ connection: afterFirst, ai: provider, now, mailbox, maxMessagesPerRun: 2 })
+        const progress: string[] = []
+        const second = await syncMailbox({
+            connection: afterFirst,
+            ai: provider,
+            now,
+            mailbox,
+            maxMessagesPerRun: 2,
+            onProgress: async ({ phase, done, total }) => {
+                progress.push(`${phase} ${done}/${total}`)
+            },
+        })
         expect(second).toMatchObject({ matched: 1, processed: 1 })
+        // Settings → Email shows each step: searching Gmail, checking headers, reading funder email.
+        expect(progress).toEqual(['searching 0/1', 'searching 1/1', 'checking 0/4', 'reading 0/1'])
         const evidence = await db().emailEvidence.findMany({
             where: { funder_id: funderId },
             orderBy: { sent_at: 'asc' },

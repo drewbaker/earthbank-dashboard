@@ -5,6 +5,7 @@ import { SyncBookkeepingJob } from '#root/jobs/sync-bookkeeping.job.ts'
 import { SyncKnowledgeJob } from '#root/jobs/sync-knowledge.job.ts'
 import { SyncMailboxJob } from '#root/jobs/sync-mailbox.job.ts'
 import { DuplicatedJobError } from 'sidequest'
+import { markMailboxSyncQueued } from '#server/database/mailboxes.ts'
 import { ensureJobQueue, Sidequest } from '#server/utils/jobs/sidequest.ts'
 
 /**
@@ -61,7 +62,7 @@ export async function enqueueBookkeepingSync() {
  */
 export async function enqueueMailboxSync({ mailboxConnectionId }: { mailboxConnectionId: string }) {
     await ensureJobQueue()
-    return queueOnce({
+    const status = await queueOnce({
         enqueue: () =>
             Sidequest.build(SyncMailboxJob)
                 .queue('mail')
@@ -70,6 +71,9 @@ export async function enqueueMailboxSync({ mailboxConnectionId }: { mailboxConne
                 .unique({ withArgs: true })
                 .enqueue({ mailboxConnectionId }),
     })
+    // Settings → Email shows "waiting to start" until the worker picks it up.
+    await markMailboxSyncQueued({ mailboxConnectionId })
+    return status
 }
 
 /**

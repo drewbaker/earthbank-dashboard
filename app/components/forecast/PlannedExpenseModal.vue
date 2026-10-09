@@ -105,13 +105,7 @@ async function savePlannedExpense(event: FormSubmitEvent<z.output<typeof CreateP
                 </UFormField>
                 <div class="grid gap-4 sm:grid-cols-2">
                     <UFormField :label="form.kind === 'monthly' ? 'Per month' : 'Amount'" name="amount_cents" required>
-                        <UInputNumber
-                            v-model="form.amount_dollars"
-                            :min="0"
-                            :step="form.kind === 'monthly' ? 1000 : 10000"
-                            :format-options="{ style: 'currency', currency: 'USD', maximumFractionDigits: 0 }"
-                            class="w-full"
-                        />
+                        <MoneyInput v-model="form.amount_dollars" />
                     </UFormField>
                     <UFormField :label="form.kind === 'monthly' ? 'Starts' : 'When'" name="starts_on" required>
                         <UInput v-model="form.starts_on" type="date" class="w-full" />

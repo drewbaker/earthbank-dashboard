@@ -222,14 +222,7 @@ async function setAccountIncluded({ accountId, isIncluded }: { accountId: string
             <UCard>
                 <div class="grid gap-4 sm:grid-cols-2">
                     <UFormField label="Cash on hand (manual)" help="Used only while no synced balance exists.">
-                        <UInputNumber
-                            v-model="form.manual_balance_dollars"
-                            :min="0"
-                            :step="10000"
-                            :format-options="{ style: 'currency', currency: 'USD', maximumFractionDigits: 0 }"
-                            placeholder="Not set"
-                            class="w-full"
-                        />
+                        <MoneyInput v-model="form.manual_balance_dollars" placeholder="Not set" />
                     </UFormField>
                     <UFormField label="As of">
                         <UInput v-model="form.manual_balance_as_of" type="date" class="w-full" />
@@ -242,14 +235,7 @@ async function setAccountIncluded({ accountId, isIncluded }: { accountId: string
                                 : 'No transaction history yet, so set this by hand.'
                         "
                     >
-                        <UInputNumber
-                            v-model="form.burn_override_dollars"
-                            :min="0"
-                            :step="5000"
-                            :format-options="{ style: 'currency', currency: 'USD', maximumFractionDigits: 0 }"
-                            placeholder="Use computed burn"
-                            class="w-full"
-                        />
+                        <MoneyInput v-model="form.burn_override_dollars" placeholder="Use computed burn" />
                     </UFormField>
                     <UFormField label="Average burn over">
                         <USelect
