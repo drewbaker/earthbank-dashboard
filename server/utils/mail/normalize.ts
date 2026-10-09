@@ -79,8 +79,10 @@ export function parseAddressList({ header }: { header: string | null | undefined
  * @returns The original sender, subject, date and the text after the header block, or null.
  */
 export function unwrapForwardedMessage({ text }: { text: string }) {
+    // Gmail, Apple Mail, older Outlook ("Original Message") and newer Outlook (an underscore rule
+    // followed by a "From:" line).
     const marker = text.search(
-        /-{3,}\s*Forwarded message\s*-{3,}|Begin forwarded message:|-{3,}\s*Original Message\s*-{3,}/i,
+        /-{3,}\s*Forwarded message\s*-{3,}|Begin forwarded message:|-{3,}\s*Original Message\s*-{3,}|_{10,}\s*\n\s*\*?From:/i,
     )
     if (marker === -1) {
         return null

@@ -1,5 +1,5 @@
 import { findContactByEmail, listFunderContacts } from '#server/database/contacts.ts'
-import { latestManualChangeAt } from '#server/database/change-events.ts'
+import { latestNonImportChangeAt } from '#server/database/change-events.ts'
 import { findFunder, findFunderByNameKey, updateFunderColumns } from '#server/database/funders.ts'
 import { ensureDefaultGoals, goalIdsByType } from '#server/database/goals.ts'
 import { createOpportunityRow, listOpportunityRows } from '#server/database/opportunities.ts'
@@ -13,7 +13,9 @@ import type {
     ParsedFunder,
     ParsedOpportunity,
 } from '#server/utils/pipeline-import/parse-master-pipeline.ts'
+import { config } from '#server/utils/config.ts'
 import type { ChangeEntityType } from '#shared/schemas/index.ts'
+import { emailDomain } from '#shared/utils/email-addresses.ts'
 
 export type PipelineImportSummary = {
     fundersCreated: number
@@ -146,7 +148,7 @@ async function updateImportedFunder({
     const events = await applyFieldChanges({
         entityType: 'funder',
         entityId: funderId,
-        changes: await withoutManualEdits({ entityType: 'funder', entityId: funderId, changes }),
+        changes: await withoutDashboardEdits({ entityType: 'funder', entityId: funderId, changes }),
         source: 'import',
         reason: 'Spreadsheet import',
     })
@@ -173,6 +175,10 @@ async function addImportedContacts({
     const known = await listFunderContacts({ funderId })
     let added = 0
     for (const contact of contacts) {
+        if (contact.email && config.internalEmailDomains.includes(emailDomain({ email: contact.email }))) {
+            summary.skipped.push(`${contact.email} is an Earth Bank address, not a funder contact.`)
+            continue
+        }
         if (contact.email) {
             const owner = await findContactByEmail({ email: contact.email })
             if (owner) {
@@ -241,7 +247,7 @@ async function upsertImportedOpportunities({
         const events = await applyFieldChanges({
             entityType: 'opportunity',
             entityId: match.id,
-            changes: await withoutManualEdits({ entityType: 'opportunity', entityId: match.id, changes }),
+            changes: await withoutDashboardEdits({ entityType: 'opportunity', entityId: match.id, changes }),
             source: 'import',
             reason: 'Spreadsheet import',
         })
@@ -254,15 +260,15 @@ async function upsertImportedOpportunities({
 }
 
 /**
- * Drop changes to fields someone has edited by hand in the dashboard; the app is the source of truth
- * once a person has touched a field.
+ * Drop changes the sheet shouldn't make: fields changed in the dashboard since (by a person, or an
+ * applied AI update from email), and blank cells (a blank in the sheet never clears a value).
  *
  * @param input.entityType - `funder` or `opportunity`.
  * @param input.entityId - The record.
  * @param input.changes - Proposed changes.
  * @returns The changes that may be applied.
  */
-async function withoutManualEdits({
+async function withoutDashboardEdits({
     entityType,
     entityId,
     changes,
@@ -273,7 +279,10 @@ async function withoutManualEdits({
 }) {
     const allowed: Record<string, ChangeValue> = {}
     for (const [field, value] of Object.entries(changes)) {
-        if (!(await latestManualChangeAt({ entityType, entityId, field }))) {
+        if (value === null) {
+            continue
+        }
+        if (!(await latestNonImportChangeAt({ entityType, entityId, field }))) {
             allowed[field] = value
         }
     }
@@ -299,6 +308,10 @@ async function withoutTakenEmails({
 }) {
     const available: ParsedContact[] = []
     for (const contact of contacts) {
+        if (contact.email && config.internalEmailDomains.includes(emailDomain({ email: contact.email }))) {
+            summary.skipped.push(`${funderName}: ${contact.email} is an Earth Bank address, not a funder contact.`)
+            continue
+        }
         if (contact.email && (await findContactByEmail({ email: contact.email }))) {
             summary.skipped.push(`${funderName}: ${contact.email} is already a contact elsewhere.`)
             continue

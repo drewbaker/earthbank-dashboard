@@ -6,7 +6,7 @@ import { recordAudit } from '#server/utils/audit.ts'
 import { requireUser } from '#server/utils/auth.ts'
 import { applyFieldChanges } from '#server/utils/change-events.ts'
 import { conflict } from '#server/utils/errors.ts'
-import { loadFunderDetail } from '#server/utils/funders.ts'
+import { loadFunderDetail, withoutInternalDomains } from '#server/utils/funders.ts'
 import { assertActiveUser } from '#server/utils/users.ts'
 import { UpdateFunderRequest } from '#shared/schemas/index.ts'
 import { funderNameKey } from '#shared/utils/funder-names.ts'
@@ -41,10 +41,13 @@ export default defineApiHandler(async event => {
         }
     }
     await assertActiveUser({ userId: body.owner_id })
+    const changes = body.email_domains
+        ? { ...body, email_domains: withoutInternalDomains({ domains: body.email_domains }) }
+        : body
     const events = await applyFieldChanges({
         entityType: 'funder',
         entityId: funderId,
-        changes: body,
+        changes,
         source: 'manual',
         actorUserId: ctx.user.id,
     })

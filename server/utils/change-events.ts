@@ -1,10 +1,10 @@
 import type { Prisma } from '#server/generated/prisma/client.ts'
 import type { ChangeEventDraft } from '#server/database/change-events.ts'
-import { findChangeEvent, resolveChangeEvent, writeFieldChanges } from '#server/database/change-events.ts'
+import { findChangeEvent, resolveChangeEvent, writeFieldChanges, writeRevert } from '#server/database/change-events.ts'
 import { findFunder } from '#server/database/funders.ts'
 import { findOpportunity } from '#server/database/opportunities.ts'
 import { centsToBigInt, centsToNumber, fromDateOnly, toDateOnly } from '#server/utils/dates.ts'
-import { badRequest, notFound } from '#server/utils/errors.ts'
+import { badRequest, conflict, notFound } from '#server/utils/errors.ts'
 import type { ChangeSource } from '#shared/constants/pipeline.ts'
 import type { ChangeEntityType } from '#shared/schemas/index.ts'
 import { funderNameKey } from '#shared/utils/funder-names.ts'
@@ -195,12 +195,14 @@ export async function rejectChangeEvent({
 
 /**
  * Revert an applied change: set the field back to its earlier value (logged as a manual change) and
- * mark the original reverted.
+ * mark the original reverted, all in one transaction.
+ *
+ * Refuses when the field has changed again since, so a revert never silently undoes a later edit.
  *
  * @param input.changeEventId - The applied event.
  * @param input.actorUserId - Who reverted it.
  * @returns Resolves once reverted.
- * @throws ApiError 404 when missing; 400 when it isn't applied.
+ * @throws ApiError 404 when missing; 400 when it isn't applied; 409 when the field changed since.
  */
 export async function revertChangeEvent({
     changeEventId,
@@ -217,18 +219,24 @@ export async function revertChangeEvent({
         throw badRequest({ message: 'Only applied changes can be reverted.', code: 'change_not_applied' })
     }
     const entityType = event.entity_type as ChangeEntityType
-    await applyFieldChanges({
+    const kind = (TRACKED_FIELDS[entityType] as Record<string, FieldKind>)[event.field]!
+    const current = await loadEntityValues({ entityType, entityId: event.entity_id })
+    const currentValue = toChangeValue({ kind, value: current[event.field] })
+    if (JSON.stringify(currentValue) !== JSON.stringify(event.to_value ?? null)) {
+        throw conflict({ message: 'This field has changed since; edit it directly instead of reverting.' })
+    }
+    const restoredValue = (event.from_value ?? null) as ChangeValue
+    await writeRevert({
+        changeEventId,
         entityType,
         entityId: event.entity_id,
-        changes: { [event.field]: (event.from_value ?? null) as ChangeValue } as never,
-        source: 'manual',
+        columnUpdates: toColumnUpdates({ entityType, field: event.field, kind, value: restoredValue }),
+        draft: {
+            field: event.field,
+            fromValue: currentValue as Prisma.InputJsonValue | null,
+            toValue: restoredValue as Prisma.InputJsonValue | null,
+        },
         actorUserId,
-        reason: `Reverted change ${event.id}`,
-    })
-    await resolveChangeEvent({
-        changeEventId,
-        status: 'reverted',
-        resolvedByUserId: actorUserId,
         resolvedAt: new Date(),
     })
 }

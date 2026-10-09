@@ -1,4 +1,4 @@
-import type { Prisma } from '#server/generated/prisma/client.ts'
+import { Prisma } from '#server/generated/prisma/client.ts'
 import { db } from '#server/utils/db.ts'
 import { newId } from '#server/utils/ids.ts'
 import type { ChangeSource, ChangeStatus } from '#shared/constants/pipeline.ts'
@@ -120,7 +120,8 @@ export async function resolveChangeEvent({
                 status,
                 resolved_at: resolvedAt,
                 resolved_by_user_id: resolvedByUserId,
-                from_value: fromValue === undefined ? undefined : (fromValue ?? undefined),
+                // A null from-value must be written as SQL NULL; undefined would keep the stale value.
+                from_value: fromValue === undefined ? undefined : fromValue === null ? Prisma.DbNull : fromValue,
             },
         }),
     )
@@ -231,4 +232,83 @@ function updateEntity({
     return entityType === 'funder'
         ? db().funder.update({ where: { id: entityId }, data: data as Prisma.FunderUncheckedUpdateInput })
         : db().opportunity.update({ where: { id: entityId }, data: data as Prisma.OpportunityUncheckedUpdateInput })
+}
+
+/**
+ * When a field was last changed by anything other than the spreadsheet import (people, or AI
+ * changes that were applied).
+ *
+ * @param input.entityType - `funder` or `opportunity`.
+ * @param input.entityId - The record.
+ * @param input.field - The field.
+ * @returns The time of the latest such change, or null.
+ */
+export async function latestNonImportChangeAt({
+    entityType,
+    entityId,
+    field,
+}: {
+    entityType: ChangeEntityType
+    entityId: string
+    field: string
+}) {
+    const latest = await db().changeEvent.findFirst({
+        where: { entity_type: entityType, entity_id: entityId, field, source: { not: 'import' }, status: 'applied' },
+        orderBy: { id: 'desc' },
+        select: { created_at: true },
+    })
+    return latest?.created_at ?? null
+}
+
+/**
+ * Revert an applied change in one transaction: write the earlier value back, log that as a manual
+ * change, and mark the original reverted.
+ *
+ * @param input.changeEventId - The applied event.
+ * @param input.entityType - `funder` or `opportunity`.
+ * @param input.entityId - The record.
+ * @param input.columnUpdates - Columns that restore the earlier value.
+ * @param input.draft - The revert's own change (field, from, to).
+ * @param input.actorUserId - Who reverted it.
+ * @param input.resolvedAt - When.
+ * @returns Resolves once written.
+ */
+export async function writeRevert({
+    changeEventId,
+    entityType,
+    entityId,
+    columnUpdates,
+    draft,
+    actorUserId,
+    resolvedAt,
+}: {
+    changeEventId: string
+    entityType: ChangeEntityType
+    entityId: string
+    columnUpdates: Record<string, unknown>
+    draft: ChangeEventDraft
+    actorUserId: string
+    resolvedAt: Date
+}) {
+    await db().$transaction([
+        updateEntity({ entityType, entityId, data: columnUpdates }),
+        db().changeEvent.create({
+            data: {
+                id: newId({ kind: 'changeEvent' }),
+                entity_type: entityType,
+                entity_id: entityId,
+                field: draft.field,
+                from_value: draft.fromValue ?? undefined,
+                to_value: draft.toValue ?? undefined,
+                source: 'manual',
+                status: 'applied',
+                actor_user_id: actorUserId,
+                reason: `Reverted change ${changeEventId}`,
+            },
+        }),
+        db().changeEvent.update({
+            where: { id: changeEventId },
+            data: { status: 'reverted', resolved_at: resolvedAt, resolved_by_user_id: actorUserId },
+        }),
+    ])
 }

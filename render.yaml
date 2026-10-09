@@ -52,6 +52,9 @@ services:
             sync: false
           - key: GOOGLE_WORKSPACE_DOMAIN
             value: theearthbank.org
+          # Earth Bank's other mail domains; staff addresses are never treated as funder contacts.
+          - key: INTERNAL_EMAIL_DOMAINS
+            value: resolvefund.org
           - key: BOOKEEPING_API_BASE
             value: https://api.bookeeping.ai/public-api
           - key: BOOKEEPING_API_KEY

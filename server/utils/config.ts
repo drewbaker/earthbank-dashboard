@@ -90,6 +90,14 @@ export const config = {
     get aiModel() {
         return env('AI_MODEL', 'claude-opus-5-5')
     },
+    /** Earth Bank's own mail domains (the Workspace domain plus aliases); never funder addresses. */
+    get internalEmailDomains() {
+        const domains = env('INTERNAL_EMAIL_DOMAINS', 'resolvefund.org')
+            .split(',')
+            .map(domain => domain.trim().toLowerCase())
+            .filter(Boolean)
+        return [...new Set([this.googleWorkspaceDomain, this.inboundEmailDomain, ...domains])]
+    },
     get inboundEmailDomain() {
         return env('INBOUND_EMAIL_DOMAIN', 'in.theearthbank.org').toLowerCase()
     },

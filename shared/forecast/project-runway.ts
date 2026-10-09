@@ -306,11 +306,13 @@ function monthOutflow({
     const shareOfMonth = ({ from, to }: { from: string; to: string }) =>
         from > to ? 0 : (daysBetween({ from, to }) + 1) / daysInMonth
 
-    let burnMultiplier = 1
+    // Burn changes are pro-rated from their start date, like recurring costs.
+    let burn = monthlyBurnCents * shareOfMonth({ from: windowStart, to: monthEnd })
     let recurring = 0
     for (const adjustment of adjustments) {
         if (adjustment.kind === 'change_burn_pct' && adjustment.starts_at <= monthEnd) {
-            burnMultiplier += adjustment.pct / 100
+            const from = [windowStart, adjustment.starts_at].sort().at(-1)!
+            burn += ((monthlyBurnCents * adjustment.pct) / 100) * shareOfMonth({ from, to: monthEnd })
         }
         if (adjustment.kind === 'add_recurring_cost') {
             const from = [windowStart, adjustment.starts_at].sort().at(-1)!
@@ -318,9 +320,7 @@ function monthOutflow({
             recurring += adjustment.monthly_cents * shareOfMonth({ from, to })
         }
     }
-    return (
-        Math.max(0, monthlyBurnCents * burnMultiplier) * shareOfMonth({ from: windowStart, to: monthEnd }) + recurring
-    )
+    return Math.max(0, burn) + recurring
 }
 
 /**

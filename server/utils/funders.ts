@@ -3,7 +3,8 @@ import { createFunderRow, findFunderByNameKey, findFunderSummary } from '#server
 import { goalIdsByType } from '#server/database/goals.ts'
 import { createOpportunityRow, listOpportunityRows } from '#server/database/opportunities.ts'
 import { centsToBigInt, fromDateOnly } from '#server/utils/dates.ts'
-import { conflict, notFound } from '#server/utils/errors.ts'
+import { config } from '#server/utils/config.ts'
+import { badRequest, conflict, notFound } from '#server/utils/errors.ts'
 import { serializeFunderDetail } from '#server/utils/serializers/funders.ts'
 import { readStageProbabilities } from '#server/utils/settings.ts'
 import type {
@@ -15,7 +16,7 @@ import type {
     RelationshipStatus,
 } from '#shared/constants/pipeline.ts'
 import { GOAL_TYPE_DETAILS } from '#shared/constants/pipeline.ts'
-import { normalizeEmailAddress, organizationDomains } from '#shared/utils/email-addresses.ts'
+import { emailDomain, normalizeEmailAddress, organizationDomains } from '#shared/utils/email-addresses.ts'
 import { funderNameKey } from '#shared/utils/funder-names.ts'
 
 export type NewContact = { name: string; title?: string | null; email?: string | null; notes?: string | null }
@@ -95,7 +96,7 @@ export async function createFunderWithDetails({
         relationshipStatus,
         geoFocus,
         potentialSize,
-        emailDomains: [...new Set([...emailDomains, ...contactDomains])],
+        emailDomains: withoutInternalDomains({ domains: [...new Set([...emailDomains, ...contactDomains])] }),
         notes,
         ownerId,
         status,
@@ -169,6 +170,9 @@ async function prepareContacts({ contacts }: { contacts: NewContact[] }) {
     const seenEmails = new Set<string>()
     for (const contact of contacts) {
         const email = contact.email ? normalizeEmailAddress({ email: contact.email }) : null
+        if (email && withoutInternalDomains({ domains: [emailDomain({ email })] }).length === 0) {
+            throw badRequest({ message: 'Earth Bank addresses can’t be funder contacts.', code: 'internal_address' })
+        }
         if (email) {
             if (seenEmails.has(email) || (await findContactByEmail({ email }))) {
                 throw conflict({ message: `${email} is already a contact.` })
@@ -178,4 +182,15 @@ async function prepareContacts({ contacts }: { contacts: NewContact[] }) {
         prepared.push({ name: contact.name.trim(), title: contact.title ?? null, email, notes: contact.notes ?? null })
     }
     return prepared
+}
+
+/**
+ * Drop Earth Bank's own domains from a funder's domains: matching on them would attribute every
+ * staff email to that funder.
+ *
+ * @param input.domains - Candidate domains.
+ * @returns The domains that may belong to a funder.
+ */
+export function withoutInternalDomains({ domains }: { domains: string[] }) {
+    return domains.filter(domain => !config.internalEmailDomains.includes(domain.toLowerCase()))
 }

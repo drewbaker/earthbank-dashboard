@@ -206,9 +206,11 @@ Changes from the original plan (and why):
 
 ## Phase 6: Hardening + deploy
 
-- [ ] Review every `/v1` route for `requireUser`, zod validation, serializer use and audit entries
-- [ ] Empty, loading and error states on every page; mobile-width check of Overview, Pipeline and task slideover
-- [ ] Finish `docs/deploy-runbook.md`:
+Status: hardening done; deploying needs the credentials listed in `docs/deploy-runbook.md` (Google OAuth client, Render, DNS, Resend, Anthropic, Bookeeping.ai).
+
+- [x] Review every `/v1` route for `requireUser`, zod validation, serializer use and audit entries
+- [x] Empty, loading and error states on every page; mobile-width check of Overview, Pipeline and task slideover
+- [x] Finish `docs/deploy-runbook.md`:
     1. Render: create from `render.yaml`, set the `sync: false` secrets, attach the disk
     2. DNS: CNAME `dashboard.theearthbank.org` → the Render service; add the custom domain in Render; enable edge caching
     3. Google Cloud (Earth Bank Workspace project): OAuth consent screen **Internal**; OAuth client (web) with redirect URIs `https://dashboard.theearthbank.org/auth/google/callback`, `…/auth/google/gmail/callback` and the localhost equivalents; enable the Gmail API
@@ -217,6 +219,8 @@ Changes from the original plan (and why):
     6. Anthropic: set `ANTHROPIC_API_KEY`
     7. Upload the spreadsheet to `/var/data/imports/` and run `npm run import:pipeline -- /var/data/imports/pipeline.xlsx` from the Render shell
     8. Drew, Leslie and Steve sign in with Google (this creates their accounts), then each connects Gmail in Settings → Email
+- [x] Independent code review of server code; seven issues fixed with regression tests (`tests/integration/review-fixes.test.ts`): Gmail sync now resumes instead of dropping older mail past the per-run cap; Earth Bank addresses can never become funder contacts/domains; re-imports keep dashboard and AI edits and never clear a field from a blank cell; revert refuses when the field changed since and is transactional; accept records a null "from" correctly; chunked bodies without a length are refused (411); mid-month burn changes are pro-rated.
+- [x] Production build smoke test (all pages and APIs 200; jobs bundle has all five job classes; a database-touching job runs in a Sidequest worker thread)
 - [ ] Deploy, smoke-test sign-in with a non-Earth-Bank Google account (must be refused), run a Bookeeping.ai sync, forward a test email
 
 ---

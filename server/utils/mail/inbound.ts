@@ -13,6 +13,7 @@ import type { ProcessEmailResult } from '#server/utils/mail/classify.ts'
 import { buildFunderMatchIndex, matchFunder } from '#server/utils/mail/matching.ts'
 import { htmlToText, stripQuotedText, unwrapForwardedMessage } from '#server/utils/mail/normalize.ts'
 import type { IncomingEmail } from '#server/utils/mail/types.ts'
+import { emailDomain } from '#shared/utils/email-addresses.ts'
 import { randomBytes } from 'node:crypto'
 
 const LOCAL_PART = 'updates'
@@ -110,7 +111,16 @@ export async function processForwardedEmail({
     }
 
     const email = originalOfForward({ received })
-    const index = buildFunderMatchIndex({ funders: await listFunderMatchData() })
+    if (!email || config.internalEmailDomains.includes(emailDomain({ email: email.from }))) {
+        // Without a recognizable forwarded header the only sender we know is the person who forwarded
+        // it, which would wrongly become a funder contact.
+        console.info('[mail] forwarded email had no recognizable original sender', receivedEmailId)
+        return null
+    }
+    const index = buildFunderMatchIndex({
+        funders: await listFunderMatchData(),
+        internalDomains: config.internalEmailDomains,
+    })
     const funderId = matchFunder({ index, from: email.from, recipients: [...email.to, ...email.cc] })
     return funderId
         ? processFunderEmail({ email, funderId, source: 'forward', mailboxUserId: inboundAddress.user_id, ai })
@@ -118,25 +128,27 @@ export async function processForwardedEmail({
 }
 
 /**
- * The original message inside a forward (sender, subject, text), or the email itself when it
- * wasn't forwarded with a standard header block.
+ * The original message inside a forward (sender, subject, text).
  *
  * @param input.received - The received email.
- * @returns The email to classify.
+ * @returns The email to classify, or null when no forwarded header block was found.
  */
-export function originalOfForward({ received }: { received: ReceivedEmail }): IncomingEmail {
+export function originalOfForward({ received }: { received: ReceivedEmail }): IncomingEmail | null {
     const body = received.text ?? (received.html ? htmlToText({ html: received.html }) : '')
     const forwarded = unwrapForwardedMessage({ text: body })
-    const parsedDate = forwarded?.dateText ? new Date(forwarded.dateText.replace(/ at /, ' ')) : null
+    if (!forwarded) {
+        return null
+    }
+    const parsedDate = forwarded.dateText ? new Date(forwarded.dateText.replace(/ at /, ' ')) : null
     return {
         // Forwarded copies don't carry the original Message-ID, so the received id deduplicates.
         messageIdHeader: `forward:${received.id}`,
-        from: forwarded?.from ?? received.from,
-        to: forwarded?.to ?? received.to,
+        from: forwarded.from,
+        to: forwarded.to,
         cc: [],
         sentAt: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : new Date(received.createdAt),
-        subject: forwarded?.subject || received.subject.replace(/^(fwd?|fw):\s*/i, ''),
-        text: stripQuotedText({ text: forwarded?.text ?? body }),
+        subject: forwarded.subject || received.subject.replace(/^(fwd?|fw):\s*/i, ''),
+        text: stripQuotedText({ text: forwarded.text }),
     }
 }
 

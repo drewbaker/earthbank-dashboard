@@ -4,7 +4,13 @@ import { htmlToText, parseAddressList, stripQuotedText } from '#server/utils/mai
 import type { IncomingEmail } from '#server/utils/mail/types.ts'
 import { normalizeEmailAddress } from '#shared/utils/email-addresses.ts'
 
-export type GmailMessageHeaders = { gmailId: string; messageIdHeader: string; from: string; recipients: string[] }
+export type GmailMessageHeaders = {
+    gmailId: string
+    messageIdHeader: string
+    from: string
+    recipients: string[]
+    sentAt: Date
+}
 
 /**
  * Read-only access to one person's Gmail, authorized by their refresh token.
@@ -63,6 +69,7 @@ export class GmailMailbox {
             messageIdHeader: header('Message-ID') ?? `gmail:${gmailId}`,
             from: parseAddressList({ header: header('From') })[0] ?? '',
             recipients: [...parseAddressList({ header: header('To') }), ...parseAddressList({ header: header('Cc') })],
+            sentAt: new Date(Number(data.internalDate ?? Date.now())),
         }
     }
 

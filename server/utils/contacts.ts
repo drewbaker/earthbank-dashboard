@@ -1,7 +1,8 @@
 import { createContactRow, findContactByEmail, updateContactRow } from '#server/database/contacts.ts'
 import { findFunder } from '#server/database/funders.ts'
 import { applyFieldChanges } from '#server/utils/change-events.ts'
-import { conflict, notFound } from '#server/utils/errors.ts'
+import { config } from '#server/utils/config.ts'
+import { badRequest, conflict, notFound } from '#server/utils/errors.ts'
 import type { ChangeSource } from '#shared/constants/pipeline.ts'
 import { emailDomain, isFreeMailDomain, normalizeEmailAddress } from '#shared/utils/email-addresses.ts'
 
@@ -17,7 +18,8 @@ import { emailDomain, isFreeMailDomain, normalizeEmailAddress } from '#shared/ut
  * @param input.source - Change source for the domain update (`manual`, `ai_email`, …).
  * @param input.actorUserId - Who added it, if a person.
  * @returns The contact row.
- * @throws ApiError 404 when the funder is missing; 409 when the email belongs to another funder's contact.
+ * @throws ApiError 404 when the funder is missing; 409 when the email belongs to another funder's contact;
+ *   400 for an Earth Bank address (staff are never funder contacts, or every staff email would match).
  */
 export async function addContactToFunder({
     funderId,
@@ -41,6 +43,9 @@ export async function addContactToFunder({
         throw notFound({ resource: 'Funder' })
     }
     const normalizedEmail = email ? normalizeEmailAddress({ email }) : null
+    if (normalizedEmail && config.internalEmailDomains.includes(emailDomain({ email: normalizedEmail }))) {
+        throw badRequest({ message: 'Earth Bank addresses can’t be funder contacts.', code: 'internal_address' })
+    }
     let contact
     const existing = normalizedEmail ? await findContactByEmail({ email: normalizedEmail }) : null
     if (existing) {

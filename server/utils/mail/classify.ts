@@ -16,7 +16,7 @@ import { toDateOnly } from '#server/utils/dates.ts'
 import { createFunderWithDetails, loadFunderDetail } from '#server/utils/funders.ts'
 import type { IncomingEmail } from '#server/utils/mail/types.ts'
 import type { FunderDetail } from '#shared/schemas/index.ts'
-import { normalizeEmailAddress } from '#shared/utils/email-addresses.ts'
+import { emailDomain, normalizeEmailAddress } from '#shared/utils/email-addresses.ts'
 import { funderNameKey } from '#shared/utils/funder-names.ts'
 
 // Changes at or above this confidence apply straight away; below it they wait on the Activity page.
@@ -383,10 +383,15 @@ async function applyClassification({
         })
     }
 
+    // New contacts must share a domain with the funder (or be the sender), so cc'd colleagues and
+    // other organizations never become this funder's contacts.
     const knownEmails = new Set(funder.contacts.map(contact => contact.email))
+    const funderDomains = new Set(funder.email_domains)
     for (const contact of classification.new_contacts) {
         const address = normalizeEmailAddress({ email: contact.email })
-        if (!address || knownEmails.has(address) || !contact.name.trim()) {
+        const belongsToFunder =
+            address !== null && (funderDomains.has(emailDomain({ email: address })) || address === email.from)
+        if (!address || !belongsToFunder || knownEmails.has(address) || !contact.name.trim()) {
             continue
         }
         await addContactToFunder({

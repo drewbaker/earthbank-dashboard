@@ -3,10 +3,13 @@ import { listFunderMatchData } from '#server/database/funders.ts'
 import type { MailboxConnection } from '#server/generated/prisma/client.ts'
 import { recordMailboxSync } from '#server/database/mailboxes.ts'
 import type { AiProvider } from '#server/utils/ai/provider.ts'
+import { config } from '#server/utils/config.ts'
 import { decryptSecret } from '#server/utils/crypto.ts'
 import { processFunderEmail } from '#server/utils/mail/classify.ts'
+import type { GmailMessageHeaders } from '#server/utils/mail/gmail.ts'
 import { GmailMailbox } from '#server/utils/mail/gmail.ts'
 import { buildFunderMailQueries, buildFunderMatchIndex, matchFunder } from '#server/utils/mail/matching.ts'
+import type { IncomingEmail } from '#server/utils/mail/types.ts'
 
 // A first sync looks back 90 days; later syncs overlap the previous one by a day. A funder backfill
 // looks back a year. Each run reads at most this many messages, so a big backlog spreads over runs.
@@ -14,8 +17,19 @@ const FIRST_SYNC_DAYS = 90
 const RESYNC_OVERLAP_DAYS = 1
 const BACKFILL_DAYS = 365
 const MAX_MESSAGES_PER_RUN = 150
+// Upper bound on ids collected per run; headers are cheap, but this keeps one run bounded.
+const MAX_SEARCH_RESULTS = 1000
 
 export type MailboxSyncResult = { matched: number; processed: number; applied: number; pending: number }
+
+type ReadResult = MailboxSyncResult & { resumeFrom: Date | null }
+
+/** What sync needs from a mailbox (Gmail in production, a fake in tests). */
+export type MailboxReader = {
+    searchMessageIds(input: { query: string; limit: number }): Promise<string[]>
+    getMessageHeaders(input: { gmailId: string }): Promise<GmailMessageHeaders>
+    getMessage(input: { gmailId: string }): Promise<IncomingEmail>
+}
 
 /**
  * Read new funder email from one Gmail account and update the pipeline.
@@ -27,6 +41,8 @@ export type MailboxSyncResult = { matched: number; processed: number; applied: n
  * @param input.ai - The AI provider.
  * @param input.now - Current time.
  * @param input.funderId - Limit to one funder and look back a year (backfill after adding a funder).
+ * @param input.mailbox - Mailbox to read (defaults to the connection's Gmail; tests pass a fake).
+ * @param input.maxMessagesPerRun - How many emails to read this run.
  * @returns Counts of what happened.
  * @throws Rethrows Gmail errors after recording them on the connection.
  */
@@ -35,11 +51,15 @@ export async function syncMailbox({
     ai,
     now,
     funderId,
+    mailbox,
+    maxMessagesPerRun = MAX_MESSAGES_PER_RUN,
 }: {
     connection: MailboxConnection
     ai: AiProvider
     now: Date
     funderId?: string
+    mailbox?: MailboxReader
+    maxMessagesPerRun?: number
 }): Promise<MailboxSyncResult> {
     const refreshToken = decryptSecret({ encrypted: connection.refresh_token_encrypted })
     if (!refreshToken) {
@@ -51,10 +71,19 @@ export async function syncMailbox({
         return { matched: 0, processed: 0, applied: 0, pending: 0 }
     }
     try {
-        const result = await readFunderMail({ refreshToken, connection, ai, now, funderId })
+        const { resumeFrom, ...result } = await readFunderMail({
+            mailbox: mailbox ?? new GmailMailbox({ refreshToken }),
+            connection,
+            ai,
+            now,
+            funderId,
+            maxMessagesPerRun,
+        })
+        // When mail was left for the next run, only advance the sync point to the oldest email still
+        // waiting, so the next run's search window still includes it.
         await recordMailboxSync({
             mailboxConnectionId: connection.id,
-            lastSyncedAt: funderId ? undefined : now,
+            lastSyncedAt: funderId ? undefined : (resumeFrom ?? now),
             lastError: null,
         })
         return result
@@ -78,29 +107,32 @@ export async function syncMailbox({
 /**
  * Search, filter and classify.
  *
- * @param input.refreshToken - Decrypted refresh token.
+ * @param input.mailbox - The mailbox to read.
+ * @param input.maxMessagesPerRun - How many emails to read this run.
  * @param input.connection - The mailbox connection.
  * @param input.ai - The AI provider.
  * @param input.now - Current time.
  * @param input.funderId - Optional single funder (backfill).
- * @returns Counts of what happened.
+ * @returns Counts of what happened, and where the next run should resume when mail was left over.
  */
 async function readFunderMail({
-    refreshToken,
+    mailbox,
     connection,
     ai,
     now,
     funderId,
+    maxMessagesPerRun,
 }: {
-    refreshToken: string
+    mailbox: MailboxReader
     connection: MailboxConnection
     ai: AiProvider
     now: Date
     funderId?: string
-}) {
+    maxMessagesPerRun: number
+}): Promise<ReadResult> {
     const allFunders = await listFunderMatchData()
     const funders = funderId ? allFunders.filter(funder => funder.id === funderId) : allFunders
-    const index = buildFunderMatchIndex({ funders: allFunders })
+    const index = buildFunderMatchIndex({ funders: allFunders, internalDomains: config.internalEmailDomains })
     const lookbackDays = funderId ? BACKFILL_DAYS : connection.last_synced_at ? null : FIRST_SYNC_DAYS
     const after = lookbackDays
         ? new Date(now.getTime() - lookbackDays * 86_400_000)
@@ -109,31 +141,42 @@ async function readFunderMail({
         contactEmails: funders.flatMap(funder => funder.contactEmails),
         domains: funders.flatMap(funder => funder.emailDomains),
         after,
+        internalDomains: config.internalEmailDomains,
     })
 
-    const mailbox = new GmailMailbox({ refreshToken })
     const gmailIds = new Set<string>()
     for (const query of queries) {
-        for (const id of await mailbox.searchMessageIds({ query, limit: MAX_MESSAGES_PER_RUN })) {
+        for (const id of await mailbox.searchMessageIds({ query, limit: MAX_SEARCH_RESULTS })) {
             gmailIds.add(id)
         }
     }
 
-    const result: MailboxSyncResult = { matched: gmailIds.size, processed: 0, applied: 0, pending: 0 }
-    // Oldest first, so the pipeline moves forward in the order things happened.
-    for (const gmailId of [...gmailIds].reverse().slice(0, MAX_MESSAGES_PER_RUN)) {
+    // Headers first (cheap): keep only funder mail not yet read in any inbox, oldest first.
+    const candidates = []
+    for (const gmailId of [...gmailIds].slice(0, MAX_SEARCH_RESULTS)) {
         const headers = await mailbox.getMessageHeaders({ gmailId })
-        if ((await findProcessedMessageIds({ messageIdHeaders: [headers.messageIdHeader] })).size > 0) {
-            continue
-        }
         const matchedFunderId = matchFunder({ index, from: headers.from, recipients: headers.recipients })
-        if (!matchedFunderId || (funderId && matchedFunderId !== funderId)) {
-            continue
+        if (matchedFunderId && (!funderId || matchedFunderId === funderId)) {
+            candidates.push({ ...headers, funderId: matchedFunderId })
         }
-        const email = await mailbox.getMessage({ gmailId })
+    }
+    const processedIds = await findProcessedMessageIds({
+        messageIdHeaders: candidates.map(candidate => candidate.messageIdHeader),
+    })
+    const unread = candidates
+        .filter(candidate => !processedIds.has(candidate.messageIdHeader))
+        .sort((first, second) => first.sentAt.getTime() - second.sentAt.getTime())
+    // A regular sync works forward from the oldest unread email and resumes from the first one it
+    // couldn't get to. A one-off backfill reads the most recent emails (they matter most).
+    const batch = funderId ? unread.slice(-maxMessagesPerRun) : unread.slice(0, maxMessagesPerRun)
+    const resumeFrom = !funderId && unread.length > maxMessagesPerRun ? unread[maxMessagesPerRun]!.sentAt : null
+
+    const result: ReadResult = { matched: unread.length, processed: 0, applied: 0, pending: 0, resumeFrom }
+    for (const candidate of batch) {
+        const email = await mailbox.getMessage({ gmailId: candidate.gmailId })
         const outcome = await processFunderEmail({
             email,
-            funderId: matchedFunderId,
+            funderId: candidate.funderId,
             source: 'gmail',
             mailboxUserId: connection.user_id,
             ai,
