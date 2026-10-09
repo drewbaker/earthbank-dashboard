@@ -77,7 +77,8 @@ export function listUsers() {
 }
 
 /**
- * Deactivate a user and delete their sessions and Gmail connection, in one transaction.
+ * Deactivate a user and delete their sessions and Gmail connection, in one transaction. Drive
+ * folders they connected keep their documents but lose their token until someone reconnects them.
  *
  * @param input.userId - The user to deactivate.
  * @param input.deactivatedAt - When it happened.
@@ -88,6 +89,14 @@ export async function deactivateUser({ userId, deactivatedAt }: { userId: string
         db().user.update({ where: { id: userId }, data: { deactivated_at: deactivatedAt } }),
         db().session.deleteMany({ where: { user_id: userId } }),
         db().mailboxConnection.deleteMany({ where: { user_id: userId } }),
+        db().knowledgeSource.updateMany({
+            where: { connected_by_id: userId },
+            data: {
+                refresh_token_encrypted: '',
+                status: 'error',
+                last_error: 'The person who connected this folder no longer has access. Reconnect it.',
+            },
+        }),
     ])
     return user
 }

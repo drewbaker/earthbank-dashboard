@@ -3,10 +3,17 @@ import { db } from '#server/utils/db.ts'
 import { newId } from '#server/utils/ids.ts'
 import type { FunderKind, FunderStatus, FunderTier, GoalType, RelationshipStatus } from '#shared/constants/pipeline.ts'
 
-// What every funder read includes: owner and live opportunities (for totals and goal badges).
+// What every funder read includes: owner, live opportunities (for totals and goal badges) and the
+// latest relevant email (to tell whether the funder is waiting on a reply).
 export const FUNDER_SUMMARY_INCLUDE = {
     owner: true,
     opportunities: { where: { archived_at: null }, include: { goal: true } },
+    emails: {
+        where: { is_relevant: true },
+        orderBy: { sent_at: 'desc' },
+        take: 1,
+        select: { from_address: true, sent_at: true },
+    },
 } satisfies Prisma.FunderInclude
 
 export type FunderSummaryRow = Prisma.FunderGetPayload<{ include: typeof FUNDER_SUMMARY_INCLUDE }>

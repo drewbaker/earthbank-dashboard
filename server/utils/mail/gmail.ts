@@ -4,6 +4,19 @@ import { htmlToText, parseAddressList, stripQuotedText } from '#server/utils/mai
 import type { IncomingEmail } from '#server/utils/mail/types.ts'
 import { normalizeEmailAddress } from '#shared/utils/email-addresses.ts'
 
+export type ThreadMessage = {
+    gmailId: string
+    messageIdHeader: string | null
+    references: string | null
+    from: string
+    to: string[]
+    cc: string[]
+    sentAt: Date
+    subject: string
+    /** New text only (quoted history removed), held in memory while a reply is drafted. */
+    text: string
+}
+
 export type GmailMessageHeaders = {
     gmailId: string
     messageIdHeader: string
@@ -13,13 +26,14 @@ export type GmailMessageHeaders = {
 }
 
 /**
- * Read-only access to one person's Gmail, authorized by their refresh token.
+ * Access to one person's Gmail, authorized by their refresh token: reading (`gmail.readonly`) and,
+ * when granted, saving drafts (`gmail.compose`). Nothing here ever sends mail.
  */
 export class GmailMailbox {
     private readonly api: gmail_v1.Gmail
 
     /**
-     * @param input.refreshToken - Decrypted refresh token with `gmail.readonly`.
+     * @param input.refreshToken - Decrypted refresh token with `gmail.readonly` (and `gmail.compose` for drafts).
      */
     constructor({ refreshToken }: { refreshToken: string }) {
         const auth = googleOAuthClient()
@@ -91,6 +105,55 @@ export class GmailMailbox {
             subject: header('Subject') ?? '',
             text: stripQuotedText({ text: messageText({ part: data.payload }) }),
         }
+    }
+
+    /**
+     * The messages of one thread, oldest first, with quoted history stripped from each.
+     *
+     * @param input.gmailMessageId - Any message in the thread.
+     * @param input.limit - Keep only the latest this many messages.
+     * @returns The Gmail thread id and its messages.
+     */
+    async getThreadOf({ gmailMessageId, limit }: { gmailMessageId: string; limit: number }) {
+        const { data: message } = await this.api.users.messages.get({
+            userId: 'me',
+            id: gmailMessageId,
+            format: 'minimal',
+        })
+        const threadId = message.threadId!
+        const { data } = await this.api.users.threads.get({ userId: 'me', id: threadId, format: 'full' })
+        const messages: ThreadMessage[] = (data.messages ?? []).slice(-limit).map(threadMessage => {
+            const header = headerReader({ headers: threadMessage.payload?.headers })
+            return {
+                gmailId: threadMessage.id!,
+                messageIdHeader: header('Message-ID'),
+                references: header('References'),
+                from: normalizeEmailAddress({ email: header('From') ?? '' }) ?? '',
+                to: parseAddressList({ header: header('To') }),
+                cc: parseAddressList({ header: header('Cc') }),
+                sentAt: new Date(Number(threadMessage.internalDate ?? Date.now())),
+                subject: header('Subject') ?? '',
+                text: stripQuotedText({ text: messageText({ part: threadMessage.payload }) }),
+            }
+        })
+        return { threadId, messages }
+    }
+
+    /**
+     * Save a draft in the person's Gmail. It is never sent; they review and send it themselves.
+     *
+     * @param input.raw - The RFC 822 message.
+     * @param input.threadId - Gmail thread to file the draft in, for replies.
+     * @returns The draft id and its message id (used to open it in Gmail).
+     */
+    async createDraft({ raw, threadId }: { raw: string; threadId: string | null }) {
+        const { data } = await this.api.users.drafts.create({
+            userId: 'me',
+            requestBody: {
+                message: { raw: Buffer.from(raw, 'utf8').toString('base64url'), threadId: threadId ?? undefined },
+            },
+        })
+        return { draftId: data.id!, messageId: data.message?.id ?? null }
     }
 }
 

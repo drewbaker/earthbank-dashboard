@@ -184,6 +184,9 @@ const funderColumns: TableColumn<Funder>[] = [
                     () => row.original.name,
                 ),
                 row.original.status === 'draft' ? h(UBadge, { label: 'Draft', color: 'warning', size: 'sm' }) : null,
+                row.original.awaiting_reply_since
+                    ? h(UBadge, { label: 'Reply needed', color: 'info', size: 'sm', icon: 'i-lucide-reply' })
+                    : null,
             ]),
     },
     { accessorKey: 'tier', header: 'Tier', cell: ({ row }) => h(PipelineTierBadge, { tier: row.original.tier }) },

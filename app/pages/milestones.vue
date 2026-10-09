@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useAsyncData, useRoute, useRouter, useSeoMeta } from '#imports'
+import { useAsyncData, useRoute, useRouter, useSeoMeta, useToast } from '#imports'
 import { GOAL_TYPE_DETAILS, MILESTONE_KIND_DETAILS } from '#shared/constants/pipeline.ts'
 import type { Milestone, MilestoneList, Task, TaskList, UserSummary } from '#shared/schemas/index.ts'
-import { useApi } from '~/composables/useApi.ts'
+import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { usePipelineReference } from '~/composables/usePipelineReference.ts'
 import { useTaskActions } from '~/composables/useTaskActions.ts'
 import { useTaskReference } from '~/composables/useTaskReference.ts'
@@ -16,6 +16,7 @@ const route = useRoute()
 const router = useRouter()
 const { team } = usePipelineReference()
 const taskReference = useTaskReference()
+const toast = useToast()
 
 type MilestonesView = 'milestones' | 'people'
 const view = ref<MilestonesView>(route.query.view === 'people' ? 'people' : 'milestones')
@@ -126,6 +127,22 @@ async function reloadAll() {
 }
 
 /**
+ * Save a new task order after a drag, then reload so every view agrees. On failure the list is
+ * reloaded to the saved order and the error is shown.
+ *
+ * @param input.taskIds - Task ids of one group, in their new order.
+ * @returns Resolves once saved and reloaded.
+ */
+async function saveTaskOrder({ taskIds }: { taskIds: string[] }) {
+    try {
+        await api({ path: '/tasks/reorder', method: 'POST', body: { task_ids: taskIds } })
+    } catch (error) {
+        toast.add({ title: apiErrorMessage({ error, fallback: 'Could not save the new order.' }), color: 'error' })
+    }
+    await refreshTasks()
+}
+
+/**
  * Short summary of what someone has to do, e.g. "3 open tasks · next due Jan 1".
  *
  * @param input.openCount - Open tasks.
@@ -232,13 +249,12 @@ function personSummary({ openCount, nextDeadline }: { openCount: number; nextDea
                         </div>
                     </template>
                     <div class="divide-y divide-default">
-                        <TasksRow
-                            v-for="task in tasksByMilestone.get(milestone.id) ?? []"
-                            :key="task.id"
-                            :task="task"
-                            :is-updating="updatingTaskId === task.id"
+                        <TasksSortableList
+                            :tasks="tasksByMilestone.get(milestone.id) ?? []"
+                            :updating-task-id="updatingTaskId"
                             @open="openTask"
                             @toggle-done="toggleDone"
+                            @reorder="saveTaskOrder({ taskIds: $event })"
                         />
                         <div class="px-3 py-2">
                             <UButton
@@ -257,16 +273,13 @@ function personSummary({ openCount, nextDeadline }: { openCount: number; nextDea
                     <template #header>
                         <h2 class="font-medium text-highlighted">Other tasks</h2>
                     </template>
-                    <div class="divide-y divide-default">
-                        <TasksRow
-                            v-for="task in tasksByMilestone.get('none')"
-                            :key="task.id"
-                            :task="task"
-                            :is-updating="updatingTaskId === task.id"
-                            @open="openTask"
-                            @toggle-done="toggleDone"
-                        />
-                    </div>
+                    <TasksSortableList
+                        :tasks="tasksByMilestone.get('none') ?? []"
+                        :updating-task-id="updatingTaskId"
+                        @open="openTask"
+                        @toggle-done="toggleDone"
+                        @reorder="saveTaskOrder({ taskIds: $event })"
+                    />
                 </UCard>
 
                 <UEmpty

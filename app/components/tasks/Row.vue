@@ -3,12 +3,26 @@ import { TASK_STATUS_DETAILS } from '#shared/constants/pipeline.ts'
 import type { Task } from '#shared/schemas/index.ts'
 import { formatDate } from '~/utils/format.ts'
 
-defineProps<{ task: Task; showMilestone?: boolean; hideAssignee?: boolean; isUpdating?: boolean }>()
+defineProps<{
+    task: Task
+    showMilestone?: boolean
+    hideAssignee?: boolean
+    isUpdating?: boolean
+    isDraggable?: boolean
+}>()
 const emit = defineEmits<{ open: [task: Task]; toggleDone: [task: Task] }>()
 </script>
 
 <template>
     <div class="group flex items-center gap-3 px-3 py-2 hover:bg-elevated/50">
+        <span
+            v-if="isDraggable"
+            class="task-row__drag-handle -mr-2 flex cursor-grab touch-none items-center text-dimmed hover:text-muted active:cursor-grabbing"
+            title="Drag to reorder"
+            aria-hidden="true"
+        >
+            <UIcon name="i-lucide-grip-vertical" class="size-4" />
+        </span>
         <UButton
             :icon="TASK_STATUS_DETAILS[task.status].icon"
             :color="task.status === 'done' ? 'success' : task.status === 'doing' ? 'info' : 'neutral'"

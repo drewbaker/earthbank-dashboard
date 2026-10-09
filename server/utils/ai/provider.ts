@@ -6,13 +6,17 @@ import { config } from '#server/utils/config.ts'
 export type StructuredResult<Output> =
     { status: 'ok'; output: Output; model: string } | { status: 'refused' | 'unparseable'; output: null; model: string }
 
+export type AiEffort = 'low' | 'medium' | 'high'
+
 export interface AiProvider {
     name: string
     model: string
     completeStructured<Schema extends z.ZodType>(input: {
         instructions: string
+        reference?: string
         prompt: string
         schema: Schema
+        effort?: AiEffort
     }): Promise<StructuredResult<z.infer<Schema>>>
 }
 
@@ -20,7 +24,8 @@ export interface AiProvider {
  * Claude via the Anthropic API, returning output that matches a zod schema (structured outputs).
  *
  * Refusal fallbacks are on: if the model declines, the API retries on a fallback model in the same
- * call. Thinking stays adaptive; effort is kept low because classification is a short, well-defined task.
+ * call. Thinking stays adaptive; effort defaults to low because classification is a short, well-defined
+ * task, and drafting asks for more.
  */
 export class AnthropicProvider implements AiProvider {
     readonly name = 'anthropic'
@@ -41,26 +46,38 @@ export class AnthropicProvider implements AiProvider {
      * Ask for one structured answer.
      *
      * @param input.instructions - System prompt.
+     * @param input.reference - Large, rarely changing reference text (Drive documents). It goes after
+     *   the instructions in the system prompt and is cached, so repeat drafts don't pay for it again.
      * @param input.prompt - The user message (email and context).
      * @param input.schema - zod schema the answer must match.
+     * @param input.effort - How hard the model thinks; `low` by default.
      * @returns The parsed output, or a refused/unparseable status.
      */
     async completeStructured<Schema extends z.ZodType>({
         instructions,
+        reference,
         prompt,
         schema,
+        effort = 'low',
     }: {
         instructions: string
+        reference?: string
         prompt: string
         schema: Schema
+        effort?: AiEffort
     }): Promise<StructuredResult<z.infer<Schema>>> {
         const response = await this.client.beta.messages.parse({
             model: this.model,
-            max_tokens: 4096,
+            max_tokens: effort === 'low' ? 4096 : 16000,
             betas: ['server-side-fallback-2026-07-01'],
             fallbacks: 'default',
-            system: instructions,
-            output_config: { effort: 'low', format: betaZodOutputFormat(schema) },
+            system: reference
+                ? [
+                      { type: 'text', text: instructions },
+                      { type: 'text', text: reference, cache_control: { type: 'ephemeral' } },
+                  ]
+                : instructions,
+            output_config: { effort, format: betaZodOutputFormat(schema) },
             messages: [{ role: 'user', content: prompt }],
         })
         if (response.stop_reason === 'refusal') {

@@ -47,6 +47,7 @@ model User {
     mailbox_connection   MailboxConnection?
     inbound_addresses    InboundAddress[]
     email_evidence       EmailEvidence[]
+    knowledge_sources    KnowledgeSource[]
 
     @@map("user")
 }
@@ -475,4 +476,54 @@ model InboundAddress {
 
     @@index([user_id])
     @@map("inbound_address")
+}
+
+// A Google Drive folder whose documents inform AI-drafted emails. Read with the refresh token of the
+// person who connected it (drive.readonly). Only files inside the folder are ever read.
+model KnowledgeSource {
+    id                      String    @id
+    drive_folder_id         String    @unique
+    name                    String
+    connected_by_id         String?
+    // Empty when access was removed (the person was deactivated); someone reconnects the folder.
+    refresh_token_encrypted String
+    // active | error
+    status                  String    @default("active")
+    last_synced_at          DateTime?
+    last_error              String?
+    created_at              DateTime  @default(now())
+    updated_at              DateTime  @updatedAt
+
+    connected_by User?               @relation(fields: [connected_by_id], references: [id], onDelete: SetNull)
+    documents    KnowledgeDocument[]
+
+    @@map("knowledge_source")
+}
+
+// One file from a knowledge folder, with its extracted text. These are Earth Bank's own business
+// documents (models, explainers), so unlike email the text is stored.
+model KnowledgeDocument {
+    id            String   @id
+    source_id     String
+    drive_file_id String   @unique
+    name          String
+    mime_type     String
+    web_view_link String?
+    // Drive's modifiedTime; a file is only downloaded again when this changes.
+    modified_at   DateTime
+    // indexed | unsupported | too_large | failed
+    status        String
+    text          String?
+    char_count    Int      @default(0)
+    // Pinned documents are always given to the AI in full; excluded ones never are.
+    is_pinned     Boolean  @default(false)
+    is_excluded   Boolean  @default(false)
+    synced_at     DateTime
+    created_at    DateTime @default(now())
+    updated_at    DateTime @updatedAt
+
+    source KnowledgeSource @relation(fields: [source_id], references: [id], onDelete: Cascade)
+
+    @@index([source_id])
+    @@map("knowledge_document")
 }

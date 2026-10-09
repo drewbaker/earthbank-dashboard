@@ -7,6 +7,8 @@ const settingsSections: NavigationMenuItem[] = [
     { label: 'Pipeline', icon: 'i-lucide-target', to: '/settings/pipeline' },
     { label: 'Cash', icon: 'i-lucide-landmark', to: '/settings/cash' },
     { label: 'Email', icon: 'i-lucide-mail', to: '/settings/email' },
+    { label: 'Knowledge', icon: 'i-lucide-library', to: '/settings/knowledge' },
+    { label: 'Import', icon: 'i-lucide-file-spreadsheet', to: '/settings/import' },
 ]
 </script>
 

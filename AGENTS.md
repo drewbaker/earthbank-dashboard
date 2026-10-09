@@ -34,6 +34,8 @@ Names used throughout: **Earth Bank Dashboard** (display name), `earthbank_dashb
 | Scenario | `scn` | A named set of forecast adjustments |
 | Mailbox connection | `mbx` | A user's connected Gmail (encrypted refresh token) |
 | Email evidence | `eml` | Metadata and an AI summary of an email that caused an update (never the body) |
+| Knowledge source | `ksr` | A connected Google Drive folder of Earth Bank documents (encrypted refresh token) |
+| Knowledge document | `kdc` | One file from a knowledge folder with its extracted text; pinned or excluded for AI drafting |
 | Change event | `chg` | Every change to a funder or opportunity field, with source (manual, import, AI), evidence and reason |
 | Audit log | `aud` | |
 
@@ -44,11 +46,13 @@ Names used throughout: **Earth Bank Dashboard** (display name), `earthbank_dashb
     4. Plan milestones with tasks: assign, set deadlines, comment, attach files, get email alerts. Make it obvious what each person must do per milestone ("Drew: A, B, C before Jan 1").
     5. Model runway scenarios: slip a funding date, change an amount, add a hire or a one-off cost, and see when OpEx runs out.
     6. Review AI-proposed updates from email, with evidence and reasoning, then accept, revert or override them.
+    7. See which funders are waiting on a reply, and have the AI draft it (from the thread, the pipeline and Earth Bank's Drive documents) into the sender's Gmail drafts for review.
 - **Public surfaces**: none, apart from `/healthz`, the Google OAuth callback and the inbound-email webhook (signature-verified).
 - **Background work**:
     - Bookeeping.ai sync (hourly): accounts, balances, transactions.
     - Gmail sync per connected user (every 15 min), plus a backfill when a funder is added.
     - AI email classification (Anthropic).
+    - Drive knowledge sync (nightly, and on demand).
     - Inbound forwarded-email processing.
     - Notification emails (task assigned, comment written).
     - Nightly backups and hourly cleanup.
@@ -59,6 +63,8 @@ Names used throughout: **Earth Bank Dashboard** (display name), `earthbank_dashb
     - Bank data comes from Bookeeping.ai (`docs.bookeeping.ai`), read-only.
     - Only the spreadsheet's Master Pipeline tab is imported in v1.
     - The AI only reads threads with known funder contacts or funder domains, never the whole inbox. It stores a short summary, never the email body.
+    - The dashboard may save drafts to a person's Gmail (`gmail.compose`) but never sends email.
+    - Drive access is read-only and limited to folders someone explicitly connects; their documents' text is stored (they're Earth Bank's own business documents).
     - The forecast shows two lines: committed money only, and pipeline weighted by an editable probability per stage.
     - AI runs on the Anthropic API.
     - The color scheme matches the Earth Bank loans app (`loans.theearthbank.org`).
@@ -107,13 +113,14 @@ Names used throughout: **Earth Bank Dashboard** (display name), `earthbank_dashb
 | Icons | Lucide via `@iconify-json/lucide` | `i-lucide-*` |
 | Fonts | `@nuxt/fonts` (bundled with Nuxt UI), self-hosted | Configure in `nuxt.config.ts` → `fonts.families` |
 | Charts | `nuxt-charts` | Follows Nuxt UI colors and dark mode |
-| Composables | `@vueuse/core` | |
+| Composables | `@vueuse/core`, `@vueuse/integrations` (`useSortable` + `sortablejs` for drag-to-reorder) | |
 | Database | SQLite (WAL, 5s busy timeout, `foreign_keys = ON`) | `better-sqlite3` driver |
 | ORM | Prisma + `@prisma/adapter-better-sqlite3`, exact-pinned together | `prisma.config.ts`, ESM client generated into `server/generated/prisma` |
 | Search | SQLite FTS5 via raw SQL | Virtual table created outside Prisma migrate |
 | Validation | `zod` | `z.toJSONSchema` for OpenAPI and AI schemas |
 | Auth | `google-auth-library` | Sign in with Google only, restricted to the `theearthbank.org` Workspace; our own DB sessions (see §6) |
-| Gmail | `googleapis` (Gmail API, `gmail.readonly`) | Behind `MailboxProvider`; same OAuth client as sign-in |
+| Gmail | `@googleapis/gmail` (`gmail.readonly`, `gmail.compose` for drafts) | Same OAuth client as sign-in |
+| Google Drive | `@googleapis/drive` (`drive.readonly`) | Knowledge folders for AI drafting; `unpdf` and `read-excel-file` extract text |
 | Bank data | Bookeeping.ai public API (`docs.bookeeping.ai`) | Behind `BookkeepingProvider`; read-only, polled |
 | Background jobs | `sidequest` + `@sidequest/sqlite-backend` | Separate `jobs.db` file |
 | Scheduled work | Nitro tasks (`experimental.tasks`, `scheduledTasks`) | |
@@ -182,10 +189,11 @@ npm run dev
 #   1. Add the custom domain dashboard.theearthbank.org (CNAME to the service).
 #   2. Enable edge caching (Settings → Edge Caching → "All files").
 #   3. Add https://dashboard.theearthbank.org/auth/google/callback to the Google
-#      OAuth client's redirect URIs (Internal app in the Earth Bank Workspace).
-#   4. Import the pipeline from the service shell:
-#        npm run import:pipeline -- /var/data/imports/pipeline.xlsx
-#   Accounts are created on first Google sign-in; there is no admin bootstrap.
+#      OAuth client's redirect URIs (Internal app in the Earth Bank Workspace;
+#      Gmail and Drive APIs enabled).
+#   4. Sign in with Google (accounts are created on first sign-in), then import
+#      the spreadsheet in Settings → Import.
+#   Data lives on the disk, never in the repo: deploys only apply new migrations.
 
 services:
     - type: web
@@ -653,7 +661,7 @@ async function auditFunderCreated({
 - **Accounts**: created on first sign-in with role `admin` (every user is an admin in v1; the `role` column stays for later). Drew, Leslie and Steve get accounts by signing in; there is no bootstrap script.
 - **Sessions**: our own `session` table. The cookie (`earthbank_dashboard_session`) holds an opaque ~256-bit token; the database stores only its SHA-256. `httpOnly`, `sameSite: lax`, `secure` in production, host-only. Sessions expire after `SESSION_TTL_DAYS` (default 7), so someone removed from Workspace loses access within a week at most; signing in again is one click while their Google session is live.
 - **Removing access**: remove the person in Google Workspace, and deactivate them in Settings → Team (`deactivated_at`), which deletes their sessions and mailbox connection immediately.
-- **Gmail is incremental authorization**: sign-in never asks for mail access. Settings → Email → "Connect Gmail" re-runs OAuth with `gmail.readonly`, `access_type=offline`, `prompt=consent` and `include_granted_scopes=true`. The refresh token is stored in `mailbox_connection`, encrypted with AES-256-GCM using `APP_ENCRYPTION_KEY` (`server/utils/crypto.ts`). Disconnecting revokes the token at Google and deletes the row.
+- **Gmail and Drive are incremental authorization**: sign-in never asks for mail or file access. Settings → Email → "Connect Gmail" re-runs OAuth with `gmail.readonly` and `gmail.compose`; Settings → Knowledge → "Connect folder" with `drive.readonly` (the folder id rides in the encrypted OAuth state). Both use `access_type=offline`, `prompt=consent` and `include_granted_scopes=true`. Refresh tokens are stored in `mailbox_connection` and `knowledge_source`, encrypted with AES-256-GCM using `APP_ENCRYPTION_KEY` (`server/utils/crypto.ts`). Revoking any token at Google revokes the person's whole grant, so disconnecting deletes the row and revokes only when nothing else of theirs still uses it (`revokeGoogleAccessIfUnused`).
 - `server/middleware/10.auth.ts` resolves the session cookie into `event.context.auth` (`AuthContext`). Routes use `requireUser({ event })` (and `requireRole({ event, minimum: 'admin' })` once roles matter) from `#server/utils/auth.ts`.
 - **CSRF**: every non-GET request must carry an `Origin` matching `APP_URL`, except the signature-verified inbound webhook.
 - Compare secrets with `timingSafeEqual`.
@@ -677,7 +685,8 @@ Each external service gets a tiny interface in `server/utils/<area>/` plus a reg
 - **Email** (`server/utils/email/`): `EmailProvider { name, send({ to, subject, html, text }) }`, `ResendProvider`, `ConsoleProvider` (dev). Messages always have `html` and `text`. Sending happens in a job, never inline in a request.
 - **AI** (`server/utils/ai/`): `AiProvider { completeStructured({ instructions, prompt, schema }) }`, chosen by `AI_PROVIDER` (default `anthropic`) / `AI_MODEL` (default `claude-opus-5-5`; set a cheaper model such as `claude-haiku-5-5` here if volume makes cost matter). `AnthropicProvider` uses `@anthropic-ai/sdk`'s `beta.messages.parse` with structured outputs (`output_config.format` from a zod schema; Opus 5.5 rejects forced tool use), low effort, and server-side refusal fallbacks (`fallbacks: "default"`). The result is range-checked after parsing. Instructions live in `server/utils/ai/instructions.ts` (TypeScript strings rather than Markdown files, so they bundle into Nitro and the job workers without file reads). `npm run eval:classify-email` scores the classifier against labelled fixtures.
 - **Bookkeeping** (`server/utils/bookkeeping/`): `BookkeepingProvider { listAccounts(), getAccountBalance({ accountId }), listTransactions({ since, cursor }) }`. `BookeepingAiProvider` calls `BOOKEEPING_API_BASE` with `Authorization: Bearer BOOKEEPING_API_KEY` and backs off on 429 (limits: 100 reads/min, 6,000/day). `FixtureProvider` serves JSON fixtures in dev when no key is set. There are no webhooks, so we poll.
-- **Mailbox** (`server/utils/mail/`): `MailboxProvider { searchMessages({ query, after }), listHistory({ startHistoryId }), getMessage({ id }) }`, implemented by `GmailProvider` over `googleapis`. `parseInboundEmail({ payload })` turns a Resend Inbound webhook payload into the same normalized `IncomingEmail { messageId, from, to, cc, date, subject, text }`, unwrapping the forwarded original where possible.
+- **Mailbox** (`server/utils/mail/`): `GmailMailbox` over `@googleapis/gmail` (search, headers, messages, threads, `createDraft`), consumed through narrow types (`MailboxReader` for sync, `ThreadReader` for drafting) so tests pass fakes.
+- **Knowledge** (`server/utils/knowledge/`): `KnowledgeDrive { getFolder, listFiles, exportFile, downloadFile }`, implemented by `GoogleKnowledgeDrive`; `extract.ts` turns files into text; `select.ts` chooses what the AI reads. `parseInboundEmail({ payload })` turns a Resend Inbound webhook payload into the same normalized `IncomingEmail { messageId, from, to, cc, date, subject, text }`, unwrapping the forwarded original where possible.
 - **Storage** (`server/utils/storage.ts`): `putFile({ key, data })`, `readStoredFile({ key })`, `streamFile({ key })`, `fileExists({ key })`, … over relative keys. Local disk now; S3/R2 later.
 
 ---
@@ -725,6 +734,7 @@ Declared in `nitro.scheduledTasks` (cron, UTC; comment any timezone math). Each 
 | `backup` | nightly | `VACUUM INTO` snapshots of `app.db` and `jobs.db` into `DATA_DIR/backups`, keep 7 |
 | `bookkeeping-sync` | hourly | Enqueue `SyncBookkeepingJob`: accounts, today's balance snapshot, new transactions |
 | `mail-sync` | every 15 min | Enqueue one `SyncMailboxJob` per connected mailbox |
+| `knowledge-sync` | nightly 04:30 | Enqueue one `SyncKnowledgeJob` per connected Drive folder |
 | `task-digest` | weekdays 13:00 UTC (morning US time) | Optional: email each user their tasks due in the next 7 days |
 
 ---
@@ -881,6 +891,14 @@ Keeps funder and opportunity status current from email, without the AI ever seei
 - **Applying changes**: a change is applied automatically when confidence ≥ 0.8 and it is not a move to `lost` or an amount decrease; otherwise it becomes a pending suggestion. Each applied or pending change writes a `change_event` with `source`, `evidence_id`, `reason` and `confidence`.
 - **Review and override** (Activity page): every AI change shows the evidence summary, the reasoning and the confidence, with **Accept** (pending), **Revert** and **Edit**. A manual edit outranks AI: the AI won't change that field again based on mail older than the manual edit.
 - **Evals**: `npm run eval:classify-email` scores the classifier against local, git-ignored fixtures in `tests/fixtures/emails/`.
+- **Reply needed**: a funder whose latest relevant email is from them (not an Earth Bank domain) has `awaiting_reply_since` set, shown on the pipeline and funder page.
+- **Drafting** (`server/utils/mail/draft-reply.ts`): `POST /v1/funders/{id}/reply-draft` finds the latest thread with the funder in the author's own Gmail (same funder search, last 12 months), reads up to 10 messages live, and sends them with the pipeline record, the author's guidance (default: the opportunity's next step) and the selected Drive documents to the AI (`DRAFT_REPLY_INSTRUCTIONS`, effort medium). Thread text is labelled as data, not instructions. Recipients (reply-all minus the author, their aliases and forwarding addresses) and the subject are computed in code; the AI writes the body, "before sending" notes and which documents it used. Nothing from the thread or the draft is stored; the audit log records only that a draft was made. `POST /v1/mailbox/drafts` saves the edited email to Gmail drafts in the thread (`In-Reply-To`/`References`); the person sends it from Gmail.
+
+### Knowledge (Google Drive)
+
+- Settings → Knowledge connects Drive folders by link. `SyncKnowledgeJob` lists each folder (subfolders included, capped at 500 files), downloads only new or changed files, and stores their text: Google Docs and Slides exported as text, Sheets and .xlsx with every tab, PDFs via `unpdf`, plain text/CSV/Markdown. Word and PowerPoint files are listed as "Not readable" (convert them to Google format). Files over 20 MB or failed exports are recorded with their status.
+- People can **pin** a document (always given to the AI in full) or **exclude** it (never given).
+- For each draft, `selectKnowledge` includes every usable document when they total under ~300k characters, in a stable order so the reference block is prompt-cached; otherwise pinned documents plus the best-matching passages (BM25 over ~1,500-character chunks) up to the budget.
 
 ---
 

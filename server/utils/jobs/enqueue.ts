@@ -2,6 +2,7 @@ import { BackfillFunderJob } from '#root/jobs/backfill-funder.job.ts'
 import { ProcessForwardedEmailJob } from '#root/jobs/process-forwarded-email.job.ts'
 import { SendEmailJob } from '#root/jobs/send-email.job.ts'
 import { SyncBookkeepingJob } from '#root/jobs/sync-bookkeeping.job.ts'
+import { SyncKnowledgeJob } from '#root/jobs/sync-knowledge.job.ts'
 import { SyncMailboxJob } from '#root/jobs/sync-mailbox.job.ts'
 import { ensureJobQueue, Sidequest } from '#server/utils/jobs/sidequest.ts'
 
@@ -89,4 +90,20 @@ export async function enqueueFunderBackfill({ funderId }: { funderId: string }) 
 export async function enqueueForwardedEmail({ receivedEmailId }: { receivedEmailId: string }) {
     await ensureJobQueue()
     return Sidequest.build(ProcessForwardedEmailJob).queue('mail').maxAttempts(5).enqueue({ receivedEmailId })
+}
+
+/**
+ * Queue a sync of one Drive knowledge folder (once per folder at a time).
+ *
+ * @param input.knowledgeSourceId - The source.
+ * @returns The queued job.
+ */
+export async function enqueueKnowledgeSync({ knowledgeSourceId }: { knowledgeSourceId: string }) {
+    await ensureJobQueue()
+    return Sidequest.build(SyncKnowledgeJob)
+        .queue('default')
+        .maxAttempts(3)
+        .timeout(20 * 60 * 1000)
+        .unique({ withArgs: true })
+        .enqueue({ knowledgeSourceId })
 }

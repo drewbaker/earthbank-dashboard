@@ -4,18 +4,18 @@ How to stand up `dashboard.theearthbank.org` on Render, and what to set up outsi
 
 | Service | Needed for | Env vars |
 |---|---|---|
-| Google Cloud (Workspace) | Sign-in (required), Gmail connection | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
+| Google Cloud (Workspace) | Sign-in (required), Gmail connection, Drive knowledge folder | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
 | Resend | Task and comment alerts; forwarded-email address | `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `EMAIL_FROM`, `INBOUND_EMAIL_DOMAIN` |
-| Anthropic | Reading funder email | `ANTHROPIC_API_KEY`, `AI_MODEL` |
+| Anthropic | Reading funder email; drafting emails to funders | `ANTHROPIC_API_KEY`, `AI_MODEL` |
 | Bookeeping.ai | Cash, burn and runway from the bank | `BOOKEEPING_API_KEY`, `BOOKEEPING_API_BASE` |
 
 ## 1. Google OAuth client
 
 In the Google Cloud console, use a project that belongs to the Earth Bank Workspace organization:
 
-1. **APIs & Services → OAuth consent screen**: user type **Internal**. Only Workspace accounts can use it, and Google doesn't need to verify the app, even for Gmail's restricted read scope.
-2. **APIs & Services → Library**: enable the **Gmail API**.
-3. **APIs & Services → Credentials → Create credentials → OAuth client ID**, type **Web application**. Add this redirect URI (sign-in and "Connect Gmail" share it):
+1. **APIs & Services → OAuth consent screen**: user type **Internal**. Only Workspace accounts can use it, and Google doesn't need to verify the app, even for the restricted Gmail and Drive scopes. Under **Data access**, the scopes the app asks for are `openid`, `email`, `profile`, `gmail.readonly`, `gmail.compose` (to save reply drafts; the app never sends) and `drive.readonly` (only the connected knowledge folders are read).
+2. **APIs & Services → Library**: enable the **Gmail API** and the **Google Drive API**.
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID**, type **Web application**. Add this redirect URI (sign-in, "Connect Gmail" and "Connect folder" share it):
     - `https://dashboard.theearthbank.org/auth/google/callback`
     - `http://localhost:3000/auth/google/callback` (local development)
 4. Copy the client ID and secret into Render (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`) and into your local `.env`.
@@ -49,12 +49,21 @@ Create an API key in the Anthropic Console and set `ANTHROPIC_API_KEY`. `AI_MODE
 
 In Bookeeping.ai, **Settings → API Access → Create API Key**; set `BOOKEEPING_API_KEY`. If the account was created in Europe or Canada, set `BOOKEEPING_API_BASE` to `https://eu-api.bookeeping.ai/public-api` or `https://ca-api.bookeeping.ai/public-api`. The first sync runs within the hour (or press **Sync now** in Settings → Cash) and reads a year of transactions. Then, in Settings → Cash, untick any account that shouldn't count toward cash (restricted funds, cards).
 
-## 7. Import the pipeline and sign in
+## 7. Sign in and import the pipeline
 
-1. Upload the spreadsheet to the server: Render → the service → **Shell**, then `mkdir -p /var/data/imports` and paste/upload it as `/var/data/imports/pipeline.xlsx` (or download a fresh export of the Google Sheet as .xlsx).
-2. Run `npm run import:pipeline -- /var/data/imports/pipeline.xlsx --dry-run` to preview, then without `--dry-run`. It's safe to run again later.
-3. Drew, Leslie and Steve open `https://dashboard.theearthbank.org` and **Sign in with Google**. Their accounts are created on that first sign-in.
-4. Each person connects Gmail in **Settings → Email**.
+1. Drew, Leslie and Steve open `https://dashboard.theearthbank.org` and **Sign in with Google**. Their accounts are created on that first sign-in.
+2. Download the Google Sheet as .xlsx (**File → Download → Microsoft Excel**). In the dashboard, **Settings → Import**: drop the file, **Preview**, check the list, then **Import**. It's safe to repeat later: funders are matched by name, nothing is deleted, and edits made in the dashboard are kept. (The same import exists as a CLI, `npm run import:pipeline -- file.xlsx`, for the Render shell.)
+3. Each person connects Gmail in **Settings → Email**.
+4. One person connects the Earth Bank Drive folder with the business documents in **Settings → Knowledge** (paste the folder link). Pin the documents that should always inform emails, such as the three-page explainer, and exclude anything that shouldn't.
+
+## Data and deploys
+
+The database and uploaded files live on the Render disk (`/var/data`), not in the repo, so **pushing code never overwrites data**:
+
+- A deploy builds the code and restarts the service; the disk is untouched. `.data/` (the local database) is git-ignored, so local data never reaches the server.
+- On start, `prisma migrate deploy` applies only migrations that haven't run yet. Migrations are additive (new tables and columns); never edit an applied migration, and never run `prisma migrate reset` or `migrate dev` against production.
+- The spreadsheet import is a one-time load (repeatable, but it never deletes or overwrites dashboard edits). After go-live, the dashboard is the source of truth.
+- Render also snapshots the disk daily, on top of the nightly backups below.
 
 ## 8. Smoke test
 
@@ -62,10 +71,11 @@ In Bookeeping.ai, **Settings → API Access → Create API Key**; set `BOOKEEPIN
 - `https://dashboard.theearthbank.org/healthz` returns `{"ok":true}`.
 - `/admin/jobs` (signed in) shows the Sidequest dashboard with `default`, `email` and `mail` queues.
 - Assign a task to someone else: they get an email.
+- On a funder you've emailed, **Draft email** → **Draft with AI** → **Save to Gmail drafts**: the draft appears in Gmail, in the thread, unsent.
 
 ## Operations
 
 - **Backups**: nightly `VACUUM INTO` snapshots of `app.db` and `jobs.db` in `/var/data/backups`, 7 kept. To restore, stop the service, copy a snapshot over `/var/data/db/app.db` from the Render shell, and restart.
 - **Logs**: Render → Logs. Server lines are prefixed by area (`[api]`, `[jobs]`, `[auth]`, `[mail]`, `[bookkeeping]`, `[backup]`).
-- **Removing someone**: remove them in Google Workspace and click **Deactivate** in Settings → Team (ends their sessions and deletes their Gmail connection).
-- **Scheduled work** (UTC): mail sync every 15 minutes, Bookeeping.ai at :15 past each hour, cleanup hourly, backups 03:00, task digest 13:00 on weekdays.
+- **Removing someone**: remove them in Google Workspace and click **Deactivate** in Settings → Team (ends their sessions, deletes their Gmail connection, and pauses any Drive folder they connected until someone else reconnects it).
+- **Scheduled work** (UTC): mail sync every 15 minutes, Bookeeping.ai at :15 past each hour, cleanup hourly, backups 03:00, Drive knowledge sync 04:30, task digest 13:00 on weekdays.

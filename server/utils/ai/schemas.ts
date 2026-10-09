@@ -52,3 +52,13 @@ export const DraftFunderProposal = z.object({
     next_step: z.string().nullable(),
 })
 export type DraftFunderProposal = z.infer<typeof DraftFunderProposal>
+
+// A drafted email from the team to a funder. Recipients and subject are set in code from the thread.
+export const DraftedReply = z.object({
+    body: z.string().describe('The email body as plain text, ready to send after review.'),
+    notes: z
+        .array(z.string())
+        .describe('Short points for the team member: placeholders to fill, facts to check, files to attach.'),
+    used_documents: z.array(z.string()).describe('Names of reference documents the email draws facts from.'),
+})
+export type DraftedReply = z.infer<typeof DraftedReply>

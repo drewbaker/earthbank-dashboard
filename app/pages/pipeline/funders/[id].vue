@@ -62,6 +62,19 @@ const isContactModalOpen = ref(false)
 const editingOpportunity = ref<Opportunity | null>(null)
 const editingContact = ref<Contact | null>(null)
 const isArchiving = ref(false)
+const isEmailDraftOpen = ref(false)
+const emailDraftOpportunityId = ref<string | null>(null)
+
+/**
+ * Open the AI email draft, optionally about one opportunity.
+ *
+ * @param input.opportunityId - The opportunity the email is about, or null.
+ * @returns Nothing.
+ */
+function openEmailDraft({ opportunityId }: { opportunityId: string | null }) {
+    emailDraftOpportunityId.value = opportunityId
+    isEmailDraftOpen.value = true
+}
 
 const { busyEventId, acceptChange, rejectChange, revertChange } = useChangeEventActions({ onChanged: reloadFunder })
 
@@ -175,6 +188,12 @@ async function toggleArchived() {
                             @click="toggleArchived"
                         />
                         <UButton label="Edit" icon="i-lucide-pencil" @click="isFunderModalOpen = true" />
+                        <UButton
+                            label="Draft email"
+                            icon="i-lucide-sparkles"
+                            :variant="funder.awaiting_reply_since ? 'solid' : 'soft'"
+                            @click="openEmailDraft({ opportunityId: null })"
+                        />
                     </template>
                 </template>
             </UDashboardNavbar>
@@ -209,6 +228,12 @@ async function toggleArchived() {
                     <div class="flex flex-wrap items-center gap-2">
                         <PipelineTierBadge :tier="funder.tier" />
                         <PipelineRelationshipBadge :status="funder.relationship_status" />
+                        <UBadge
+                            v-if="funder.awaiting_reply_since"
+                            :label="`Reply needed · they wrote ${formatDate({ value: funder.awaiting_reply_since, style: 'short' })}`"
+                            icon="i-lucide-reply"
+                            color="info"
+                        />
                         <PipelineGoalBadge
                             v-for="goalType in funder.goal_types"
                             :key="goalType"
@@ -229,10 +254,14 @@ async function toggleArchived() {
                             </div>
                         </template>
                         <ul v-if="funder.opportunities.length" class="divide-y divide-default">
-                            <li v-for="opportunity in funder.opportunities" :key="opportunity.id">
+                            <li
+                                v-for="opportunity in funder.opportunities"
+                                :key="opportunity.id"
+                                class="flex items-start hover:bg-elevated/50"
+                            >
                                 <button
                                     type="button"
-                                    class="flex w-full items-start gap-4 px-4 py-3 text-left hover:bg-elevated/50"
+                                    class="flex min-w-0 flex-1 items-start gap-4 py-3 pl-4 text-left"
                                     @click="openOpportunityForm({ opportunity })"
                                 >
                                     <div class="min-w-0 flex-1 space-y-1">
@@ -270,6 +299,17 @@ async function toggleArchived() {
                                         </p>
                                     </div>
                                 </button>
+                                <UTooltip text="Draft an email about this">
+                                    <UButton
+                                        icon="i-lucide-mail-plus"
+                                        color="neutral"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="m-2"
+                                        :aria-label="`Draft an email about ${opportunity.name}`"
+                                        @click="openEmailDraft({ opportunityId: opportunity.id })"
+                                    />
+                                </UTooltip>
                             </li>
                         </ul>
                         <p v-else class="px-4 py-6 text-center text-sm text-muted">No opportunities yet.</p>
@@ -434,6 +474,11 @@ async function toggleArchived() {
 
             <template v-if="funder">
                 <PipelineFunderModal v-model:open="isFunderModalOpen" :funder="funder" @saved="reloadFunder" />
+                <PipelineEmailDraftModal
+                    v-model:open="isEmailDraftOpen"
+                    :funder="funder"
+                    :opportunity-id="emailDraftOpportunityId"
+                />
                 <PipelineOpportunityModal
                     v-model:open="isOpportunityModalOpen"
                     :opportunity="editingOpportunity"

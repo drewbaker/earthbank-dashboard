@@ -21,6 +21,8 @@ export const ID_PREFIXES = {
     emailEvidence: 'eml',
     changeEvent: 'chg',
     inboundAddress: 'iad',
+    knowledgeSource: 'ksr',
+    knowledgeDocument: 'kdc',
 } as const
 
 export type IdKind = keyof typeof ID_PREFIXES

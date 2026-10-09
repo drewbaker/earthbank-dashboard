@@ -4,15 +4,15 @@ import { deleteMailboxConnection, findMailboxConnectionForUser } from '#server/d
 import { defineApiHandler, requestIp } from '#server/utils/api.ts'
 import { recordAudit } from '#server/utils/audit.ts'
 import { requireUser } from '#server/utils/auth.ts'
-import { googleOAuthClient } from '#server/utils/auth/google.ts'
 import { decryptSecret } from '#server/utils/crypto.ts'
+import { revokeGoogleAccessIfUnused } from '#server/utils/google-access.ts'
 
 defineRouteMeta({
     openAPI: {
         tags: ['Email'],
         summary: 'Disconnect Gmail',
         description:
-            "Revokes the dashboard's access at Google and deletes the stored token. Emails already read stay in the history.",
+            "Deletes the stored token and revokes the dashboard's access at Google (unless a Drive folder you connected still needs it). Emails already read stay in the history.",
         responses: { 204: { description: 'Disconnected' } },
     },
 })
@@ -22,15 +22,10 @@ export default defineApiHandler(async event => {
     const connection = await findMailboxConnectionForUser({ userId: ctx.user.id })
     if (connection) {
         const refreshToken = decryptSecret({ encrypted: connection.refresh_token_encrypted })
-        if (refreshToken) {
-            // Best effort: the token is deleted either way.
-            await googleOAuthClient()
-                .revokeToken(refreshToken)
-                .catch(error =>
-                    console.info('[mail] token revoke failed', error instanceof Error ? error.message : error),
-                )
-        }
         await deleteMailboxConnection({ userId: ctx.user.id })
+        if (refreshToken) {
+            await revokeGoogleAccessIfUnused({ userId: ctx.user.id, refreshToken })
+        }
         await recordAudit({
             actor: ctx.actor,
             action: 'mailbox.disconnected',

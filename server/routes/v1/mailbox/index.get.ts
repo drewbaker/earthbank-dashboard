@@ -2,6 +2,7 @@ import { defineRouteMeta } from 'nitropack/runtime'
 import { findMailboxConnectionForUser } from '#server/database/mailboxes.ts'
 import { defineApiHandler } from '#server/utils/api.ts'
 import { requireUser } from '#server/utils/auth.ts'
+import { hasGoogleScope } from '#server/utils/auth/google.ts'
 import { config } from '#server/utils/config.ts'
 import { toIsoDateTime } from '#server/utils/dates.ts'
 import { forwardingAddressFor } from '#server/utils/mail/inbound.ts'
@@ -32,6 +33,7 @@ export default defineApiHandler(async event => {
                   status: connection.status === 'error' ? 'error' : 'active',
                   last_synced_at: toIsoDateTime({ date: connection.last_synced_at }),
                   last_error: connection.last_error,
+                  can_create_drafts: hasGoogleScope({ grantedScopes: connection.scopes, scope: 'gmail.compose' }),
               }
             : null,
         forwarding_address: await forwardingAddressFor({ userId: ctx.user.id }),

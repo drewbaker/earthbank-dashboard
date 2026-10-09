@@ -41,6 +41,8 @@ export const Funder = z.object({
     materials_sent_at: DateOnly.nullable(),
     last_contact_at: DateOnly.nullable(),
     last_contact_note: z.string().nullable(),
+    /** When the funder's latest email is theirs (they're waiting on us), when they sent it. */
+    awaiting_reply_since: IsoDateTime.nullable(),
     notes: z.string().nullable(),
     owner: UserSummary.nullable(),
     status: z.enum(FUNDER_STATUSES),

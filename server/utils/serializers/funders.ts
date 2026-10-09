@@ -1,6 +1,7 @@
 import type { Contact as ContactRow } from '#server/generated/prisma/client.ts'
 import type { FunderSummaryRow } from '#server/database/funders.ts'
 import type { OpportunityRow } from '#server/database/opportunities.ts'
+import { config } from '#server/utils/config.ts'
 import { centsToNumber, toDateOnly, toIsoDateTime } from '#server/utils/dates.ts'
 import { serializeUserSummary } from '#server/utils/serializers/common.ts'
 import { serializeContact } from '#server/utils/serializers/contacts.ts'
@@ -15,6 +16,7 @@ import type {
 } from '#shared/constants/pipeline.ts'
 import { GOAL_TYPES, OPPORTUNITY_STAGE_DETAILS } from '#shared/constants/pipeline.ts'
 import type { Funder, FunderDetail } from '#shared/schemas/index.ts'
+import { emailDomain } from '#shared/utils/email-addresses.ts'
 import type { StageProbabilities } from '#shared/utils/probability.ts'
 import { opportunityProbability, weightedAmountCents } from '#shared/utils/probability.ts'
 
@@ -73,6 +75,7 @@ export function serializeFunder({
         materials_sent_at: toDateOnly({ date: funder.materials_sent_at }),
         last_contact_at: toDateOnly({ date: funder.last_contact_at }),
         last_contact_note: funder.last_contact_note,
+        awaiting_reply_since: awaitingReplySince({ latestEmail: funder.emails[0] ?? null }),
         notes: funder.notes,
         owner: serializeUserSummary({ user: funder.owner }),
         status: funder.status as FunderStatus,
@@ -109,4 +112,17 @@ export function serializeFunderDetail({
         contacts: contacts.map(contact => serializeContact({ contact })),
         opportunities: opportunities.map(opportunity => serializeOpportunity({ opportunity, stageProbabilities })),
     }
+}
+
+/**
+ * When the funder's latest email is from them (not from Earth Bank), the ball is in our court.
+ *
+ * @param input.latestEmail - The latest relevant email with this funder, if any.
+ * @returns When they wrote, or null when we sent the last email (or there is none).
+ */
+function awaitingReplySince({ latestEmail }: { latestEmail: { from_address: string; sent_at: Date } | null }) {
+    if (!latestEmail || config.internalEmailDomains.includes(emailDomain({ email: latestEmail.from_address }))) {
+        return null
+    }
+    return toIsoDateTime({ date: latestEmail.sent_at })
 }

@@ -223,6 +223,18 @@ Status: hardening done; deploying needs the credentials listed in `docs/deploy-r
 - [x] Production build smoke test (all pages and APIs 200; jobs bundle has all five job classes; a database-touching job runs in a Sidequest worker thread)
 - [ ] Deploy, smoke-test sign-in with a non-Earth-Bank Google account (must be refused), run a Bookeeping.ai sync, forward a test email
 
+## Phase 7: Email drafts, Drive knowledge, task ordering, in-app import
+
+Status: done (requested after v1). Needs the Google Drive API enabled and people to reconnect Gmail once (the new `gmail.compose` scope).
+
+- [x] Drag-to-reorder tasks within a milestone (`TasksSortableList`, sortablejs via `@vueuse/integrations`, touch-friendly with a short press), saved through `POST /v1/tasks/reorder`
+- [x] "Reply needed" flag on funders whose latest relevant email is theirs (`awaiting_reply_since`), shown on the pipeline and funder page
+- [x] **Draft email** on the funder page and per opportunity: `POST /v1/funders/{id}/reply-draft` reads the latest thread with the funder live from the author's Gmail (nothing stored), plus the pipeline record and Drive documents, and returns a reply-all draft (recipients and subject set in code, body and "before sending" notes from the AI). `POST /v1/mailbox/drafts` saves it to Gmail drafts in the thread (`gmail.compose`; never sends)
+- [x] **Knowledge** (Settings → Knowledge): connect Drive folders (`drive.readonly`, incremental auth, token per folder); `SyncKnowledgeJob` nightly and on demand reads Google Docs/Slides (text), Sheets and .xlsx (every tab), PDFs and text files, skipping unchanged files; documents can be pinned (always read in full) or excluded. When everything fits about 300k characters it all goes to the AI (cached); otherwise pinned documents plus the best-matching passages (BM25)
+- [x] Gmail and Drive share one Google grant per person, so disconnecting either only revokes at Google when nothing else uses it; deactivating someone pauses folders they connected
+- [x] **Import** (Settings → Import): upload the .xlsx, preview, import; same importer as the CLI
+- [x] Tests: `knowledge-selection.test.ts`, `email-draft-compose.test.ts`, `email-drafts-and-knowledge.test.ts`
+
 ---
 
 ## Later (not v1)

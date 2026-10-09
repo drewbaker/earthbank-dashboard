@@ -29,7 +29,7 @@ const connectResult = computed(() => {
             wrong_account: { color: 'error' as const, text: 'Connect the same Google account you sign in with.' },
             not_granted: {
                 color: 'warning' as const,
-                text: 'Google did not grant read access to mail. Try again and allow access.',
+                text: 'Google did not grant access to mail. Try again and allow access.',
             },
         }[typeof result === 'string' ? result : ''] ?? null
     )
@@ -122,7 +122,8 @@ async function copyAddress() {
                 <p class="text-sm text-muted">
                     The dashboard reads only email to or from people and domains in the pipeline, every 15 minutes. It
                     keeps a short summary of each, never the email itself, and suggests pipeline updates you can review
-                    on the Activity page.
+                    on the Activity page. It can also save AI-drafted replies to your Gmail drafts; it never sends
+                    email.
                 </p>
             </div>
             <UCard>
@@ -148,17 +149,20 @@ async function copyAddress() {
                         <p v-if="mailbox.connection.last_error" class="text-error">
                             {{ mailbox.connection.last_error }}
                         </p>
+                        <p v-else-if="!mailbox.connection.can_create_drafts" class="text-warning">
+                            Reconnect to let the dashboard save drafted replies to your Gmail.
+                        </p>
                     </div>
                     <div class="flex gap-2">
                         <UButton
-                            v-if="mailbox.connection.status === 'error'"
+                            v-if="mailbox.connection.status === 'error' || !mailbox.connection.can_create_drafts"
                             to="/auth/google/gmail"
                             external
                             label="Reconnect"
                             variant="solid"
                         />
                         <UButton
-                            v-else
+                            v-if="mailbox.connection.status === 'active'"
                             icon="i-lucide-refresh-cw"
                             label="Sync now"
                             :loading="isSyncing"
@@ -175,7 +179,7 @@ async function copyAddress() {
                 </div>
                 <div v-else class="flex flex-wrap items-center justify-between gap-3">
                     <p class="text-sm text-muted">
-                        Not connected. Google will ask you to allow read-only access to your mail.
+                        Not connected. Google will ask you to allow reading your mail and saving drafts.
                     </p>
                     <UButton
                         to="/auth/google/gmail"
