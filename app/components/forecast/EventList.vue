@@ -4,6 +4,7 @@ import type { ForecastEvent } from '#shared/forecast/project-runway.ts'
 import { formatDate } from '~/utils/format.ts'
 
 const props = defineProps<{ events: ForecastEvent[]; limit?: number }>()
+const emit = defineEmits<{ editPlannedExpense: [plannedExpenseId: string] }>()
 
 const isExpanded = ref(false)
 const visibleEvents = computed(() =>
@@ -27,7 +28,23 @@ const SOURCE_DETAILS: Record<ForecastEvent['source'], { label: string; icon: str
             >
                 <UIcon :name="SOURCE_DETAILS[event.source].icon" class="mt-0.5 size-4 shrink-0 text-muted" />
                 <div class="min-w-0 flex-1">
-                    <p class="truncate text-highlighted">{{ event.label }}</p>
+                    <button
+                        v-if="event.planned_expense_id"
+                        type="button"
+                        class="max-w-full truncate text-left text-highlighted hover:underline"
+                        :title="`Edit ${event.label}`"
+                        @click="emit('editPlannedExpense', event.planned_expense_id)"
+                    >
+                        {{ event.label }}
+                    </button>
+                    <NuxtLink
+                        v-else-if="event.funder_id"
+                        :to="`/pipeline/funders/${event.funder_id}`"
+                        class="block truncate text-highlighted hover:underline"
+                    >
+                        {{ event.label }}
+                    </NuxtLink>
+                    <p v-else class="truncate text-highlighted">{{ event.label }}</p>
                     <p class="text-xs text-muted">
                         {{ formatDate({ value: event.date }) }} · {{ SOURCE_DETAILS[event.source].label
                         }}<template v-if="event.note"> · {{ event.note }}</template>

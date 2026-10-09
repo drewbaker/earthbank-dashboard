@@ -102,6 +102,14 @@ defineExpose({ openForm })
                     <p class="text-xs text-muted">{{ describeExpense({ plannedExpense }) }}</p>
                 </button>
                 <UButton
+                    icon="i-lucide-pencil"
+                    size="xs"
+                    color="neutral"
+                    variant="ghost"
+                    :aria-label="`Edit ${plannedExpense.label}`"
+                    @click="openForm({ plannedExpense })"
+                />
+                <UButton
                     icon="i-lucide-trash-2"
                     size="xs"
                     color="neutral"

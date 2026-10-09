@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useTemplateRef, watch } from 'vue'
 import { useAsyncData, useSeoMeta, useToast } from '#imports'
 import { GOAL_TYPE_DETAILS } from '#shared/constants/pipeline.ts'
 import type { RunwayEnd } from '#shared/forecast/project-runway.ts'
-import type { Scenario, ScenarioAdjustment, ScenarioList } from '#shared/schemas/index.ts'
+import type { PlannedExpense, Scenario, ScenarioAdjustment, ScenarioList } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { useForecast } from '~/composables/useForecast.ts'
 import { describeAdjustment, ADJUSTMENT_KIND_DETAILS } from '~/utils/scenario-descriptions.ts'
@@ -91,6 +91,25 @@ function runwayText({ end }: { end: RunwayEnd | undefined }) {
         return '—'
     }
     return end.out_date ? `${end.months} mo · ${formatDate({ value: end.out_date })}` : '24+ mo'
+}
+
+const plannedExpensesCard = useTemplateRef<{
+    openForm: (input: { plannedExpense: PlannedExpense | null }) => void
+}>('plannedExpensesCard')
+
+/**
+ * Open a planned expense for editing (from the "What moves the line" list).
+ *
+ * @param input.plannedExpenseId - The expense.
+ * @returns Resolves once the form is open.
+ */
+async function editPlannedExpense({ plannedExpenseId }: { plannedExpenseId: string }) {
+    try {
+        const plannedExpense = await api<PlannedExpense>({ path: `/planned-expenses/${plannedExpenseId}` })
+        plannedExpensesCard.value?.openForm({ plannedExpense })
+    } catch (error) {
+        toast.add({ title: apiErrorMessage({ error }), color: 'error' })
+    }
 }
 
 /**
@@ -201,10 +220,18 @@ async function deleteScenario() {
                                 }}. Hover the chart to see them month by month.
                             </p>
                         </template>
-                        <ForecastEventList :events="(scenarioProjection ?? baseProjection).events" :limit="8" />
+                        <ForecastEventList
+                            :events="(scenarioProjection ?? baseProjection).events"
+                            :limit="8"
+                            @edit-planned-expense="plannedExpenseId => editPlannedExpense({ plannedExpenseId })"
+                        />
                     </UCard>
 
-                    <ForecastPlannedExpenses :today="forecastInputs!.today" @changed="inputs.refresh()" />
+                    <ForecastPlannedExpenses
+                        ref="plannedExpensesCard"
+                        :today="forecastInputs!.today"
+                        @changed="inputs.refresh()"
+                    />
 
                     <UCard :ui="{ body: 'p-0 sm:p-0' }">
                         <table class="w-full text-sm">

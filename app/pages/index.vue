@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { navigateTo, useAsyncData, useSeoMeta } from '#imports'
+import { navigateTo, useAsyncData, useSeoMeta, useToast } from '#imports'
 import { MILESTONE_KIND_DETAILS } from '#shared/constants/pipeline.ts'
 import type { RunwayEnd } from '#shared/forecast/project-runway.ts'
-import type { CashSummary, ChangeEventList, MilestoneList, TaskList } from '#shared/schemas/index.ts'
+import type { CashSummary, ChangeEventList, MilestoneList, PlannedExpense, TaskList } from '#shared/schemas/index.ts'
 import { addDays } from '#shared/utils/calendar-dates.ts'
-import { useApi } from '~/composables/useApi.ts'
+import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { useAuth } from '~/composables/useAuth.ts'
 import { useChangeEventActions } from '~/composables/useChangeEventActions.ts'
 import { useForecast } from '~/composables/useForecast.ts'
@@ -20,6 +20,25 @@ const { currentUser } = useAuth()
 const { goals } = usePipelineReference()
 const { inputs, isReady, baseProjection } = useForecast()
 const isPlannedExpenseOpen = ref(false)
+const editingPlannedExpense = ref<PlannedExpense | null>(null)
+const toast = useToast()
+
+/**
+ * Open the planned expense form: empty for a new one, or loaded with an existing one to edit.
+ *
+ * @param input.plannedExpenseId - The expense to edit, or null for a new one.
+ * @returns Resolves once the form is open.
+ */
+async function openPlannedExpense({ plannedExpenseId }: { plannedExpenseId: string | null }) {
+    try {
+        editingPlannedExpense.value = plannedExpenseId
+            ? await api<PlannedExpense>({ path: `/planned-expenses/${plannedExpenseId}` })
+            : null
+        isPlannedExpenseOpen.value = true
+    } catch (error) {
+        toast.add({ title: apiErrorMessage({ error }), color: 'error' })
+    }
+}
 
 const { data: cash } = await useAsyncData('overview.cash', () => api<CashSummary>({ path: '/cash/summary' }))
 
@@ -156,7 +175,7 @@ function describeRunway({ end }: { end: RunwayEnd }) {
                                     icon="i-lucide-receipt"
                                     size="sm"
                                     color="neutral"
-                                    @click="isPlannedExpenseOpen = true"
+                                    @click="openPlannedExpense({ plannedExpenseId: null })"
                                 />
                                 <UButton
                                     to="/forecast"
@@ -170,12 +189,18 @@ function describeRunway({ end }: { end: RunwayEnd }) {
                     <ForecastRunwayChart :projection="baseProjection" :height="240" />
                     <template v-if="baseProjection.events.length" #footer>
                         <p class="mb-1 text-xs font-medium text-muted">Coming up</p>
-                        <ForecastEventList :events="baseProjection.events" :limit="4" class="-mx-4" />
+                        <ForecastEventList
+                            :events="baseProjection.events"
+                            :limit="4"
+                            class="-mx-4"
+                            @edit-planned-expense="plannedExpenseId => openPlannedExpense({ plannedExpenseId })"
+                        />
                     </template>
                 </UCard>
                 <ForecastPlannedExpenseModal
                     v-if="inputs.data.value"
                     v-model:open="isPlannedExpenseOpen"
+                    :planned-expense="editingPlannedExpense"
                     :today="inputs.data.value.today"
                     @saved="inputs.refresh()"
                 />

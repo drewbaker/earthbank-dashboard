@@ -13,6 +13,7 @@ export const ForecastInputs = z.object({
         z.object({
             id: z.string(),
             name: z.string(),
+            funder_id: z.string(),
             funder_name: z.string(),
             goal_type: z.enum(GOAL_TYPES),
             stage: z.enum(OPPORTUNITY_STAGES),

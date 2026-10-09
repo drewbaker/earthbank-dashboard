@@ -35,6 +35,7 @@ export async function loadForecastInputs({ today }: { today: string }): Promise<
             return {
                 id: opportunity.id,
                 name: opportunity.name,
+                funder_id: opportunity.funder.id,
                 funder_name: opportunity.funder.name,
                 goal_type: opportunity.goal_type,
                 stage: opportunity.stage,

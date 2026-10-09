@@ -9,6 +9,7 @@ import { addDays, addMonths, daysBetween, firstOfMonth, lastOfMonth } from '#sha
 export type ForecastOpportunity = {
     id: string
     name: string
+    funder_id?: string
     funder_name: string
     goal_type: GoalType
     stage: OpportunityStage
@@ -44,6 +45,10 @@ export type ForecastEvent = {
     is_monthly: boolean
     /** Extra context, e.g. "35% likely" or "Expected date has passed". */
     note: string | null
+    /** What the event comes from, so it can link to it. */
+    opportunity_id: string | null
+    funder_id: string | null
+    planned_expense_id: string | null
 }
 
 export type ForecastPoint = {
@@ -57,6 +62,7 @@ export type ForecastPoint = {
 
 export type ForecastInflow = {
     opportunity_id: string
+    funder_id: string | null
     label: string
     goal_type: GoalType
     /** When the money is modeled to land (overdue receipts are moved to today). */
@@ -305,6 +311,7 @@ function buildInflows({
         const isOverdue = opportunity.expected_receipt_at < today
         inflows.push({
             opportunity_id: opportunity.id,
+            funder_id: opportunity.funder_id ?? null,
             label,
             goal_type: opportunity.goal_type,
             date: isOverdue ? today : opportunity.expected_receipt_at,
@@ -370,7 +377,17 @@ function buildEvents({
     adjustments: ScenarioAdjustment[]
     plannedAdjustments: ScenarioAdjustment[]
 }) {
-    const planned = new Set<ScenarioAdjustment>(plannedAdjustments)
+    const planned = new Map(
+        plannedAdjustments.map(adjustment => [
+            adjustment as ScenarioAdjustment,
+            (adjustment as { planned_expense_id?: string }).planned_expense_id ?? null,
+        ]),
+    )
+    const links = (adjustment: ScenarioAdjustment) => ({
+        opportunity_id: null,
+        funder_id: null,
+        planned_expense_id: planned.get(adjustment) ?? null,
+    })
     const events: ForecastEvent[] = inflows.map(inflow => ({
         date: inflow.date,
         label: inflow.label,
@@ -383,6 +400,9 @@ function buildEvents({
             : inflow.committed_cents === 0 && inflow.weighted_cents > 0
               ? 'Weighted by its chance of landing'
               : null,
+        opportunity_id: inflow.opportunity_id,
+        funder_id: inflow.funder_id,
+        planned_expense_id: null,
     }))
     for (const adjustment of adjustments) {
         const source = planned.has(adjustment) ? 'planned_expense' : 'scenario'
@@ -395,6 +415,7 @@ function buildEvents({
                 weighted_cents: adjustment.amount_cents,
                 is_monthly: false,
                 note: null,
+                ...links(adjustment),
             })
         } else if (adjustment.kind === 'add_recurring_cost') {
             events.push({
@@ -405,6 +426,7 @@ function buildEvents({
                 weighted_cents: -adjustment.monthly_cents,
                 is_monthly: true,
                 note: adjustment.ends_at ? `Monthly until ${adjustment.ends_at.slice(0, 7)}` : 'Monthly, ongoing',
+                ...links(adjustment),
             })
         } else if (adjustment.kind === 'change_burn_pct') {
             events.push({
@@ -415,6 +437,7 @@ function buildEvents({
                 weighted_cents: 0,
                 is_monthly: true,
                 note: null,
+                ...links(adjustment),
             })
         }
     }

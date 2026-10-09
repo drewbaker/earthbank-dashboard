@@ -37,9 +37,11 @@ const tooltipSeries = computed(() =>
     })),
 )
 
+// Lines are drawn in this order, so committed comes after weighted: where the two are equal (before
+// any pipeline money lands) the committed line stays visible on top instead of hiding underneath.
 const categories = computed(() => ({
-    committed: { name: 'Committed money only', color: palette.value.committed },
     ...(props.committedOnly ? {} : { weighted: { name: 'Weighted pipeline', color: palette.value.weighted } }),
+    committed: { name: 'Committed money only', color: palette.value.committed },
     ...(props.scenarioProjection ? { scenario: { name: 'Scenario (weighted)', color: palette.value.scenario } } : {}),
 }))
 
