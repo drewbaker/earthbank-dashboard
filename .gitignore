@@ -1,0 +1,16 @@
+node_modules
+.nuxt
+.output
+.nitro
+.cache
+.data
+dist
+logs
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+server/generated
+# Real spreadsheets and emails stay local.
+tests/fixtures/private

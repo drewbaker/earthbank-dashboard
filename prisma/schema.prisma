@@ -1,0 +1,72 @@
+// Earth Bank Dashboard schema.
+//
+// Conventions:
+// - Models are PascalCase and @@map to snake_case tables; every field is snake_case so Prisma rows,
+//   API JSON and form state look the same.
+// - IDs are prefixed, time-sortable strings generated in app code (newId in server/utils/ids.ts),
+//   never by the database.
+// - Money is integer cents in USD.
+// - The database URL comes from prisma.config.ts (derived from DATA_DIR).
+
+generator client {
+    provider            = "prisma-client"
+    output              = "../server/generated/prisma"
+    moduleFormat        = "esm"
+    importFileExtension = "ts"
+}
+
+datasource db {
+    provider = "sqlite"
+}
+
+model User {
+    id              String    @id
+    google_sub      String    @unique
+    email           String    @unique
+    name            String
+    avatar_url      String?
+    role            String    @default("admin")
+    last_sign_in_at DateTime?
+    deactivated_at  DateTime?
+    created_at      DateTime  @default(now())
+    updated_at      DateTime  @updatedAt
+
+    sessions  Session[]
+    audit_log AuditLog[]
+
+    @@map("user")
+}
+
+model Session {
+    id           String   @id
+    user_id      String
+    token_hash   String   @unique
+    expires_at   DateTime
+    ip           String?
+    user_agent   String?
+    created_at   DateTime @default(now())
+    last_seen_at DateTime @default(now())
+
+    user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+    @@index([user_id])
+    @@index([expires_at])
+    @@map("session")
+}
+
+model AuditLog {
+    id            String   @id
+    actor_user_id String?
+    action        String
+    entity_type   String
+    entity_id     String
+    changes       Json?
+    ip            String?
+    created_at    DateTime @default(now())
+
+    actor_user User? @relation(fields: [actor_user_id], references: [id], onDelete: SetNull)
+
+    @@index([entity_type, entity_id])
+    @@index([created_at])
+    @@map("audit_log")
+}

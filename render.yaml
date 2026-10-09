@@ -1,0 +1,78 @@
+# Render Blueprint — Earth Bank Dashboard
+#
+# One web service runs everything (HTTP + Sidequest workers + Nitro cron) with
+# a persistent disk for SQLite and files. A disk pins the service to a single
+# instance and disables zero-downtime deploys; jobs are resumable so a deploy
+# restart is safe.
+#
+# After the first deploy (details in docs/deploy-runbook.md):
+#   1. Add the custom domain dashboard.theearthbank.org (CNAME to the service).
+#   2. Enable edge caching (Settings → Edge Caching → "All files").
+#   3. Add https://dashboard.theearthbank.org/auth/google/callback to the Google
+#      OAuth client's redirect URIs (Internal app in the Earth Bank Workspace).
+#   4. Import the pipeline from the service shell:
+#        npm run import:pipeline -- /var/data/imports/pipeline.xlsx
+#   Accounts are created on first Google sign-in; there is no admin bootstrap.
+
+services:
+    - type: web
+      name: earthbank-dashboard
+      runtime: node
+      plan: standard
+      region: oregon
+      buildCommand: npm ci && npm run build
+      # Migrations run at start: the disk isn't mounted during build/pre-deploy.
+      startCommand: npm run start:render
+      healthCheckPath: /healthz
+      disk:
+          name: data
+          mountPath: /var/data
+          sizeGB: 10
+      envVars:
+          # Current Node LTS major; keep in step with engines.node.
+          - key: NODE_VERSION
+            value: '24'
+          - key: NODE_ENV
+            value: production
+          - key: DATA_DIR
+            value: /var/data
+          - key: APP_URL
+            value: https://dashboard.theearthbank.org
+          - key: SESSION_TTL_DAYS
+            value: '7'
+          - key: NITRO_RUN_BACKGROUND_WORKERS
+            value: 'true'
+          # Encrypts stored Gmail refresh tokens and the OAuth state cookie (AES-256-GCM).
+          # Never rotate without re-encrypting stored tokens.
+          - key: APP_ENCRYPTION_KEY
+            generateValue: true
+          - key: GOOGLE_CLIENT_ID
+            sync: false
+          - key: GOOGLE_CLIENT_SECRET
+            sync: false
+          - key: GOOGLE_WORKSPACE_DOMAIN
+            value: theearthbank.org
+          - key: BOOKEEPING_API_BASE
+            value: https://api.bookeeping.ai/public-api
+          - key: BOOKEEPING_API_KEY
+            sync: false
+          - key: AI_PROVIDER
+            value: anthropic
+          - key: AI_MODEL
+            value: claude-haiku-5-5
+          - key: AI_FALLBACK_MODEL
+            value: claude-sonnet-5-5
+          - key: ANTHROPIC_API_KEY
+            sync: false
+          - key: EMAIL_FROM
+            value: Earth Bank Dashboard <noreply@mail.theearthbank.org>
+          - key: RESEND_API_KEY
+            sync: false
+          - key: RESEND_WEBHOOK_SECRET
+            sync: false
+          - key: INBOUND_EMAIL_DOMAIN
+            value: in.theearthbank.org
+          - key: SIDEQUEST_DASHBOARD_USER
+            value: admin
+          - key: SIDEQUEST_DASHBOARD_PASSWORD
+            generateValue: true

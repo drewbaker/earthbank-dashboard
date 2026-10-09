@@ -1,0 +1,36 @@
+@import 'tailwindcss';
+@import '@nuxt/ui';
+
+@theme {
+    --font-sans: 'Public Sans', sans-serif;
+}
+
+/* Tokens copied from the Earth Bank loans app so the two products match. */
+:root,
+.light {
+    --ui-radius: 0.25rem;
+    --ui-primary: var(--ui-color-primary-700);
+    --ui-bg: var(--ui-color-neutral-50);
+    --ui-bg-muted: var(--ui-color-neutral-100);
+    --ui-text-inverted: var(--ui-color-neutral-50);
+}
+
+.dark {
+    --ui-primary: var(--ui-color-primary-400);
+    --ui-bg: var(--ui-color-neutral-900);
+    --ui-bg-muted: var(--ui-color-neutral-800);
+    --ui-text-inverted: var(--ui-color-neutral-900);
+}
+
+/* Tailwind v4 dropped the pointer cursor on buttons; restore it for every interactive control. */
+@layer base {
+    button:not(:disabled),
+    [role='button']:not([aria-disabled='true']),
+    [role='switch']:not([aria-disabled='true']),
+    [role='tab']:not([aria-disabled='true']),
+    [role='option']:not([aria-disabled='true']),
+    [role='menuitem']:not([aria-disabled='true']),
+    select:not(:disabled) {
+        cursor: pointer;
+    }
+}
