@@ -49,14 +49,15 @@ async function createLink(event: FormSubmitEvent<z.output<typeof CreateShareLink
 }
 
 /**
- * Copy a link to the clipboard.
+ * Copy text to the clipboard.
  *
- * @param input.link - The link.
+ * @param input.text - What to copy.
+ * @param input.title - The confirmation shown.
  * @returns Resolves once copied.
  */
-async function copyLink({ link }: { link: ShareLink }) {
-    await navigator.clipboard.writeText(link.url)
-    toast.add({ title: 'Copied', color: 'success' })
+async function copyText({ text, title }: { text: string; title: string }) {
+    await navigator.clipboard.writeText(text)
+    toast.add({ title, color: 'success' })
 }
 
 /**
@@ -127,6 +128,13 @@ async function revokeLink({ link }: { link: ShareLink }) {
                             <p class="font-medium text-highlighted">{{ link.label }}</p>
                             <p class="truncate text-xs text-muted">{{ link.url }}</p>
                             <p class="text-xs text-muted">
+                                Password:
+                                <code v-if="link.password" class="rounded bg-elevated px-1 text-highlighted">{{
+                                    link.password
+                                }}</code>
+                                <template v-else>not saved (made before passwords were kept; make a new link)</template>
+                            </p>
+                            <p class="text-xs text-muted">
                                 Made by {{ link.created_by?.name ?? 'a former team member' }}
                                 {{ formatRelativeTime({ value: link.created_at }) }} ·
                                 {{
@@ -142,7 +150,15 @@ async function revokeLink({ link }: { link: ShareLink }) {
                             color="neutral"
                             icon="i-lucide-copy"
                             label="Copy link"
-                            @click="copyLink({ link })"
+                            @click="copyText({ text: link.url, title: 'Link copied' })"
+                        />
+                        <UButton
+                            v-if="link.password"
+                            size="sm"
+                            color="neutral"
+                            icon="i-lucide-key-round"
+                            label="Copy password"
+                            @click="copyText({ text: link.password, title: 'Password copied' })"
                         />
                         <UButton
                             size="sm"

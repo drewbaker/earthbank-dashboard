@@ -10,588 +10,591 @@
 // - The database URL comes from prisma.config.ts (derived from DATA_DIR).
 
 generator client {
-  provider            = "prisma-client"
-  output              = "../server/generated/prisma"
-  moduleFormat        = "esm"
-  importFileExtension = "ts"
+    provider            = "prisma-client"
+    output              = "../server/generated/prisma"
+    moduleFormat        = "esm"
+    importFileExtension = "ts"
 }
 
 datasource db {
-  provider = "sqlite"
+    provider = "sqlite"
 }
 
 model User {
-  id              String    @id
-  google_sub      String    @unique
-  email           String    @unique
-  name            String
-  avatar_url      String?
-  role            String    @default("admin")
-  last_sign_in_at DateTime?
-  deactivated_at  DateTime?
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @updatedAt
+    id              String    @id
+    google_sub      String    @unique
+    email           String    @unique
+    name            String
+    avatar_url      String?
+    role            String    @default("admin")
+    last_sign_in_at DateTime?
+    deactivated_at  DateTime?
+    created_at      DateTime  @default(now())
+    updated_at      DateTime  @updatedAt
 
-  sessions            Session[]
-  audit_log           AuditLog[]
-  owned_funders       Funder[]
-  owned_opportunities Opportunity[]
-  change_events       ChangeEvent[]      @relation("change_event_actor")
-  resolved_changes    ChangeEvent[]      @relation("change_event_resolver")
-  assigned_tasks      Task[]             @relation("task_assignee")
-  created_tasks       Task[]             @relation("task_creator")
-  created_milestones  Milestone[]
-  comments            Comment[]
-  attachments         Attachment[]
-  scenarios           Scenario[]
-  planned_expenses    PlannedExpense[]
-  mailbox_connection  MailboxConnection?
-  inbound_addresses   InboundAddress[]
-  email_evidence      EmailEvidence[]
-  knowledge_sources   KnowledgeSource[]
-  share_links         ShareLink[]
+    sessions            Session[]
+    audit_log           AuditLog[]
+    owned_funders       Funder[]
+    owned_opportunities Opportunity[]
+    change_events       ChangeEvent[]      @relation("change_event_actor")
+    resolved_changes    ChangeEvent[]      @relation("change_event_resolver")
+    assigned_tasks      Task[]             @relation("task_assignee")
+    created_tasks       Task[]             @relation("task_creator")
+    created_milestones  Milestone[]
+    comments            Comment[]
+    attachments         Attachment[]
+    scenarios           Scenario[]
+    planned_expenses    PlannedExpense[]
+    mailbox_connection  MailboxConnection?
+    inbound_addresses   InboundAddress[]
+    email_evidence      EmailEvidence[]
+    knowledge_sources   KnowledgeSource[]
+    share_links         ShareLink[]
 
-  @@map("user")
+    @@map("user")
 }
 
 model Session {
-  id           String   @id
-  user_id      String
-  token_hash   String   @unique
-  expires_at   DateTime
-  ip           String?
-  user_agent   String?
-  created_at   DateTime @default(now())
-  last_seen_at DateTime @default(now())
+    id           String   @id
+    user_id      String
+    token_hash   String   @unique
+    expires_at   DateTime
+    ip           String?
+    user_agent   String?
+    created_at   DateTime @default(now())
+    last_seen_at DateTime @default(now())
 
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+    user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@index([user_id])
-  @@index([expires_at])
-  @@map("session")
+    @@index([user_id])
+    @@index([expires_at])
+    @@map("session")
 }
 
 model AuditLog {
-  id            String   @id
-  actor_user_id String?
-  action        String
-  entity_type   String
-  entity_id     String
-  changes       Json?
-  ip            String?
-  created_at    DateTime @default(now())
+    id            String   @id
+    actor_user_id String?
+    action        String
+    entity_type   String
+    entity_id     String
+    changes       Json?
+    ip            String?
+    created_at    DateTime @default(now())
 
-  actor_user User? @relation(fields: [actor_user_id], references: [id], onDelete: SetNull)
+    actor_user User? @relation(fields: [actor_user_id], references: [id], onDelete: SetNull)
 
-  @@index([entity_type, entity_id])
-  @@index([created_at])
-  @@map("audit_log")
+    @@index([entity_type, entity_id])
+    @@index([created_at])
+    @@map("audit_log")
 }
 
 // An organization that might give or lend us money.
 model Funder {
-  id                  String    @id
-  name                String
-  // Lowercased, punctuation-free name; keeps "IKEA Foundation" and "Ikea foundation" as one funder.
-  name_key            String    @unique
-  // foundation | dfi | corporate | individual | government | other
-  kind                String    @default("foundation")
-  // t1 (hot) … t4 (target, no relationship)
-  tier                String?
-  // no_contact | early | active | advanced | committed | dead
-  relationship_status String    @default("no_contact")
-  geo_focus           String?
-  // "Design Grant Only", "Above $10M", … as written in the pipeline sheet.
-  potential_size      String?
-  // Domains whose mail belongs to this funder (JSON array of strings); never free-mail domains.
-  email_domains       Json      @default("[]")
-  materials_sent_at   DateTime?
-  last_contact_at     DateTime?
-  last_contact_note   String?
-  notes               String?
-  owner_id            String?
-  // active | draft (drafts are proposed by the AI from forwarded email and wait for review)
-  status              String    @default("active")
-  archived_at         DateTime?
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
+    id                  String    @id
+    name                String
+    // Lowercased, punctuation-free name; keeps "IKEA Foundation" and "Ikea foundation" as one funder.
+    name_key            String    @unique
+    // foundation | dfi | corporate | individual | government | other
+    kind                String    @default("foundation")
+    // t1 (hot) … t4 (target, no relationship)
+    tier                String?
+    // no_contact | early | active | advanced | committed | dead
+    relationship_status String    @default("no_contact")
+    geo_focus           String?
+    // "Design Grant Only", "Above $10M", … as written in the pipeline sheet.
+    potential_size      String?
+    // Domains whose mail belongs to this funder (JSON array of strings); never free-mail domains.
+    email_domains       Json      @default("[]")
+    materials_sent_at   DateTime?
+    last_contact_at     DateTime?
+    last_contact_note   String?
+    notes               String?
+    owner_id            String?
+    // active | draft (drafts are proposed by the AI from forwarded email and wait for review)
+    status              String    @default("active")
+    archived_at         DateTime?
+    created_at          DateTime  @default(now())
+    updated_at          DateTime  @updatedAt
 
-  owner         User?           @relation(fields: [owner_id], references: [id], onDelete: SetNull)
-  contacts      Contact[]
-  opportunities Opportunity[]
-  milestones    Milestone[]
-  tasks         Task[]
-  emails        EmailEvidence[]
+    owner         User?           @relation(fields: [owner_id], references: [id], onDelete: SetNull)
+    contacts      Contact[]
+    opportunities Opportunity[]
+    milestones    Milestone[]
+    tasks         Task[]
+    emails        EmailEvidence[]
 
-  @@index([tier])
-  @@index([relationship_status])
-  @@map("funder")
+    @@index([tier])
+    @@index([relationship_status])
+    @@map("funder")
 }
 
 // A person at a funder.
 model Contact {
-  id          String    @id
-  funder_id   String
-  name        String
-  title       String?
-  // Unique when present; SQLite allows many NULLs.
-  email       String?   @unique
-  notes       String?
-  archived_at DateTime?
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @updatedAt
+    id          String    @id
+    funder_id   String
+    name        String
+    title       String?
+    // Unique when present; SQLite allows many NULLs.
+    email       String?   @unique
+    notes       String?
+    archived_at DateTime?
+    created_at  DateTime  @default(now())
+    updated_at  DateTime  @updatedAt
 
-  funder Funder @relation(fields: [funder_id], references: [id], onDelete: Cascade)
+    funder Funder @relation(fields: [funder_id], references: [id], onDelete: Cascade)
 
-  @@index([funder_id])
-  @@map("contact")
+    @@index([funder_id])
+    @@map("contact")
 }
 
 // One of the three funding goals every opportunity counts toward.
 model Goal {
-  id                  String    @id
-  // design_grant | opex | lending_capital
-  type                String    @unique
-  name                String
-  target_amount_cents BigInt?
-  target_date         DateTime?
-  notes               String?
-  sort                Int       @default(0)
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
+    id                  String    @id
+    // design_grant | opex | lending_capital
+    type                String    @unique
+    name                String
+    target_amount_cents BigInt?
+    target_date         DateTime?
+    notes               String?
+    sort                Int       @default(0)
+    created_at          DateTime  @default(now())
+    updated_at          DateTime  @updatedAt
 
-  opportunities Opportunity[]
-  milestones    Milestone[]
+    opportunities Opportunity[]
+    milestones    Milestone[]
 
-  @@map("goal")
+    @@map("goal")
 }
 
 // One ask to one funder for one goal.
 model Opportunity {
-  id                   String    @id
-  funder_id            String
-  goal_id              String
-  name                 String
-  // identified | in_discussion | proposal | due_diligence | in_committee | committed (shown as
-  // "Approved") | received | lost (shown as "Declined")
-  stage                String    @default("identified")
-  amount_cents         BigInt?
-  // 0–100; when null the stage's default probability applies.
-  probability_override Int?
-  expected_decision_at DateTime?
-  expected_receipt_at  DateTime?
-  // When it went to the funder's committee (set when the stage moves to in_committee).
-  committee_on         DateTime?
-  // Geographic focus: country codes ("KE"), regions ("region:eastern_africa") or "global".
-  focus_areas          Json      @default("[]")
-  received_at          DateTime?
-  next_step            String?
-  owner_id             String?
-  archived_at          DateTime?
-  created_at           DateTime  @default(now())
-  updated_at           DateTime  @updatedAt
+    id                   String    @id
+    funder_id            String
+    goal_id              String
+    name                 String
+    // identified | in_discussion | proposal | due_diligence | in_committee | committed (shown as
+    // "Approved") | received | lost (shown as "Declined")
+    stage                String    @default("identified")
+    amount_cents         BigInt?
+    // 0–100; when null the stage's default probability applies.
+    probability_override Int?
+    expected_decision_at DateTime?
+    expected_receipt_at  DateTime?
+    // When it went to the funder's committee (set when the stage moves to in_committee).
+    committee_on         DateTime?
+    // Geographic focus: country codes ("KE"), regions ("region:eastern_africa") or "global".
+    focus_areas          Json      @default("[]")
+    received_at          DateTime?
+    next_step            String?
+    owner_id             String?
+    archived_at          DateTime?
+    created_at           DateTime  @default(now())
+    updated_at           DateTime  @updatedAt
 
-  funder     Funder      @relation(fields: [funder_id], references: [id], onDelete: Cascade)
-  goal       Goal        @relation(fields: [goal_id], references: [id])
-  owner      User?       @relation(fields: [owner_id], references: [id], onDelete: SetNull)
-  milestones Milestone[]
-  tasks      Task[]
+    funder     Funder      @relation(fields: [funder_id], references: [id], onDelete: Cascade)
+    goal       Goal        @relation(fields: [goal_id], references: [id])
+    owner      User?       @relation(fields: [owner_id], references: [id], onDelete: SetNull)
+    milestones Milestone[]
+    tasks      Task[]
 
-  @@index([funder_id])
-  @@index([goal_id, stage])
-  @@map("opportunity")
+    @@index([funder_id])
+    @@index([goal_id, stage])
+    @@map("opportunity")
 }
 
 // Every change to a tracked funder or opportunity field, from any source. Written only through
 // applyFieldChanges (server/utils/change-events.ts) so the Activity log is complete.
 model ChangeEvent {
-  id                  String    @id
-  // funder | opportunity
-  entity_type         String
-  entity_id           String
-  field               String
-  from_value          Json?
-  to_value            Json?
-  // manual | import | ai_email | ai_forward
-  source              String
-  // applied | pending | rejected | reverted | superseded
-  status              String
-  actor_user_id       String?
-  evidence_id         String?
-  reason              String?
-  confidence          Float?
-  resolved_at         DateTime?
-  resolved_by_user_id String?
-  created_at          DateTime  @default(now())
+    id                  String    @id
+    // funder | opportunity
+    entity_type         String
+    entity_id           String
+    field               String
+    from_value          Json?
+    to_value            Json?
+    // manual | import | ai_email | ai_forward
+    source              String
+    // applied | pending | rejected | reverted | superseded
+    status              String
+    actor_user_id       String?
+    evidence_id         String?
+    reason              String?
+    confidence          Float?
+    resolved_at         DateTime?
+    resolved_by_user_id String?
+    created_at          DateTime  @default(now())
 
-  actor_user       User?          @relation("change_event_actor", fields: [actor_user_id], references: [id], onDelete: SetNull)
-  resolved_by_user User?          @relation("change_event_resolver", fields: [resolved_by_user_id], references: [id], onDelete: SetNull)
-  evidence         EmailEvidence? @relation(fields: [evidence_id], references: [id], onDelete: SetNull)
+    actor_user       User?          @relation("change_event_actor", fields: [actor_user_id], references: [id], onDelete: SetNull)
+    resolved_by_user User?          @relation("change_event_resolver", fields: [resolved_by_user_id], references: [id], onDelete: SetNull)
+    evidence         EmailEvidence? @relation(fields: [evidence_id], references: [id], onDelete: SetNull)
 
-  @@index([entity_type, entity_id, field])
-  @@index([status])
-  @@index([source])
-  @@map("change_event")
+    @@index([entity_type, entity_id, field])
+    @@index([status])
+    @@index([source])
+    @@map("change_event")
 }
 
 // Small app-wide settings (stage probabilities, burn settings), validated by zod in app code.
 model Setting {
-  key        String   @id
-  value      Json
-  updated_at DateTime @updatedAt
+    key        String   @id
+    value      Json
+    updated_at DateTime @updatedAt
 
-  @@map("setting")
+    @@map("setting")
 }
 
 // A dated funding milestone or event ("UBS decision", "NY Climate Week") that tasks roll up to.
 // It also appears as a marker on the runway forecast.
 model Milestone {
-  id             String    @id
-  title          String
-  description    String?
-  due_at         DateTime
-  // funding | event | internal
-  kind           String    @default("funding")
-  // open | done
-  status         String    @default("open")
-  goal_id        String?
-  opportunity_id String?
-  // Set from the opportunity when there is one, so funder pages find their milestones directly.
-  funder_id      String?
-  created_by_id  String?
-  archived_at    DateTime?
-  created_at     DateTime  @default(now())
-  updated_at     DateTime  @updatedAt
+    id             String    @id
+    title          String
+    description    String?
+    due_at         DateTime
+    // funding | event | internal
+    kind           String    @default("funding")
+    // open | done
+    status         String    @default("open")
+    goal_id        String?
+    opportunity_id String?
+    // Set from the opportunity when there is one, so funder pages find their milestones directly.
+    funder_id      String?
+    created_by_id  String?
+    archived_at    DateTime?
+    created_at     DateTime  @default(now())
+    updated_at     DateTime  @updatedAt
 
-  goal        Goal?        @relation(fields: [goal_id], references: [id], onDelete: SetNull)
-  opportunity Opportunity? @relation(fields: [opportunity_id], references: [id], onDelete: SetNull)
-  funder      Funder?      @relation(fields: [funder_id], references: [id], onDelete: SetNull)
-  created_by  User?        @relation(fields: [created_by_id], references: [id], onDelete: SetNull)
-  tasks       Task[]
+    goal        Goal?        @relation(fields: [goal_id], references: [id], onDelete: SetNull)
+    opportunity Opportunity? @relation(fields: [opportunity_id], references: [id], onDelete: SetNull)
+    funder      Funder?      @relation(fields: [funder_id], references: [id], onDelete: SetNull)
+    created_by  User?        @relation(fields: [created_by_id], references: [id], onDelete: SetNull)
+    tasks       Task[]
 
-  @@index([due_at])
-  @@index([funder_id])
-  @@map("milestone")
+    @@index([due_at])
+    @@index([funder_id])
+    @@map("milestone")
 }
 
 // Something a person has to do, usually for a milestone.
 model Task {
-  id             String    @id
-  title          String
-  description    String?
-  // todo | doing | done
-  status         String    @default("todo")
-  assignee_id    String?
-  due_at         DateTime?
-  milestone_id   String?
-  opportunity_id String?
-  // Set from the opportunity (or milestone) when there is one.
-  funder_id      String?
-  // Order within a milestone; lower first.
-  sort           Int       @default(0)
-  completed_at   DateTime?
-  created_by_id  String?
-  archived_at    DateTime?
-  created_at     DateTime  @default(now())
-  updated_at     DateTime  @updatedAt
+    id             String    @id
+    title          String
+    description    String?
+    // todo | doing | done
+    status         String    @default("todo")
+    assignee_id    String?
+    due_at         DateTime?
+    milestone_id   String?
+    opportunity_id String?
+    // Set from the opportunity (or milestone) when there is one.
+    funder_id      String?
+    // Order within a milestone; lower first.
+    sort           Int       @default(0)
+    completed_at   DateTime?
+    created_by_id  String?
+    archived_at    DateTime?
+    created_at     DateTime  @default(now())
+    updated_at     DateTime  @updatedAt
 
-  assignee    User?        @relation("task_assignee", fields: [assignee_id], references: [id], onDelete: SetNull)
-  created_by  User?        @relation("task_creator", fields: [created_by_id], references: [id], onDelete: SetNull)
-  milestone   Milestone?   @relation(fields: [milestone_id], references: [id], onDelete: SetNull)
-  opportunity Opportunity? @relation(fields: [opportunity_id], references: [id], onDelete: SetNull)
-  funder      Funder?      @relation(fields: [funder_id], references: [id], onDelete: SetNull)
-  comments    Comment[]
-  attachments Attachment[]
+    assignee    User?        @relation("task_assignee", fields: [assignee_id], references: [id], onDelete: SetNull)
+    created_by  User?        @relation("task_creator", fields: [created_by_id], references: [id], onDelete: SetNull)
+    milestone   Milestone?   @relation(fields: [milestone_id], references: [id], onDelete: SetNull)
+    opportunity Opportunity? @relation(fields: [opportunity_id], references: [id], onDelete: SetNull)
+    funder      Funder?      @relation(fields: [funder_id], references: [id], onDelete: SetNull)
+    comments    Comment[]
+    attachments Attachment[]
 
-  @@index([assignee_id, status])
-  @@index([milestone_id])
-  @@index([funder_id])
-  @@index([due_at])
-  @@map("task")
+    @@index([assignee_id, status])
+    @@index([milestone_id])
+    @@index([funder_id])
+    @@index([due_at])
+    @@map("task")
 }
 
 model Comment {
-  id         String    @id
-  task_id    String
-  author_id  String?
-  body       String
-  edited_at  DateTime?
-  deleted_at DateTime?
-  created_at DateTime  @default(now())
+    id         String    @id
+    task_id    String
+    author_id  String?
+    body       String
+    edited_at  DateTime?
+    deleted_at DateTime?
+    created_at DateTime  @default(now())
 
-  task        Task         @relation(fields: [task_id], references: [id], onDelete: Cascade)
-  author      User?        @relation(fields: [author_id], references: [id], onDelete: SetNull)
-  attachments Attachment[]
+    task        Task         @relation(fields: [task_id], references: [id], onDelete: Cascade)
+    author      User?        @relation(fields: [author_id], references: [id], onDelete: SetNull)
+    attachments Attachment[]
 
-  @@index([task_id])
-  @@map("comment")
+    @@index([task_id])
+    @@map("comment")
 }
 
 // A file on a task. The bytes live on disk under DATA_DIR/files at storage_key.
 model Attachment {
-  id             String    @id
-  task_id        String
-  // Set when the file was attached to a comment rather than to the task itself.
-  comment_id     String?
-  uploaded_by_id String?
-  filename       String
-  content_type   String
-  size_bytes     Int
-  storage_key    String
-  deleted_at     DateTime?
-  created_at     DateTime  @default(now())
+    id             String    @id
+    task_id        String
+    // Set when the file was attached to a comment rather than to the task itself.
+    comment_id     String?
+    uploaded_by_id String?
+    filename       String
+    content_type   String
+    size_bytes     Int
+    storage_key    String
+    deleted_at     DateTime?
+    created_at     DateTime  @default(now())
 
-  task        Task     @relation(fields: [task_id], references: [id], onDelete: Cascade)
-  comment     Comment? @relation(fields: [comment_id], references: [id], onDelete: SetNull)
-  uploaded_by User?    @relation(fields: [uploaded_by_id], references: [id], onDelete: SetNull)
+    task        Task     @relation(fields: [task_id], references: [id], onDelete: Cascade)
+    comment     Comment? @relation(fields: [comment_id], references: [id], onDelete: SetNull)
+    uploaded_by User?    @relation(fields: [uploaded_by_id], references: [id], onDelete: SetNull)
 
-  @@index([task_id])
-  @@index([comment_id])
-  @@map("attachment")
+    @@index([task_id])
+    @@index([comment_id])
+    @@map("attachment")
 }
 
 // A bank (or card) account synced from Bookeeping.ai.
 model BankAccount {
-  id             String    @id
-  external_id    String    @unique
-  name           String
-  // Depository | Credit | Loan | Investment | Other (Bookeeping.ai's account types)
-  account_type   String
-  currency       String    @default("USD")
-  // Whether this account counts toward cash on hand and runway.
-  is_included    Boolean   @default(true)
-  last_synced_at DateTime?
-  created_at     DateTime  @default(now())
-  updated_at     DateTime  @updatedAt
+    id             String    @id
+    external_id    String    @unique
+    name           String
+    // Depository | Credit | Loan | Investment | Other (Bookeeping.ai's account types)
+    account_type   String
+    currency       String    @default("USD")
+    // Whether this account counts toward cash on hand and runway.
+    is_included    Boolean   @default(true)
+    last_synced_at DateTime?
+    created_at     DateTime  @default(now())
+    updated_at     DateTime  @updatedAt
 
-  snapshots    BalanceSnapshot[]
-  transactions BankTransaction[]
+    snapshots    BalanceSnapshot[]
+    transactions BankTransaction[]
 
-  @@map("bank_account")
+    @@map("bank_account")
 }
 
 // One account's balance on one day (today's sync, or a month-end from Bookeeping.ai's history).
 model BalanceSnapshot {
-  id              String   @id
-  bank_account_id String
-  as_of           DateTime
-  balance_cents   BigInt
-  // institution (the bank's own figure) | accounting (Bookeeping.ai's ledger)
-  source          String
-  created_at      DateTime @default(now())
+    id              String   @id
+    bank_account_id String
+    as_of           DateTime
+    balance_cents   BigInt
+    // institution (the bank's own figure) | accounting (Bookeeping.ai's ledger)
+    source          String
+    created_at      DateTime @default(now())
 
-  bank_account BankAccount @relation(fields: [bank_account_id], references: [id], onDelete: Cascade)
+    bank_account BankAccount @relation(fields: [bank_account_id], references: [id], onDelete: Cascade)
 
-  @@unique([bank_account_id, as_of])
-  @@map("balance_snapshot")
+    @@unique([bank_account_id, as_of])
+    @@map("balance_snapshot")
 }
 
 // One transaction, signed from the bank account's point of view: + money in, - money out.
 model BankTransaction {
-  id                    String    @id
-  external_id           String    @unique
-  bank_account_id       String?
-  booked_on             DateTime
-  amount_cents          BigInt
-  description           String?
-  counterparty_name     String?
-  category_name         String?
-  // Bookeeping.ai parent category of the non-bank side: EXPENSE, INCOME, CURRENT_ASSET (transfers), …
-  parent_category       String?
-  // Set by a person to leave a one-off (e.g. a loan repayment) out of the burn rate.
-  is_excluded_from_burn Boolean   @default(false)
-  source_updated_at     DateTime?
-  created_at            DateTime  @default(now())
-  updated_at            DateTime  @updatedAt
+    id                    String    @id
+    external_id           String    @unique
+    bank_account_id       String?
+    booked_on             DateTime
+    amount_cents          BigInt
+    description           String?
+    counterparty_name     String?
+    category_name         String?
+    // Bookeeping.ai parent category of the non-bank side: EXPENSE, INCOME, CURRENT_ASSET (transfers), …
+    parent_category       String?
+    // Set by a person to leave a one-off (e.g. a loan repayment) out of the burn rate.
+    is_excluded_from_burn Boolean   @default(false)
+    source_updated_at     DateTime?
+    created_at            DateTime  @default(now())
+    updated_at            DateTime  @updatedAt
 
-  bank_account BankAccount? @relation(fields: [bank_account_id], references: [id], onDelete: SetNull)
+    bank_account BankAccount? @relation(fields: [bank_account_id], references: [id], onDelete: SetNull)
 
-  @@index([booked_on])
-  @@map("bank_transaction")
+    @@index([booked_on])
+    @@map("bank_transaction")
 }
 
 // A named what-if for the runway forecast; adjustments are validated by zod (shared/schemas/scenarios.ts).
 model Scenario {
-  id            String    @id
-  name          String
-  description   String?
-  adjustments   Json      @default("[]")
-  created_by_id String?
-  archived_at   DateTime?
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @updatedAt
+    id            String    @id
+    name          String
+    description   String?
+    adjustments   Json      @default("[]")
+    created_by_id String?
+    archived_at   DateTime?
+    created_at    DateTime  @default(now())
+    updated_at    DateTime  @updatedAt
 
-  created_by User? @relation(fields: [created_by_id], references: [id], onDelete: SetNull)
+    created_by User? @relation(fields: [created_by_id], references: [id], onDelete: SetNull)
 
-  @@map("scenario")
+    @@map("scenario")
 }
 
 // A team member's connected Gmail. Only the encrypted refresh token is kept; mail is fetched on demand.
 model MailboxConnection {
-  id                      String    @id
-  user_id                 String    @unique
-  google_email            String
-  refresh_token_encrypted String
-  scopes                  String
-  // active | error (token revoked or expired; the user reconnects)
-  status                  String    @default("active")
-  last_synced_at          DateTime?
-  last_error              String?
-  // Progress of the current sync, for Settings → Email: idle | queued | running
-  sync_state              String    @default("idle")
-  // searching | checking | reading (while running)
-  sync_phase              String?
-  sync_done               Int       @default(0)
-  sync_total              Int?
-  sync_started_at         DateTime?
-  // { matched, processed, applied, pending, finished_at } of the last finished sync
-  last_sync_result        Json?
-  created_at              DateTime  @default(now())
-  updated_at              DateTime  @updatedAt
+    id                      String    @id
+    user_id                 String    @unique
+    google_email            String
+    refresh_token_encrypted String
+    scopes                  String
+    // active | error (token revoked or expired; the user reconnects)
+    status                  String    @default("active")
+    last_synced_at          DateTime?
+    last_error              String?
+    // Progress of the current sync, for Settings → Email: idle | queued | running
+    sync_state              String    @default("idle")
+    // searching | checking | reading (while running)
+    sync_phase              String?
+    sync_done               Int       @default(0)
+    sync_total              Int?
+    sync_started_at         DateTime?
+    // { matched, processed, applied, pending, finished_at } of the last finished sync
+    last_sync_result        Json?
+    created_at              DateTime  @default(now())
+    updated_at              DateTime  @updatedAt
 
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+    user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@map("mailbox_connection")
+    @@map("mailbox_connection")
 }
 
 // What the dashboard keeps about an email it read: who, when, and an AI summary. Never the body.
 model EmailEvidence {
-  id                String   @id
-  // gmail | forward
-  source            String
-  // RFC 5322 Message-ID, so the same email in two inboxes is processed once.
-  message_id_header String   @unique
-  mailbox_user_id   String?
-  from_address      String
-  to_addresses      Json     @default("[]")
-  sent_at           DateTime
-  // Hidden (null) when the AI marks the email sensitive.
-  subject           String?
-  summary           String
-  is_relevant       Boolean  @default(true)
-  is_sensitive      Boolean  @default(false)
-  funder_id         String?
-  model             String?
-  confidence        Float?
-  created_at        DateTime @default(now())
+    id                String   @id
+    // gmail | forward
+    source            String
+    // RFC 5322 Message-ID, so the same email in two inboxes is processed once.
+    message_id_header String   @unique
+    mailbox_user_id   String?
+    from_address      String
+    to_addresses      Json     @default("[]")
+    sent_at           DateTime
+    // Hidden (null) when the AI marks the email sensitive.
+    subject           String?
+    summary           String
+    is_relevant       Boolean  @default(true)
+    is_sensitive      Boolean  @default(false)
+    funder_id         String?
+    model             String?
+    confidence        Float?
+    created_at        DateTime @default(now())
 
-  mailbox_user  User?         @relation(fields: [mailbox_user_id], references: [id], onDelete: SetNull)
-  funder        Funder?       @relation(fields: [funder_id], references: [id], onDelete: SetNull)
-  change_events ChangeEvent[]
+    mailbox_user  User?         @relation(fields: [mailbox_user_id], references: [id], onDelete: SetNull)
+    funder        Funder?       @relation(fields: [funder_id], references: [id], onDelete: SetNull)
+    change_events ChangeEvent[]
 
-  @@index([funder_id, sent_at])
-  @@map("email_evidence")
+    @@index([funder_id, sent_at])
+    @@map("email_evidence")
 }
 
 // A user's private forwarding address: updates+<token>@INBOUND_EMAIL_DOMAIN.
 model InboundAddress {
-  id              String    @id
-  user_id         String
-  // Looked up by hash; the encrypted copy lets Settings show the address again.
-  token_hash      String    @unique
-  token_encrypted String
-  revoked_at      DateTime?
-  created_at      DateTime  @default(now())
+    id              String    @id
+    user_id         String
+    // Looked up by hash; the encrypted copy lets Settings show the address again.
+    token_hash      String    @unique
+    token_encrypted String
+    revoked_at      DateTime?
+    created_at      DateTime  @default(now())
 
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+    user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@index([user_id])
-  @@map("inbound_address")
+    @@index([user_id])
+    @@map("inbound_address")
 }
 
 // A Google Drive folder whose documents inform AI-drafted emails. Read with the refresh token of the
 // person who connected it (drive.readonly). Only files inside the folder are ever read.
 model KnowledgeSource {
-  id                      String    @id
-  drive_folder_id         String    @unique
-  name                    String
-  connected_by_id         String?
-  // Empty when access was removed (the person was deactivated); someone reconnects the folder.
-  refresh_token_encrypted String
-  // active | error
-  status                  String    @default("active")
-  last_synced_at          DateTime?
-  last_error              String?
-  created_at              DateTime  @default(now())
-  updated_at              DateTime  @updatedAt
+    id                      String    @id
+    drive_folder_id         String    @unique
+    name                    String
+    connected_by_id         String?
+    // Empty when access was removed (the person was deactivated); someone reconnects the folder.
+    refresh_token_encrypted String
+    // active | error
+    status                  String    @default("active")
+    last_synced_at          DateTime?
+    last_error              String?
+    created_at              DateTime  @default(now())
+    updated_at              DateTime  @updatedAt
 
-  connected_by User?               @relation(fields: [connected_by_id], references: [id], onDelete: SetNull)
-  documents    KnowledgeDocument[]
+    connected_by User?               @relation(fields: [connected_by_id], references: [id], onDelete: SetNull)
+    documents    KnowledgeDocument[]
 
-  @@map("knowledge_source")
+    @@map("knowledge_source")
 }
 
 // One file from a knowledge folder, with its extracted text. These are Earth Bank's own business
 // documents (models, explainers), so unlike email the text is stored.
 model KnowledgeDocument {
-  id               String   @id
-  source_id        String
-  drive_file_id    String   @unique
-  name             String
-  mime_type        String
-  web_view_link    String?
-  // Drive's modifiedTime; a file is only downloaded again when this changes.
-  modified_at      DateTime
-  // indexed | unsupported | too_large | failed | sensitive
-  status           String
-  // Why a file was skipped as sensitive (an ID, a tax form…); its text is never stored.
-  sensitive_reason String?
-  text             String?
-  char_count       Int      @default(0)
-  // Pinned documents are always given to the AI in full; excluded ones never are.
-  is_pinned        Boolean  @default(false)
-  is_excluded      Boolean  @default(false)
-  synced_at        DateTime
-  created_at       DateTime @default(now())
-  updated_at       DateTime @updatedAt
+    id               String   @id
+    source_id        String
+    drive_file_id    String   @unique
+    name             String
+    mime_type        String
+    web_view_link    String?
+    // Drive's modifiedTime; a file is only downloaded again when this changes.
+    modified_at      DateTime
+    // indexed | unsupported | too_large | failed | sensitive
+    status           String
+    // Why a file was skipped as sensitive (an ID, a tax form…); its text is never stored.
+    sensitive_reason String?
+    text             String?
+    char_count       Int      @default(0)
+    // Pinned documents are always given to the AI in full; excluded ones never are.
+    is_pinned        Boolean  @default(false)
+    is_excluded      Boolean  @default(false)
+    synced_at        DateTime
+    created_at       DateTime @default(now())
+    updated_at       DateTime @updatedAt
 
-  source KnowledgeSource @relation(fields: [source_id], references: [id], onDelete: Cascade)
+    source KnowledgeSource @relation(fields: [source_id], references: [id], onDelete: Cascade)
 
-  @@index([source_id])
-  @@map("knowledge_document")
+    @@index([source_id])
+    @@map("knowledge_document")
 }
 
 // A spending decision the team has made but not paid yet (a research study, an event, a new
 // contract). Part of the base forecast, unlike scenario what-ifs.
 model PlannedExpense {
-  id            String    @id
-  label         String
-  // one_off | monthly
-  kind          String
-  // Positive cents: the one-off amount, or the amount per month.
-  amount_cents  BigInt
-  // The payment date (one-off) or the first month (monthly).
-  starts_on     DateTime
-  // Last month of a monthly expense; null = open-ended. Unused for one-offs.
-  ends_on       DateTime?
-  notes         String?
-  created_by_id String?
-  archived_at   DateTime?
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @updatedAt
+    id            String    @id
+    label         String
+    // one_off | monthly
+    kind          String
+    // Positive cents: the one-off amount, or the amount per month.
+    amount_cents  BigInt
+    // The payment date (one-off) or the first month (monthly).
+    starts_on     DateTime
+    // Last month of a monthly expense; null = open-ended. Unused for one-offs.
+    ends_on       DateTime?
+    notes         String?
+    created_by_id String?
+    archived_at   DateTime?
+    created_at    DateTime  @default(now())
+    updated_at    DateTime  @updatedAt
 
-  created_by User? @relation(fields: [created_by_id], references: [id], onDelete: SetNull)
+    created_by User? @relation(fields: [created_by_id], references: [id], onDelete: SetNull)
 
-  @@index([starts_on])
-  @@map("planned_expense")
+    @@index([starts_on])
+    @@map("planned_expense")
 }
 
 // A secret, password-protected link that shows funders a read-only summary of the pipeline.
 model ShareLink {
-  id                 String    @id
-  label              String
-  // Looked up by hash; the encrypted copy lets Settings show the link again.
-  token_hash         String    @unique
-  token_encrypted    String
-  // scrypt: "scrypt$<salt>$<hash>", both base64url.
-  password_hash      String
-  show_next_steps    Boolean   @default(true)
-  created_by_user_id String?
-  last_viewed_at     DateTime?
-  revoked_at         DateTime?
-  created_at         DateTime  @default(now())
+    id                 String    @id
+    label              String
+    // Looked up by hash; the encrypted copy lets Settings show the link again.
+    token_hash         String    @unique
+    token_encrypted    String
+    // scrypt: "scrypt$<salt>$<hash>", both base64url.
+    password_hash      String
+    // The team can see the password again in Settings (it isn't a secret from them); null for links
+    // made before passwords were kept.
+    password_encrypted String?
+    show_next_steps    Boolean   @default(true)
+    created_by_user_id String?
+    last_viewed_at     DateTime?
+    revoked_at         DateTime?
+    created_at         DateTime  @default(now())
 
-  created_by User? @relation(fields: [created_by_user_id], references: [id], onDelete: SetNull)
+    created_by User? @relation(fields: [created_by_user_id], references: [id], onDelete: SetNull)
 
-  @@map("share_link")
+    @@map("share_link")
 }

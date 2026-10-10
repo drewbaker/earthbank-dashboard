@@ -36,6 +36,7 @@ export default defineApiHandler(async event => {
         tokenHash: hashToken({ token }),
         tokenEncrypted: encryptSecret({ plaintext: token }),
         passwordHash: await hashPassword({ password: body.password }),
+        passwordEncrypted: encryptSecret({ plaintext: body.password }),
         showNextSteps: body.show_next_steps,
         createdByUserId: ctx.user.id,
     })

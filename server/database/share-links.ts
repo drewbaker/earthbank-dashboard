@@ -8,6 +8,7 @@ import { newId } from '#server/utils/ids.ts'
  * @param input.tokenHash - SHA-256 of the secret in the URL.
  * @param input.tokenEncrypted - The secret, encrypted, so Settings can show the link again.
  * @param input.passwordHash - scrypt hash of the password.
+ * @param input.passwordEncrypted - The password, encrypted, so the team can see it again.
  * @param input.showNextSteps - Whether viewers see next steps.
  * @param input.createdByUserId - Who made it.
  * @returns The row with its creator.
@@ -17,6 +18,7 @@ export function createShareLinkRow({
     tokenHash,
     tokenEncrypted,
     passwordHash,
+    passwordEncrypted,
     showNextSteps,
     createdByUserId,
 }: {
@@ -24,6 +26,7 @@ export function createShareLinkRow({
     tokenHash: string
     tokenEncrypted: string
     passwordHash: string
+    passwordEncrypted: string
     showNextSteps: boolean
     createdByUserId: string
 }) {
@@ -34,6 +37,7 @@ export function createShareLinkRow({
             token_hash: tokenHash,
             token_encrypted: tokenEncrypted,
             password_hash: passwordHash,
+            password_encrypted: passwordEncrypted,
             show_next_steps: showNextSteps,
             created_by_user_id: createdByUserId,
         },

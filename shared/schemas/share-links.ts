@@ -1,12 +1,15 @@
 import { z } from 'zod'
 import { OPPORTUNITY_STAGES } from '#shared/constants/pipeline.ts'
 import { IsoDateTime, listOf, UserSummary } from '#shared/schemas/common.ts'
+import { Goal } from '#shared/schemas/goals.ts'
 
 /** A funder-facing link, as the team sees it in Settings → Sharing. */
 export const ShareLink = z.object({
     id: z.string(),
     label: z.string(),
     url: z.string(),
+    /** Null for links made before passwords were kept. */
+    password: z.string().nullable(),
     show_next_steps: z.boolean(),
     created_by: UserSummary.nullable(),
     last_viewed_at: IsoDateTime.nullable(),
@@ -46,5 +49,8 @@ export const SharedPipeline = z.object({
     updated_at: IsoDateTime,
     design_grants: z.array(SharedAsk),
     lending_capital: z.array(SharedAsk),
+    /** The goal stats boxes, as on the Pipeline page (notes left out). */
+    design_grant_goals: z.array(Goal),
+    lending_capital_goals: z.array(Goal),
 })
 export type SharedPipeline = z.infer<typeof SharedPipeline>

@@ -102,6 +102,7 @@ describe('share link routes', () => {
                 tokenHash: hashToken({ token }),
                 tokenEncrypted: encryptSecret({ plaintext: token }),
                 passwordHash: await hashPassword({ password: 'green-ledger-42' }),
+                passwordEncrypted: encryptSecret({ plaintext: 'green-ledger-42' }),
                 showNextSteps: true,
                 createdByUserId: userId,
             })

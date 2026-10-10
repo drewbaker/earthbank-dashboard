@@ -6,6 +6,7 @@ import { useAsyncData, useSeoMeta, useToast } from '#imports'
 import type { User, UserList } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { useAuth } from '~/composables/useAuth.ts'
+import { sortableColumns } from '~/utils/table-sorting.ts'
 
 useSeoMeta({ title: 'Team · Earth Bank Dashboard' })
 
@@ -19,34 +20,39 @@ const { data: team, refresh } = await useAsyncData('settings.team', () => api<Us
 const UAvatar = resolveComponent('UAvatar')
 const UBadge = resolveComponent('UBadge')
 
-const columns: TableColumn<User>[] = [
-    {
-        accessorKey: 'name',
-        header: 'Name',
-        cell: ({ row }) =>
-            h('div', { class: 'flex items-center gap-3' }, [
-                h(UAvatar, { src: row.original.avatar_url ?? undefined, alt: row.original.name, size: 'sm' }),
-                h('div', [
-                    h('p', { class: 'font-medium text-highlighted' }, row.original.name),
-                    h('p', { class: 'text-muted' }, row.original.email),
+const columns: TableColumn<User>[] = sortableColumns({
+    columns: [
+        {
+            id: 'name',
+            accessorFn: user => user.name.toLowerCase(),
+            header: 'Name',
+            cell: ({ row }) =>
+                h('div', { class: 'flex items-center gap-3' }, [
+                    h(UAvatar, { src: row.original.avatar_url ?? undefined, alt: row.original.name, size: 'sm' }),
+                    h('div', [
+                        h('p', { class: 'font-medium text-highlighted' }, row.original.name),
+                        h('p', { class: 'text-muted' }, row.original.email),
+                    ]),
                 ]),
-            ]),
-    },
-    {
-        accessorKey: 'last_sign_in_at',
-        header: 'Last sign-in',
-        cell: ({ row }) => formatSignIn({ signedInAt: row.original.last_sign_in_at }),
-    },
-    {
-        accessorKey: 'deactivated_at',
-        header: 'Status',
-        cell: ({ row }) =>
-            row.original.deactivated_at
-                ? h(UBadge, { color: 'neutral', label: 'Deactivated' })
-                : h(UBadge, { color: 'success', label: 'Active' }),
-    },
-    { id: 'actions', header: '' },
-]
+        },
+        {
+            id: 'last_sign_in_at',
+            accessorFn: user => user.last_sign_in_at ?? undefined,
+            header: 'Last sign-in',
+            cell: ({ row }) => formatSignIn({ signedInAt: row.original.last_sign_in_at }),
+        },
+        {
+            id: 'status',
+            accessorFn: user => (user.deactivated_at ? 'deactivated' : 'active'),
+            header: 'Status',
+            cell: ({ row }) =>
+                row.original.deactivated_at
+                    ? h(UBadge, { color: 'neutral', label: 'Deactivated' })
+                    : h(UBadge, { color: 'success', label: 'Active' }),
+        },
+        { id: 'actions', header: '' },
+    ],
+})
 
 /**
  * Format a last sign-in timestamp for the table.

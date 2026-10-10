@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, useTemplateRef, watch } from 'vue'
+import type { TableColumn } from '@nuxt/ui'
+import { computed, h, ref, useTemplateRef, watch } from 'vue'
 import { useAsyncData, useSeoMeta, useToast } from '#imports'
 import { GOAL_TYPE_DETAILS } from '#shared/constants/pipeline.ts'
-import type { RunwayEnd } from '#shared/forecast/project-runway.ts'
+import type { ForecastInflow, RunwayEnd } from '#shared/forecast/project-runway.ts'
 import type {
     OpportunityList,
     PlannedExpense,
@@ -14,6 +15,7 @@ import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { useForecast } from '~/composables/useForecast.ts'
 import { describeAdjustment, ADJUSTMENT_KIND_DETAILS } from '~/utils/scenario-descriptions.ts'
 import { formatDate, formatMoney } from '~/utils/format.ts'
+import { sortableColumns } from '~/utils/table-sorting.ts'
 
 useSeoMeta({ title: 'Forecast · Earth Bank Dashboard' })
 
@@ -71,6 +73,44 @@ watch(selectedScenarioId, scenarioId => {
     const scenario = scenarioList.value?.data.find(candidate => candidate.id === scenarioId)
     adjustments.value = scenario ? [...scenario.adjustments] : []
     scenarioName.value = scenario?.name ?? ''
+})
+
+const inflowColumns: TableColumn<ForecastInflow>[] = sortableColumns({
+    columns: [
+        {
+            id: 'date',
+            accessorFn: inflow => inflow.date,
+            header: 'When',
+            meta: { class: { td: 'whitespace-nowrap' } },
+            cell: ({ row }) =>
+                row.original.is_overdue
+                    ? h('span', { class: 'text-error' }, 'Overdue')
+                    : formatDate({ value: row.original.date }),
+        },
+        {
+            id: 'label',
+            accessorFn: inflow => inflow.label.toLowerCase(),
+            header: 'From',
+            cell: ({ row }) => h('span', { class: 'text-highlighted' }, row.original.label),
+        },
+        {
+            id: 'committed_cents',
+            accessorFn: inflow => inflow.committed_cents,
+            header: 'Committed',
+            meta: { class: { th: 'text-right', td: 'text-right' } },
+            cell: ({ row }) =>
+                row.original.committed_cents
+                    ? formatMoney({ cents: row.original.committed_cents, compact: true })
+                    : '—',
+        },
+        {
+            id: 'weighted_cents',
+            accessorFn: inflow => inflow.weighted_cents,
+            header: 'Weighted',
+            meta: { class: { th: 'text-right', td: 'text-right text-muted' } },
+            cell: ({ row }) => formatMoney({ cents: row.original.weighted_cents, compact: true }),
+        },
+    ],
 })
 
 const comparison = computed(() => {
@@ -288,41 +328,11 @@ async function deleteScenario() {
                         <template #header>
                             <h2 class="font-medium text-highlighted">Money expected to land</h2>
                         </template>
-                        <table v-if="(scenarioProjection ?? baseProjection).inflows.length" class="w-full text-sm">
-                            <thead class="text-left text-muted">
-                                <tr class="border-b border-default">
-                                    <th class="px-4 py-2 font-medium">When</th>
-                                    <th class="px-4 py-2 font-medium">From</th>
-                                    <th class="px-4 py-2 text-right font-medium">Committed</th>
-                                    <th class="px-4 py-2 text-right font-medium">Weighted</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr
-                                    v-for="inflow in (scenarioProjection ?? baseProjection).inflows"
-                                    :key="inflow.opportunity_id"
-                                    class="border-b border-default last:border-0"
-                                >
-                                    <td
-                                        class="px-4 py-2 whitespace-nowrap"
-                                        :class="inflow.is_overdue ? 'text-error' : ''"
-                                    >
-                                        {{ inflow.is_overdue ? 'Overdue' : formatDate({ value: inflow.date }) }}
-                                    </td>
-                                    <td class="px-4 py-2 text-highlighted">{{ inflow.label }}</td>
-                                    <td class="px-4 py-2 text-right">
-                                        {{
-                                            inflow.committed_cents
-                                                ? formatMoney({ cents: inflow.committed_cents, compact: true })
-                                                : '—'
-                                        }}
-                                    </td>
-                                    <td class="px-4 py-2 text-right text-muted">
-                                        {{ formatMoney({ cents: inflow.weighted_cents, compact: true }) }}
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <UTable
+                            v-if="(scenarioProjection ?? baseProjection).inflows.length"
+                            :data="(scenarioProjection ?? baseProjection).inflows"
+                            :columns="inflowColumns"
+                        />
                         <p v-else class="px-4 py-6 text-sm text-muted">
                             No dated pipeline money yet. Set "Expected to land" on opportunities to see it here.
                         </p>

@@ -2,10 +2,12 @@
 import type { TableColumn } from '@nuxt/ui'
 import { computed, h, ref, resolveComponent } from 'vue'
 import { definePageMeta, useAsyncData, useRoute, useSeoMeta } from '#imports'
+import { OPPORTUNITY_STAGES } from '#shared/constants/pipeline.ts'
 import type { SharedAsk, SharedPipeline } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { formatDate, formatMoney } from '~/utils/format.ts'
 import type { StageAsk } from '~/utils/stage-asks.ts'
+import { sortableColumns } from '~/utils/table-sorting.ts'
 
 // Funders open this without an account: the secret link plus a password. Nothing here links back
 // into the dashboard.
@@ -58,6 +60,11 @@ const trackItems = [
 ]
 
 const asks = computed<SharedAsk[]>(() => (page.value?.kind === 'ready' ? page.value.pipeline[track.value] : []))
+const goals = computed(() =>
+    page.value?.kind === 'ready'
+        ? page.value.pipeline[track.value === 'design_grants' ? 'design_grant_goals' : 'lending_capital_goals']
+        : [],
+)
 const stageAsks = computed<StageAsk[]>(() =>
     asks.value.map((ask, index) => ({
         key: `${track.value}-${index}`,
@@ -71,48 +78,64 @@ const showsNextSteps = computed(() => asks.value.some(ask => ask.next_step !== n
 
 const PipelineStageBadge = resolveComponent('PipelineStageBadge')
 
-const columns = computed<TableColumn<SharedAsk>[]>(() => [
-    {
-        accessorKey: 'organization',
-        header: 'Organization',
-        cell: ({ row }) => h('span', { class: 'font-medium text-highlighted' }, row.original.organization),
-    },
-    {
-        accessorKey: 'contacts',
-        header: 'Key contacts',
-        cell: ({ row }) => row.original.contacts.join(', ') || '—',
-    },
-    {
-        accessorKey: 'geo_focus',
-        header: 'Geo focus',
-        cell: ({ row }) => row.original.geo_focus.join(', ') || '—',
-    },
-    {
-        accessorKey: 'amount_cents',
-        header: () => h('div', { class: 'text-right' }, 'Grant amount'),
-        cell: ({ row }) =>
-            h(
-                'div',
-                { class: 'text-right' },
-                row.original.amount_cents === null ? 'TBD' : formatMoney({ cents: row.original.amount_cents }),
-            ),
-    },
-    {
-        accessorKey: 'stage',
-        header: 'Status',
-        cell: ({ row }) => h(PipelineStageBadge, { stage: row.original.stage }),
-    },
-    ...(showsNextSteps.value
-        ? [
-              {
-                  accessorKey: 'next_step',
-                  header: 'Next steps',
-                  cell: ({ row }: { row: { original: SharedAsk } }) =>
-                      h('span', { class: 'block max-w-md whitespace-normal' }, row.original.next_step ?? '—'),
-              },
-          ]
-        : []),
-])
+const STAGE_ORDER = new Map(OPPORTUNITY_STAGES.map((stage, index) => [stage, index]))
+
+// Fixed widths with wrapping, so long contact lists and next steps don't push the table sideways.
+const wrapping = (width: string) => ({ class: { th: width, td: `${width} whitespace-normal align-top` } })
+
+const columns = computed<TableColumn<SharedAsk>[]>(() =>
+    sortableColumns({
+        columns: [
+            {
+                id: 'organization',
+                accessorFn: ask => ask.organization.toLowerCase(),
+                header: 'Organization',
+                meta: wrapping('w-48 min-w-40'),
+                cell: ({ row }) => h('span', { class: 'font-medium text-highlighted' }, row.original.organization),
+            },
+            {
+                id: 'contacts',
+                accessorFn: ask => ask.contacts.join(', ').toLowerCase() || undefined,
+                header: 'Key contacts',
+                meta: wrapping('w-56 min-w-44 max-w-64'),
+                cell: ({ row }) => row.original.contacts.join(', ') || '—',
+            },
+            {
+                id: 'geo_focus',
+                accessorFn: ask => ask.geo_focus.join(', ') || undefined,
+                header: 'Geo focus',
+                meta: wrapping('w-36 min-w-28'),
+                cell: ({ row }) => row.original.geo_focus.join(', ') || '—',
+            },
+            {
+                id: 'amount_cents',
+                accessorFn: ask => ask.amount_cents ?? undefined,
+                header: 'Grant amount',
+                meta: { class: { th: 'w-32 text-right', td: 'w-32 text-right align-top' } },
+                cell: ({ row }) =>
+                    row.original.amount_cents === null ? 'TBD' : formatMoney({ cents: row.original.amount_cents }),
+            },
+            {
+                id: 'stage',
+                accessorFn: ask => STAGE_ORDER.get(ask.stage),
+                header: 'Status',
+                meta: { class: { th: 'w-36', td: 'w-36 align-top' } },
+                cell: ({ row }) => h(PipelineStageBadge, { stage: row.original.stage }),
+            },
+            ...(showsNextSteps.value
+                ? [
+                      {
+                          id: 'next_step',
+                          accessorFn: (ask: SharedAsk) => ask.next_step?.toLowerCase() ?? undefined,
+                          header: 'Next steps',
+                          meta: wrapping('min-w-64 max-w-md'),
+                          cell: ({ row }: { row: { original: SharedAsk } }) => row.original.next_step ?? '—',
+                      } satisfies TableColumn<SharedAsk>,
+                  ]
+                : []),
+        ],
+    }),
+)
 </script>
 
 <template>
@@ -162,8 +185,18 @@ const columns = computed<TableColumn<SharedAsk>[]>(() => [
 
             <template v-else-if="page?.kind === 'ready'">
                 <UTabs v-model="track" :items="trackItems" :content="false" variant="link" />
-                <PipelineStageOverview :asks="stageAsks" />
-                <UTable :data="asks" :columns="columns" class="rounded-md border border-default">
+                <!-- Same layout as Pipeline: goal stats beside the stage donut, funder bars, then the list. -->
+                <div class="grid gap-6 lg:grid-cols-2">
+                    <PipelineGoalSummary v-if="goals.length" :goals="goals" is-stacked />
+                    <PipelineStageOverview :asks="stageAsks" part="pie" />
+                </div>
+                <PipelineStageOverview :asks="stageAsks" part="bars" />
+                <UTable
+                    :data="asks"
+                    :columns="columns"
+                    class="rounded-md border border-default"
+                    :ui="{ base: 'table-fixed' }"
+                >
                     <template #empty>
                         <p class="py-6 text-center text-sm text-muted">Nothing to show here yet.</p>
                     </template>

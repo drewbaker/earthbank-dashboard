@@ -810,6 +810,7 @@ Static rules go in `routeRules`. Everything except hashed assets is private, so 
 - Dark mode is supported from day one, using the light/dark tokens above.
 - Dashboard layout uses Nuxt UI's dashboard components (`UDashboardGroup`, `UDashboardSidebar`, `UDashboardPanel`, `UDashboardNavbar`). The sidebar nav is defined in one constant (`app/utils/navigation.ts`), so adding a page later means adding a route and one nav entry: Overview, Pipeline, Forecast, Milestones & Tasks, Activity, Settings.
 - **Dates follow the viewer's time zone.** The browser stores its zone in the `earthbank_dashboard_tz` cookie (`app/plugins/time-zone.ts`), so server-rendered pages and the server's "today" (`requestToday`) use it; `formatDate` shows moments in that zone. Calendar dates (deadlines, expected dates) are the same day everywhere. Work with no browser (emails, digests) uses `APP_TIME_ZONE`.
+- **Tables**: every `UTable` passes its columns through `sortableColumns` (`app/utils/table-sorting.ts`), so clicking a header sorts by it. Columns whose cell isn't a plain value give an `accessorFn` returning the sort value (stages and relationships in pipeline order); `enableSorting: false` opts out.
 - Money is stored as integer cents (`amount_cents`) in USD and formatted in the client with one `formatMoney({ cents })` helper; compact form (`$1.5M`) on charts and tiles.
 
 ### Data fetching
@@ -904,7 +905,7 @@ Keeps funder and opportunity status current from email, without the AI ever seei
 
 ### Sharing with funders
 
-- Settings → Sharing creates **share links**: `/share/{token}` plus a password. The token is 256 random bits, stored hashed (and encrypted so Settings can show the link again); the password is hashed with scrypt (`server/utils/passwords.ts`). Turning a link off (`revoked_at`) stops it at once.
+- Settings → Sharing creates **share links**: `/share/{token}` plus a password. The token is 256 random bits, stored hashed (and encrypted so Settings can show the link again); the password is hashed with scrypt (`server/utils/passwords.ts`) for checking, and also kept encrypted so the team can see and copy it in Settings (it's meant to be sent to funders, not kept from the team). Turning a link off (`revoked_at`) stops it at once.
 - `POST /v1/shared/{token}/unlock` checks the password (10 wrong tries per link per 15 minutes, in memory) and sets a signed, per-link, httpOnly cookie for 12 hours; `GET /v1/shared/{token}` then returns the summary. Neither needs a session.
 - The summary (`buildSharedPipeline`) has Design Grants (design grants + OpEx) and Lending Capital, each ask with only: funder name, contact **names**, geographic focus names, amount, stage, and (if the link allows) the first sentence of the next step. Declined asks and draft or archived funders are left out. Never emails, notes, owners, probabilities or AI reasoning. The page reuses `PipelineStageOverview` with no links into the dashboard; every response is `noindex`.
 

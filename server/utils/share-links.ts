@@ -1,11 +1,14 @@
 import type { H3Event } from 'h3'
 import { getCookie, setCookie } from 'h3'
 import type { ShareLink as ShareLinkRow, User as UserRow } from '#server/generated/prisma/client.ts'
+import { listGoalsWithOpportunities } from '#server/database/goals.ts'
 import { listSharedPipelineRows } from '#server/database/opportunities.ts'
 import { config } from '#server/utils/config.ts'
 import { decryptSecret, signValue, verifySignedValue } from '#server/utils/crypto.ts'
 import { centsToNumber, toIsoDateTime } from '#server/utils/dates.ts'
 import { serializeUserSummary } from '#server/utils/serializers/common.ts'
+import { serializeGoal } from '#server/utils/serializers/goals.ts'
+import { readStageProbabilities } from '#server/utils/settings.ts'
 import type { OpportunityStage } from '#shared/constants/pipeline.ts'
 import type { SharedAsk, SharedPipeline, ShareLink } from '#shared/schemas/index.ts'
 import { focusCodesFromText, geoFocusLabel } from '#shared/utils/geo-focus.ts'
@@ -28,7 +31,7 @@ export function shareUrl({ token }: { token: string }) {
 }
 
 /**
- * Public shape of a link for Settings → Sharing (never its password).
+ * A link as the team sees it in Settings → Sharing, password included (it's for sending to funders).
  *
  * @param input.link - The row with its creator.
  * @returns The API shape.
@@ -39,6 +42,7 @@ export function serializeShareLink({ link }: { link: ShareLinkRow & { created_by
         id: link.id,
         label: link.label,
         url: token ? shareUrl({ token }) : '',
+        password: link.password_encrypted ? decryptSecret({ encrypted: link.password_encrypted }) : null,
         show_next_steps: link.show_next_steps,
         created_by: serializeUserSummary({ user: link.created_by }),
         last_viewed_at: toIsoDateTime({ date: link.last_viewed_at }),
@@ -155,7 +159,15 @@ export async function buildSharedPipeline({
     showNextSteps: boolean
     now?: Date
 }): Promise<SharedPipeline> {
-    const rows = await listSharedPipelineRows()
+    const [rows, goalRows, stageProbabilities] = await Promise.all([
+        listSharedPipelineRows(),
+        listGoalsWithOpportunities(),
+        readStageProbabilities(),
+    ])
+    // Same stats boxes as Pipeline (OpEx hidden there too); internal goal notes stay private.
+    const goals = goalRows
+        .map(goal => ({ ...serializeGoal({ goal, stageProbabilities }), notes: null }))
+        .filter(goal => goal.type !== 'opex')
     const toAsk = (row: (typeof rows)[number]): SharedAsk => ({
         organization: row.funder.name,
         contacts: [...new Set(row.funder.contacts.map(contact => contact.name.trim()).filter(Boolean))],
@@ -169,6 +181,8 @@ export async function buildSharedPipeline({
         updated_at: now.toISOString(),
         design_grants: rows.filter(row => row.goal.type !== 'lending_capital').map(toAsk),
         lending_capital: rows.filter(row => row.goal.type === 'lending_capital').map(toAsk),
+        design_grant_goals: goals.filter(goal => goal.type === 'design_grant'),
+        lending_capital_goals: goals.filter(goal => goal.type === 'lending_capital'),
     }
 }
 

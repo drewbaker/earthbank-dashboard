@@ -3,12 +3,13 @@ import type { TableColumn } from '@nuxt/ui'
 import { computed, h, ref, resolveComponent, watch } from 'vue'
 import { navigateTo, useAsyncData, useRoute, useRouter, useSeoMeta, useToast } from '#imports'
 import type { GoalType, OpportunityStage } from '#shared/constants/pipeline.ts'
-import { OPPORTUNITY_STAGE_DETAILS } from '#shared/constants/pipeline.ts'
+import { OPPORTUNITY_STAGE_DETAILS, OPPORTUNITY_STAGES, RELATIONSHIP_STATUSES } from '#shared/constants/pipeline.ts'
 import type { Funder, FunderDetail, FunderList, Opportunity, OpportunityList } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { usePipelineReference } from '~/composables/usePipelineReference.ts'
 import { formatDate, formatMoney } from '~/utils/format.ts'
 import { stageAsksFromOpportunities } from '~/utils/stage-asks.ts'
+import { sortableColumns } from '~/utils/table-sorting.ts'
 
 useSeoMeta({ title: 'Pipeline · Earth Bank Dashboard' })
 
@@ -105,59 +106,79 @@ const PipelineStageBadge = resolveComponent('PipelineStageBadge')
 const PipelineTierBadge = resolveComponent('PipelineTierBadge')
 const PipelineRelationshipBadge = resolveComponent('PipelineRelationshipBadge')
 
-const opportunityColumns: TableColumn<Opportunity>[] = [
-    {
-        accessorKey: 'funder',
-        header: 'Funder',
-        cell: ({ row }) =>
-            h('div', { class: 'flex items-center gap-2' }, [
-                h(PipelineTierBadge, { tier: row.original.funder.tier }),
-                // The ask's name under the funder's, so a funder with several grants reads clearly.
-                h('div', { class: 'min-w-0' }, [
-                    h(
-                        NuxtLink,
-                        {
-                            to: `/pipeline/funders/${row.original.funder.id}`,
-                            class: 'font-medium text-highlighted hover:underline',
-                        },
-                        () => row.original.funder.name,
-                    ),
-                    h('p', { class: 'truncate text-xs text-muted' }, row.original.name),
+// Stages and relationships sort in pipeline order, not alphabetically.
+const STAGE_ORDER = new Map(OPPORTUNITY_STAGES.map((stage, index) => [stage, index]))
+const RELATIONSHIP_ORDER = new Map(RELATIONSHIP_STATUSES.map((status, index) => [status, index]))
+
+const opportunityColumns: TableColumn<Opportunity>[] = sortableColumns({
+    columns: [
+        {
+            id: 'funder',
+            accessorFn: opportunity => opportunity.funder.name.toLowerCase(),
+            header: 'Funder',
+            cell: ({ row }) =>
+                h('div', { class: 'flex items-center gap-2' }, [
+                    h(PipelineTierBadge, { tier: row.original.funder.tier }),
+                    // The ask's name under the funder's, so a funder with several grants reads clearly.
+                    h('div', { class: 'min-w-0' }, [
+                        h(
+                            NuxtLink,
+                            {
+                                to: `/pipeline/funders/${row.original.funder.id}`,
+                                class: 'font-medium text-highlighted hover:underline',
+                            },
+                            () => row.original.funder.name,
+                        ),
+                        h('p', { class: 'truncate text-xs text-muted' }, row.original.name),
+                    ]),
                 ]),
-            ]),
-    },
-    {
-        accessorKey: 'goal_type',
-        header: 'Goal',
-        cell: ({ row }) => h(PipelineGoalBadge, { goalType: row.original.goal_type }),
-    },
-    { accessorKey: 'stage', header: 'Stage', cell: ({ row }) => h(PipelineStageBadge, { stage: row.original.stage }) },
-    {
-        accessorKey: 'amount_cents',
-        header: 'Amount',
-        meta: { class: { th: 'text-right', td: 'text-right' } },
-        cell: ({ row }) => formatMoney({ cents: row.original.amount_cents, compact: true }),
-    },
-    {
-        accessorKey: 'weighted_amount_cents',
-        header: 'Weighted',
-        meta: { class: { th: 'text-right', td: 'text-right text-muted' } },
-        cell: ({ row }) =>
-            `${formatMoney({ cents: row.original.weighted_amount_cents, compact: true })} · ${row.original.probability}%`,
-    },
-    {
-        accessorKey: 'expected_receipt_at',
-        header: 'Expected',
-        cell: ({ row }) => formatDate({ value: row.original.expected_receipt_at, unknown: 'Not set' }),
-    },
-    {
-        accessorKey: 'next_step',
-        header: 'Next step',
-        meta: { class: { td: 'max-w-xs truncate text-muted' } },
-        cell: ({ row }) => row.original.next_step ?? '',
-    },
-    { accessorKey: 'owner', header: 'Owner', cell: ({ row }) => row.original.owner?.name ?? '' },
-]
+        },
+        {
+            accessorKey: 'goal_type',
+            header: 'Goal',
+            cell: ({ row }) => h(PipelineGoalBadge, { goalType: row.original.goal_type }),
+        },
+        {
+            id: 'stage',
+            accessorFn: opportunity => STAGE_ORDER.get(opportunity.stage),
+            header: 'Stage',
+            cell: ({ row }) => h(PipelineStageBadge, { stage: row.original.stage }),
+        },
+        {
+            id: 'amount_cents',
+            accessorFn: opportunity => opportunity.amount_cents ?? undefined,
+            header: 'Amount',
+            meta: { class: { th: 'text-right', td: 'text-right' } },
+            cell: ({ row }) => formatMoney({ cents: row.original.amount_cents, compact: true }),
+        },
+        {
+            accessorKey: 'weighted_amount_cents',
+            header: 'Weighted',
+            meta: { class: { th: 'text-right', td: 'text-right text-muted' } },
+            cell: ({ row }) =>
+                `${formatMoney({ cents: row.original.weighted_amount_cents, compact: true })} · ${row.original.probability}%`,
+        },
+        {
+            id: 'expected_receipt_at',
+            accessorFn: opportunity => opportunity.expected_receipt_at ?? undefined,
+            header: 'Expected',
+            cell: ({ row }) => formatDate({ value: row.original.expected_receipt_at, unknown: 'Not set' }),
+        },
+        {
+            id: 'next_step',
+            accessorFn: opportunity => opportunity.next_step?.toLowerCase() ?? undefined,
+            header: 'Next step',
+            meta: { class: { td: 'max-w-xs truncate text-muted' } },
+            cell: ({ row }) => row.original.next_step ?? '',
+        },
+        {
+            id: 'owner',
+            accessorFn: opportunity => opportunity.owner?.name ?? undefined,
+            header: 'Owner',
+            cell: ({ row }) => row.original.owner?.name ?? '',
+        },
+    ],
+})
 
 // Every opportunity on the lending tab has the same goal, so its column is left out there.
 const visibleOpportunityColumns = computed(() =>
@@ -166,65 +187,86 @@ const visibleOpportunityColumns = computed(() =>
         : opportunityColumns,
 )
 
-const funderColumns: TableColumn<Funder>[] = [
-    {
-        accessorKey: 'name',
-        header: 'Funder',
-        cell: ({ row }) =>
-            h('div', { class: 'flex items-center gap-2' }, [
+const funderColumns: TableColumn<Funder>[] = sortableColumns({
+    columns: [
+        {
+            id: 'name',
+            accessorFn: funder => funder.name.toLowerCase(),
+            header: 'Funder',
+            cell: ({ row }) =>
+                h('div', { class: 'flex items-center gap-2' }, [
+                    h(
+                        NuxtLink,
+                        {
+                            to: `/pipeline/funders/${row.original.id}`,
+                            class: 'font-medium text-highlighted hover:underline',
+                        },
+                        () => row.original.name,
+                    ),
+                    row.original.status === 'draft'
+                        ? h(UBadge, { label: 'Draft', color: 'warning', size: 'sm' })
+                        : null,
+                    row.original.awaiting_reply_since
+                        ? h(UBadge, { label: 'Reply needed', color: 'info', size: 'sm', icon: 'i-lucide-reply' })
+                        : null,
+                ]),
+        },
+        {
+            id: 'tier',
+            accessorFn: funder => funder.tier ?? undefined,
+            header: 'Tier',
+            cell: ({ row }) => h(PipelineTierBadge, { tier: row.original.tier }),
+        },
+        {
+            id: 'relationship_status',
+            accessorFn: funder => RELATIONSHIP_ORDER.get(funder.relationship_status),
+            header: 'Relationship',
+            cell: ({ row }) => h(PipelineRelationshipBadge, { status: row.original.relationship_status }),
+        },
+        {
+            accessorKey: 'goal_types',
+            header: 'Goals',
+            enableSorting: false,
+            cell: ({ row }) =>
                 h(
-                    NuxtLink,
-                    {
-                        to: `/pipeline/funders/${row.original.id}`,
-                        class: 'font-medium text-highlighted hover:underline',
-                    },
-                    () => row.original.name,
+                    'div',
+                    { class: 'flex gap-1' },
+                    row.original.goal_types.map(goalType => h(PipelineGoalBadge, { goalType })),
                 ),
-                row.original.status === 'draft' ? h(UBadge, { label: 'Draft', color: 'warning', size: 'sm' }) : null,
-                row.original.awaiting_reply_since
-                    ? h(UBadge, { label: 'Reply needed', color: 'info', size: 'sm', icon: 'i-lucide-reply' })
-                    : null,
-            ]),
-    },
-    { accessorKey: 'tier', header: 'Tier', cell: ({ row }) => h(PipelineTierBadge, { tier: row.original.tier }) },
-    {
-        accessorKey: 'relationship_status',
-        header: 'Relationship',
-        cell: ({ row }) => h(PipelineRelationshipBadge, { status: row.original.relationship_status }),
-    },
-    {
-        accessorKey: 'goal_types',
-        header: 'Goals',
-        cell: ({ row }) =>
-            h(
-                'div',
-                { class: 'flex gap-1' },
-                row.original.goal_types.map(goalType => h(PipelineGoalBadge, { goalType })),
-            ),
-    },
-    {
-        id: 'secured',
-        header: 'Secured',
-        meta: { class: { th: 'text-right', td: 'text-right' } },
-        cell: ({ row }) =>
-            formatMoney({
-                cents: row.original.totals.committed_amount_cents + row.original.totals.received_amount_cents,
-                compact: true,
-            }),
-    },
-    {
-        id: 'open',
-        header: 'Open asks',
-        meta: { class: { th: 'text-right', td: 'text-right text-muted' } },
-        cell: ({ row }) => formatMoney({ cents: row.original.totals.open_amount_cents, compact: true }),
-    },
-    { accessorKey: 'geo_focus', header: 'Geo', meta: { class: { td: 'text-muted' } } },
-    {
-        accessorKey: 'last_contact_at',
-        header: 'Last contact',
-        cell: ({ row }) => formatDate({ value: row.original.last_contact_at, unknown: 'None logged' }),
-    },
-]
+        },
+        {
+            id: 'secured',
+            accessorFn: funder => funder.totals.committed_amount_cents + funder.totals.received_amount_cents,
+            header: 'Secured',
+            meta: { class: { th: 'text-right', td: 'text-right' } },
+            cell: ({ row }) =>
+                formatMoney({
+                    cents: row.original.totals.committed_amount_cents + row.original.totals.received_amount_cents,
+                    compact: true,
+                }),
+        },
+        {
+            id: 'open',
+            accessorFn: funder => funder.totals.open_amount_cents,
+            header: 'Open asks',
+            meta: { class: { th: 'text-right', td: 'text-right text-muted' } },
+            cell: ({ row }) => formatMoney({ cents: row.original.totals.open_amount_cents, compact: true }),
+        },
+        {
+            id: 'geo_focus',
+            accessorFn: funder => funder.geo_focus ?? undefined,
+            header: 'Geo',
+            meta: { class: { td: 'text-muted' } },
+            cell: ({ row }) => row.original.geo_focus ?? '',
+        },
+        {
+            id: 'last_contact_at',
+            accessorFn: funder => funder.last_contact_at ?? undefined,
+            header: 'Last contact',
+            cell: ({ row }) => formatDate({ value: row.original.last_contact_at, unknown: 'None logged' }),
+        },
+    ],
+})
 
 /**
  * Open the edit form for an opportunity.
