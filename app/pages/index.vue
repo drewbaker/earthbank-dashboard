@@ -18,6 +18,8 @@ useSeoMeta({ title: 'Overview · Earth Bank Dashboard' })
 const api = useApi()
 const { currentUser } = useAuth()
 const { goals } = usePipelineReference()
+// Design grants are what fund OpEx, so the separate OpEx goal isn't shown.
+const shownGoals = computed(() => (goals.data.value?.data ?? []).filter(goal => goal.type !== 'opex'))
 const { inputs, isReady, baseProjection } = useForecast()
 const isPlannedExpenseOpen = ref(false)
 const editingPlannedExpense = ref<PlannedExpense | null>(null)
@@ -205,7 +207,7 @@ function describeRunway({ end }: { end: RunwayEnd }) {
                     @saved="inputs.refresh()"
                 />
 
-                <PipelineGoalSummary v-if="goals.data.value" :goals="goals.data.value.data" />
+                <PipelineGoalSummary v-if="goals.data.value" :goals="shownGoals" />
 
                 <div class="grid gap-6 lg:grid-cols-2">
                     <UCard :ui="{ body: 'p-0 sm:p-0' }">

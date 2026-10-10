@@ -22,7 +22,7 @@ function securedPercent({ goal }: { goal: Goal }) {
 </script>
 
 <template>
-    <div class="grid gap-4" :class="isStacked ? 'grid-cols-1' : 'sm:grid-cols-2 lg:grid-cols-3'">
+    <div class="grid gap-4" :class="isStacked ? 'grid-cols-1' : 'sm:grid-cols-2'">
         <UCard v-for="goal in goals" :key="goal.id" :ui="{ body: 'space-y-3' }">
             <div class="flex items-start justify-between gap-2">
                 <div>
