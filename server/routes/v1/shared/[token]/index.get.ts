@@ -11,7 +11,7 @@ defineRouteMeta({
         tags: ['Sharing'],
         summary: 'Shared pipeline (public)',
         description:
-            'No sign-in: needs the secret link and, once per browser every 12 hours, its password (POST …/unlock). Shows funder names, contact names, geographic focus, amounts, stages and short next steps only.',
+            'No sign-in: needs the secret link and, if it has one, its password once per browser every 12 hours (POST …/unlock). Shows funder names, contact names, geographic focus, amounts, stages and short next steps only.',
         parameters: [{ name: 'token', in: 'path', required: true, schema: { type: 'string' } }],
         responses: {
             200: {
@@ -30,7 +30,8 @@ export default defineApiHandler(async event => {
     if (!link) {
         throw notFound({ resource: 'Link' })
     }
-    if (!isShareLinkUnlocked({ event, shareLinkId: link.id })) {
+    // A link without a password is opened by its secret URL alone.
+    if (link.password_hash && !isShareLinkUnlocked({ event, shareLinkId: link.id })) {
         throw unauthorized({ message: 'Enter the password to view this page.' })
     }
     await recordShareLinkView({ shareLinkId: link.id, viewedAt: new Date() })

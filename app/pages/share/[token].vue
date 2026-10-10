@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
 import { computed, h, ref, resolveComponent } from 'vue'
-import { definePageMeta, useAsyncData, useRoute, useSeoMeta } from '#imports'
+import { definePageMeta, useAsyncData, useHead, useRoute, useSeoMeta } from '#imports'
 import { OPPORTUNITY_STAGES } from '#shared/constants/pipeline.ts'
 import type { SharedAsk, SharedPipeline } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
@@ -12,7 +12,9 @@ import { sortableColumns } from '~/utils/table-sorting.ts'
 // Funders open this without an account: the secret link plus a password. Nothing here links back
 // into the dashboard.
 definePageMeta({ layout: false, public: true })
-useSeoMeta({ title: 'Funding pipeline · Earth Bank', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Funding pipeline · Earth Bank', robots: 'noindex, nofollow, noarchive, nosnippet' })
+// The link's secret is in the URL; don't pass it on to any site this page links to.
+useHead({ meta: [{ name: 'referrer', content: 'no-referrer' }] })
 
 const api = useApi()
 const route = useRoute()

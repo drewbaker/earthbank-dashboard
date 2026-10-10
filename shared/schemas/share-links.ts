@@ -8,7 +8,8 @@ export const ShareLink = z.object({
     id: z.string(),
     label: z.string(),
     url: z.string(),
-    /** Null for links made before passwords were kept. */
+    has_password: z.boolean(),
+    /** Null when there's no password, or for links made before passwords were kept. */
     password: z.string().nullable(),
     show_next_steps: z.boolean(),
     created_by: UserSummary.nullable(),
@@ -22,7 +23,8 @@ export type ShareLinkList = z.infer<typeof ShareLinkList>
 
 export const CreateShareLinkRequest = z.object({
     label: z.string().trim().min(1, 'Give the link a name.').max(120),
-    password: z.string().min(8, 'Use at least 8 characters.').max(200),
+    /** Empty for no password: the secret link alone opens the page. */
+    password: z.union([z.literal(''), z.string().min(8, 'Use at least 8 characters, or leave it empty.').max(200)]),
     show_next_steps: z.boolean().default(true),
 })
 export type CreateShareLinkRequest = z.infer<typeof CreateShareLinkRequest>

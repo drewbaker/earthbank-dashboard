@@ -42,6 +42,7 @@ export function serializeShareLink({ link }: { link: ShareLinkRow & { created_by
         id: link.id,
         label: link.label,
         url: token ? shareUrl({ token }) : '',
+        has_password: link.password_hash !== null,
         password: link.password_encrypted ? decryptSecret({ encrypted: link.password_encrypted }) : null,
         show_next_steps: link.show_next_steps,
         created_by: serializeUserSummary({ user: link.created_by }),

@@ -36,7 +36,7 @@ async function createLink(event: FormSubmitEvent<z.output<typeof CreateShareLink
         await navigator.clipboard.writeText(link.url).catch(() => undefined)
         toast.add({
             title: 'Link created and copied',
-            description: 'Send the password separately from the link.',
+            description: link.has_password ? 'Send the password separately from the link.' : undefined,
             color: 'success',
         })
         Object.assign(draft, { label: '', password: '', show_next_steps: true })
@@ -89,9 +89,9 @@ async function revokeLink({ link }: { link: ShareLink }) {
             <div>
                 <h2 class="text-lg font-semibold text-highlighted">Share the pipeline with funders</h2>
                 <p class="text-sm text-muted">
-                    A secret link plus a password opens a read-only page with every design grant and lending capital
-                    ask: organization, contact names, geographic focus, amount, status and, if you choose, a short next
-                    step. Emails, notes, owners and AI reasoning are never shown. Declined asks are left out.
+                    A secret link (with an optional password) opens a read-only page with every design grant and lending
+                    capital ask: organization, contact names, geographic focus, amount, status and, if you choose, a
+                    short next step. Emails, notes, owners and AI reasoning are never shown. Declined asks are left out.
                 </p>
             </div>
             <UCard>
@@ -104,7 +104,11 @@ async function revokeLink({ link }: { link: ShareLink }) {
                     <UFormField label="Name (for you)" name="label">
                         <UInput v-model="draft.label" placeholder="Funders, October 2026" class="w-full" />
                     </UFormField>
-                    <UFormField label="Password" name="password" help="At least 8 characters. Send it separately.">
+                    <UFormField
+                        label="Password"
+                        name="password"
+                        help="Optional. Leave empty and anyone with the link can view it; the link itself is a long random secret."
+                    >
                         <UInput v-model="draft.password" type="password" autocomplete="new-password" class="w-full" />
                     </UFormField>
                     <USwitch
@@ -132,7 +136,10 @@ async function revokeLink({ link }: { link: ShareLink }) {
                                 <code v-if="link.password" class="rounded bg-elevated px-1 text-highlighted">{{
                                     link.password
                                 }}</code>
-                                <template v-else>not saved (made before passwords were kept; make a new link)</template>
+                                <template v-else-if="link.has_password"
+                                    >not saved (made before passwords were kept; make a new link)</template
+                                >
+                                <template v-else>none (the link alone opens it)</template>
                             </p>
                             <p class="text-xs text-muted">
                                 Made by {{ link.created_by?.name ?? 'a former team member' }}

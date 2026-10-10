@@ -152,6 +152,24 @@ describe('share link routes', () => {
         expect((await call(new Request('http://localhost/v1/shared/not-a-real-token'))).status).toBe(404)
     })
 
+    it('opens without a password when the link has none', async () => {
+        const { createShareLinkRow } = await import('#server/database/share-links.ts')
+        const { encryptSecret, hashToken, newOpaqueToken } = await import('#server/utils/crypto.ts')
+        const openToken = newOpaqueToken()
+        await createShareLinkRow({
+            label: 'Open link',
+            tokenHash: hashToken({ token: openToken }),
+            tokenEncrypted: encryptSecret({ plaintext: openToken }),
+            passwordHash: null,
+            passwordEncrypted: null,
+            showNextSteps: false,
+            createdByUserId: userId,
+        })
+        const view = await call(new Request(`http://localhost/v1/shared/${openToken}`))
+        expect(view.status).toBe(200)
+        expect((await view.json()).design_grants[0].next_step).toBeNull()
+    })
+
     it('stops working once turned off', async () => {
         const { revokeShareLinkRow } = await import('#server/database/share-links.ts')
         await revokeShareLinkRow({ shareLinkId, revokedAt: new Date() })

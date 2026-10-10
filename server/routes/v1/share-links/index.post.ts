@@ -13,7 +13,7 @@ defineRouteMeta({
     openAPI: {
         tags: ['Sharing'],
         summary: 'Create a share link',
-        description: 'A secret link plus a password; send both to funders (ideally the password separately).',
+        description: 'A secret link, optionally with a password (send it separately from the link).',
         requestBody: {
             required: true,
             content: { 'application/json': { schema: { $ref: '#/components/schemas/CreateShareLinkRequest' } } },
@@ -35,8 +35,8 @@ export default defineApiHandler(async event => {
         label: body.label,
         tokenHash: hashToken({ token }),
         tokenEncrypted: encryptSecret({ plaintext: token }),
-        passwordHash: await hashPassword({ password: body.password }),
-        passwordEncrypted: encryptSecret({ plaintext: body.password }),
+        passwordHash: body.password ? await hashPassword({ password: body.password }) : null,
+        passwordEncrypted: body.password ? encryptSecret({ plaintext: body.password }) : null,
         showNextSteps: body.show_next_steps,
         createdByUserId: ctx.user.id,
     })
@@ -45,7 +45,7 @@ export default defineApiHandler(async event => {
         action: 'share_link.created',
         entityType: 'share_link',
         entityId: link.id,
-        changes: { label: body.label, show_next_steps: body.show_next_steps },
+        changes: { label: body.label, show_next_steps: body.show_next_steps, has_password: Boolean(body.password) },
         ip: requestIp({ event }),
     })
     setResponseStatus(event, 201)

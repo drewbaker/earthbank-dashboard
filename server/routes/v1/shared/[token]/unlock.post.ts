@@ -41,7 +41,7 @@ export default defineApiHandler(async event => {
         throw tooManyRequests({ message: 'Too many wrong passwords. Try again in 15 minutes.' })
     }
     const { password } = await parseBody({ event, schema: UnlockShareLinkRequest })
-    if (!(await verifyPassword({ password, passwordHash: link.password_hash }))) {
+    if (link.password_hash && !(await verifyPassword({ password, passwordHash: link.password_hash }))) {
         recordFailedShareLinkAttempt({ shareLinkId: link.id })
         throw badRequest({ message: "That password isn't right.", code: 'wrong_password' })
     }

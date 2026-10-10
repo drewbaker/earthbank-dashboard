@@ -568,8 +568,8 @@ model ShareLink {
     // Looked up by hash; the encrypted copy lets Settings show the link again.
     token_hash         String    @unique
     token_encrypted    String
-    // scrypt: "scrypt$<salt>$<hash>", both base64url.
-    password_hash      String
+    // scrypt: "scrypt$<salt>$<hash>", both base64url. Null: no password, the secret URL alone opens it.
+    password_hash      String?
     // The team can see the password again in Settings (it isn't a secret from them); null for links
     // made before passwords were kept.
     password_encrypted String?
