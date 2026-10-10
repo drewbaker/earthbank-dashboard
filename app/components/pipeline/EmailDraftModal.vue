@@ -174,12 +174,12 @@ async function copyBody() {
             <div v-else-if="step === 'review' && draft" class="space-y-4">
                 <p class="text-sm text-muted">
                     <template v-if="draft.thread">
-                        <UIcon name="i-lucide-reply" class="mr-1 inline size-4 align-text-bottom" />
+                        <UIcon name="i-lucide-reply" class="mr-1 inline-block size-4 align-text-bottom" />
                         Reply to “{{ draft.thread.subject }}” from {{ draft.thread.last_message_from }},
                         {{ formatDate({ value: draft.thread.last_message_at }) }}
                     </template>
                     <template v-else>
-                        <UIcon name="i-lucide-mail-plus" class="mr-1 inline size-4 align-text-bottom" />
+                        <UIcon name="i-lucide-mail-plus" class="mr-1 inline-block size-4 align-text-bottom" />
                         No email with them in the last year in your Gmail, so this is a new email.
                     </template>
                 </p>

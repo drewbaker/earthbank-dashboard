@@ -107,7 +107,7 @@ const STATUS_BADGES: Record<ChangeEvent['status'], { label: string; color: 'warn
                     <p class="text-muted">
                         <UIcon
                             :name="event.evidence.source === 'forward' ? 'i-lucide-forward' : 'i-lucide-mail'"
-                            class="mr-1 inline size-3.5 align-text-bottom"
+                            class="mr-1 inline-block size-3.5 align-text-bottom"
                         />
                         {{ event.evidence.from_address }} · {{ formatDate({ value: event.evidence.sent_at }) }}
                         <template v-if="event.evidence.mailbox_user">

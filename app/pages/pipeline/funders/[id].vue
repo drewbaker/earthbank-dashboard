@@ -262,7 +262,7 @@ async function toggleArchived() {
                                         <p v-if="opportunity.focus_areas.length" class="text-xs text-muted">
                                             <UIcon
                                                 name="i-lucide-map-pin"
-                                                class="mr-0.5 inline size-3 align-text-bottom"
+                                                class="mr-0.5 inline-block size-3 align-text-bottom"
                                             />
                                             {{
                                                 opportunity.focus_areas.map(code => geoFocusLabel({ code })).join(', ')
