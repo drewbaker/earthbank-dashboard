@@ -41,7 +41,7 @@ export default defineApiHandler(async event => {
         countFunderEmailEvidence({ funderId }),
     ])
     return {
-        data: rows.map(evidence => serializeEmailEvidence({ evidence, viewerEmail: ctx.user.email })),
+        data: rows.map(evidence => serializeEmailEvidence({ evidence, viewer: { id: ctx.user.id, email: ctx.user.email } })),
         next_cursor: null,
         has_more: total > rows.length,
         total,

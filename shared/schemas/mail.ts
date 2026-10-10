@@ -59,7 +59,7 @@ export const EmailEvidence = z.object({
     mailbox_user: UserSummary.nullable(),
     /** Pipeline changes this email caused (null where not loaded). */
     change_count: z.number().int().nullable(),
-    /** Finds the email in the viewer's Gmail. */
+    /** Finds the email in Gmail; only for the person whose inbox it was read from, else null. */
     gmail_url: z.string().nullable(),
 })
 export type EmailEvidence = z.infer<typeof EmailEvidence>

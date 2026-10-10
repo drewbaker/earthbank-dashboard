@@ -72,6 +72,9 @@ const sentCount = computed(() => emails.value?.data.filter(email => email.direct
                         {{ formatDate({ value: email.sent_at }) }}
                         <template v-if="email.source === 'forward'"> · forwarded</template>
                         <template v-if="email.mailbox_user"> · from {{ email.mailbox_user.name }}'s Gmail</template>
+                        <template v-if="email.mailbox_user && !email.gmail_url">
+                            · only {{ email.mailbox_user.name.split(' ')[0] }} can open it</template
+                        >
                     </p>
                 </div>
                 <UButton

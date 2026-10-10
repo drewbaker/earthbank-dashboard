@@ -10,6 +10,7 @@ import {
 } from '#shared/constants/pipeline.ts'
 import type { ChangeEvent } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
+import { useAuth } from '~/composables/useAuth.ts'
 import { usePipelineReference } from '~/composables/usePipelineReference.ts'
 import { changeFieldLabel, formatChangeValue } from '~/utils/change-values.ts'
 import { formatDate, formatRelativeTime } from '~/utils/format.ts'
@@ -25,6 +26,7 @@ const emit = defineEmits<{
 const api = useApi()
 const toast = useToast()
 const { team, goalTypeById } = usePipelineReference()
+const { currentUser } = useAuth()
 
 const lookups = computed(() => ({
     userNames: new Map((team.data.value?.data ?? []).map(user => [user.id, user.name] as const)),
@@ -47,6 +49,33 @@ const suggestedText = computed(() =>
         lookups: lookups.value,
         isFullText: true,
     }),
+)
+
+// The email behind the change: whose inbox it came from, and who it was between. Only that person
+// gets "Open in Gmail" (the server leaves the link out for everyone else).
+const evidence = computed(() => props.event.evidence)
+const mailboxOwner = computed(() => evidence.value?.mailbox_user ?? null)
+const isViewersMailbox = computed(() => Boolean(mailboxOwner.value && mailboxOwner.value.id === currentUser.value?.id))
+const mailboxLabel = computed(() => {
+    if (!mailboxOwner.value) return 'From an email'
+    const owner = isViewersMailbox.value ? 'your' : `${mailboxOwner.value.name}'s`
+    return evidence.value?.source === 'forward'
+        ? `Forwarded by ${isViewersMailbox.value ? 'you' : mailboxOwner.value.name}`
+        : `From ${owner} Gmail`
+})
+const emailParties = computed(() => {
+    if (!evidence.value) return ''
+    const owner = isViewersMailbox.value ? 'you' : (mailboxOwner.value?.name.split(' ')[0] ?? 'Earth Bank')
+    const other = evidence.value.counterpart ?? evidence.value.from_address
+    return evidence.value.direction === 'sent' ? `${owner} → ${other}` : `${other} → ${owner}`
+})
+const ownerInitials = computed(() =>
+    (mailboxOwner.value?.name ?? '?')
+        .split(/\s+/)
+        .map(part => part[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase(),
 )
 
 const isPending = computed(() => props.event.status === 'pending')
@@ -186,6 +215,39 @@ async function saveEdit() {
             />
         </div>
 
+        <div v-if="evidence" class="flex items-start gap-3 rounded-md border border-default p-3">
+            <UAvatar
+                :src="mailboxOwner?.avatar_url ?? undefined"
+                :text="ownerInitials"
+                :alt="mailboxOwner?.name"
+                size="sm"
+                class="shrink-0"
+            />
+            <div class="min-w-0 flex-1 text-sm">
+                <p>
+                    <span class="font-medium text-highlighted">{{ mailboxLabel }}</span>
+                    <span class="text-muted">
+                        · {{ emailParties }} · {{ formatDate({ value: evidence.sent_at }) }}</span
+                    >
+                </p>
+                <p v-if="evidence.subject" class="truncate text-toned">{{ evidence.subject }}</p>
+                <p v-if="mailboxOwner && !isViewersMailbox" class="mt-1 flex items-center gap-1 text-xs text-muted">
+                    <UIcon name="i-lucide-lock" class="size-3.5" />
+                    Only {{ mailboxOwner.name.split(' ')[0] }} can open this email
+                </p>
+            </div>
+            <UButton
+                v-if="evidence.gmail_url"
+                size="sm"
+                color="neutral"
+                icon="i-lucide-external-link"
+                label="Open in Gmail"
+                :to="evidence.gmail_url"
+                target="_blank"
+                class="shrink-0"
+            />
+        </div>
+
         <template v-if="!isEditing">
             <!-- Each box is also its button: click the value you want. -->
             <div class="grid grid-cols-2 gap-3">
@@ -276,24 +338,8 @@ async function saveEdit() {
             </div>
         </div>
 
-        <div class="flex flex-wrap gap-2">
-            <UButton
-                v-if="editorKind && !isEditing"
-                size="sm"
-                color="neutral"
-                icon="i-lucide-pencil"
-                label="Edit"
-                @click="startEditing"
-            />
-            <UButton
-                v-if="event.evidence?.gmail_url"
-                size="sm"
-                color="neutral"
-                icon="i-lucide-external-link"
-                label="Open email in Gmail"
-                :to="event.evidence.gmail_url"
-                target="_blank"
-            />
+        <div v-if="editorKind && !isEditing" class="flex flex-wrap gap-2">
+            <UButton size="sm" color="neutral" icon="i-lucide-pencil" label="Edit" @click="startEditing" />
         </div>
 
         <p class="text-xs text-muted">
@@ -301,11 +347,6 @@ async function saveEdit() {
             {{ formatRelativeTime({ value: event.created_at }) }}
             <template v-if="event.reason"> · Why: {{ event.reason }}</template>
             <template v-if="OUTCOME_NOTES[event.status]"> · {{ OUTCOME_NOTES[event.status] }}</template>
-            <template v-if="event.evidence">
-                · from {{ event.evidence.counterpart ?? event.evidence.from_address }},
-                {{ formatDate({ value: event.evidence.sent_at }) }}
-                <template v-if="event.evidence.subject">("{{ event.evidence.subject }}")</template>
-            </template>
             <template v-if="event.confidence !== null"> · {{ Math.round(event.confidence * 100) }}% sure</template>
         </p>
     </article>

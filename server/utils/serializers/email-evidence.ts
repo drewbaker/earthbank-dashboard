@@ -9,15 +9,16 @@ import { emailDomain } from '#shared/utils/email-addresses.ts'
  * not the full recipient list.
  *
  * @param input.evidence - The evidence row with its mailbox owner (and change count, when loaded).
- * @param input.viewerEmail - The signed-in person's address, so "Open in Gmail" opens their own inbox.
+ * @param input.viewer - The signed-in person. The Gmail link is only given to the person whose inbox the
+ *   email was read from: nobody else can open it in their Gmail.
  * @returns The API representation.
  */
 export function serializeEmailEvidence({
     evidence,
-    viewerEmail,
+    viewer,
 }: {
     evidence: EmailEvidenceRow & { mailbox_user: UserRow | null; _count?: { change_events: number } }
-    viewerEmail?: string
+    viewer?: { id: string; email: string }
 }): EmailEvidence {
     const isSent = config.internalEmailDomains.includes(emailDomain({ email: evidence.from_address }))
     const recipients = Array.isArray(evidence.to_addresses) ? (evidence.to_addresses as string[]) : []
@@ -38,13 +39,15 @@ export function serializeEmailEvidence({
         funder_id: evidence.funder_id,
         mailbox_user: serializeUserSummary({ user: evidence.mailbox_user }),
         change_count: evidence._count?.change_events ?? null,
-        gmail_url: gmailSearchUrl({ messageIdHeader: evidence.message_id_header, viewerEmail }),
+        gmail_url:
+            viewer && evidence.mailbox_user_id === viewer.id
+                ? gmailSearchUrl({ messageIdHeader: evidence.message_id_header, viewerEmail: viewer.email })
+                : null,
     }
 }
 
 /**
- * A link that finds the email in Gmail by its Message-ID. It opens in the viewer's own inbox, so it
- * works for anyone who has the email (the sender, recipients, people cc'd).
+ * A link that finds the email in Gmail by its Message-ID, in the given person's inbox.
  *
  * @param input.messageIdHeader - The RFC 5322 Message-ID.
  * @param input.viewerEmail - Whose Gmail to open.

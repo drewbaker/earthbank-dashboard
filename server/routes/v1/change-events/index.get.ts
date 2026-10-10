@@ -47,6 +47,6 @@ export default defineApiHandler(async event => {
         status: query.status,
         cursor: query.cursor,
         limit: query.limit,
-        viewerEmail: ctx.user.email,
+        viewer: { id: ctx.user.id, email: ctx.user.email },
     })
 })

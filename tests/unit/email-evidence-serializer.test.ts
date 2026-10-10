@@ -1,5 +1,5 @@
 // Covers how an email shows on the funder page: sent or received, who the other side is, and a Gmail
-// link that finds it by Message-ID in the viewer's own inbox. Sensitive subjects stay hidden.
+// link that finds it by Message-ID in the inbox it was read from (only for that person). Sensitive subjects stay hidden.
 import { describe, expect, it } from 'vitest'
 import { serializeEmailEvidence } from '#server/utils/serializers/email-evidence.ts'
 
@@ -34,7 +34,10 @@ function evidenceRow(overrides: Record<string, unknown>) {
 
 describe('serializeEmailEvidence', () => {
     it('marks funder email as received from the funder, with a Gmail link for the viewer', () => {
-        const email = serializeEmailEvidence({ evidence: evidenceRow({}), viewerEmail: 'leslie@theearthbank.org' })
+        const email = serializeEmailEvidence({
+            evidence: evidenceRow({ mailbox_user_id: 'usr_leslie' }),
+            viewer: { id: 'usr_leslie', email: 'leslie@theearthbank.org' },
+        })
         expect(email).toMatchObject({ direction: 'received', counterpart: 'tom@ubs.com', change_count: 2 })
         expect(email.gmail_url).toBe(
             'https://mail.google.com/mail/?authuser=leslie%40theearthbank.org#search/rfc822msgid%3Aabc.123%40mail.gmail.com',
