@@ -281,15 +281,18 @@ function describeRunway({ end }: { end: RunwayEnd }) {
                             <UButton to="/activity" label="Activity" size="xs" color="neutral" variant="ghost" />
                         </div>
                     </template>
-                    <PipelineChangeTimeline
-                        v-if="recentChanges?.data.length"
-                        :events="recentChanges.data"
-                        show-entity-name
-                        :busy-event-id="busyEventId"
-                        @accept="acceptChange"
-                        @reject="rejectChange"
-                        @revert="revertChange"
-                    />
+                    <div v-if="recentChanges?.data.length" class="divide-y divide-default">
+                        <ActivityChangeCard
+                            v-for="event in recentChanges.data"
+                            :key="event.id"
+                            :event="event"
+                            :is-busy="busyEventId === event.id"
+                            @accept="acceptChange"
+                            @reject="rejectChange"
+                            @revert="revertChange"
+                            @edited="refreshChanges"
+                        />
+                    </div>
                     <p v-else class="text-sm text-muted">No changes yet.</p>
                 </UCard>
             </div>

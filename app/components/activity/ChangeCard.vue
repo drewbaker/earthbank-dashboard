@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useToast } from '#imports'
 import {
+    CHANGE_SOURCE_LABELS,
     OPPORTUNITY_STAGE_DETAILS,
     OPPORTUNITY_STAGES,
     RELATIONSHIP_STATUS_DETAILS,
@@ -11,10 +12,15 @@ import type { ChangeEvent } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { usePipelineReference } from '~/composables/usePipelineReference.ts'
 import { changeFieldLabel, formatChangeValue } from '~/utils/change-values.ts'
-import { formatDate } from '~/utils/format.ts'
+import { formatDate, formatRelativeTime } from '~/utils/format.ts'
 
 const props = defineProps<{ event: ChangeEvent; isBusy: boolean }>()
-const emit = defineEmits<{ accept: [event: ChangeEvent]; reject: [event: ChangeEvent]; edited: [] }>()
+const emit = defineEmits<{
+    accept: [event: ChangeEvent]
+    reject: [event: ChangeEvent]
+    revert: [event: ChangeEvent]
+    edited: []
+}>()
 
 const api = useApi()
 const toast = useToast()
@@ -42,6 +48,29 @@ const suggestedText = computed(() =>
         isFullText: true,
     }),
 )
+
+const isPending = computed(() => props.event.status === 'pending')
+const isSaved = computed(() => props.event.status === 'applied')
+
+// The card's question while it waits for review, and its outcome afterwards.
+const STATUS_DETAILS: Record<
+    Exclude<ChangeEvent['status'], 'pending'>,
+    { title: string; badge: string; color: 'success' | 'neutral' | 'warning' | 'error'; icon: string }
+> = {
+    applied: { title: 'updated', badge: 'Saved', color: 'success', icon: 'i-lucide-check' },
+    rejected: { title: 'kept as it was', badge: 'Kept current', color: 'neutral', icon: 'i-lucide-x' },
+    reverted: { title: 'changed back', badge: 'Reverted', color: 'error', icon: 'i-lucide-undo-2' },
+    superseded: { title: 'not changed', badge: 'Out of date', color: 'neutral', icon: 'i-lucide-clock' },
+}
+const outcome = computed(() => (props.event.status === 'pending' ? null : STATUS_DETAILS[props.event.status]))
+
+// AI suggestions read "Now / Suggested"; everything else is a record of what changed.
+const isSuggestion = computed(() => props.event.source.startsWith('ai_') && props.event.source !== 'ai_instruction')
+const beforeLabel = computed(() => (isPending.value ? 'Now' : 'Before'))
+const afterLabel = computed(() => {
+    if (isPending.value || !isSaved.value) return isSuggestion.value ? 'Suggested' : 'After'
+    return 'Saved'
+})
 
 // How each field can be edited by hand before saving; fields not listed can only be accepted or kept.
 type EditorKind = 'text' | 'money' | 'date' | 'stage' | 'relationship'
@@ -75,7 +104,8 @@ const draftDollars = ref<number | undefined>(undefined)
  * @returns Nothing.
  */
 function startEditing() {
-    const value = props.event.to_value
+    // Start from the value the field holds now: the suggestion while pending or once saved, else the old one.
+    const value = isPending.value || isSaved.value ? props.event.to_value : props.event.from_value
     if (editorKind.value === 'money') {
         draftDollars.value = typeof value === 'number' ? value / 100 : undefined
     } else {
@@ -117,40 +147,77 @@ async function saveEdit() {
 
 <template>
     <article class="space-y-3 py-4">
-        <div>
-            <NuxtLink
-                v-if="event.funder_id"
-                :to="`/pipeline/funders/${event.funder_id}`"
-                class="text-sm text-muted hover:underline"
-            >
-                {{ event.entity_name }}
-            </NuxtLink>
-            <p class="font-medium text-highlighted">Update the {{ fieldLabel.toLowerCase() }}?</p>
+        <div class="flex items-start justify-between gap-3">
+            <div>
+                <NuxtLink
+                    v-if="event.funder_id"
+                    :to="`/pipeline/funders/${event.funder_id}`"
+                    class="text-sm text-muted hover:underline"
+                >
+                    {{ event.entity_name }}
+                </NuxtLink>
+                <p class="font-medium text-highlighted">
+                    <template v-if="outcome">{{ fieldLabel }} {{ outcome.title }}</template>
+                    <template v-else>Update the {{ fieldLabel.toLowerCase() }}?</template>
+                </p>
+            </div>
+            <UBadge
+                v-if="outcome"
+                :label="outcome.badge"
+                :color="outcome.color"
+                :icon="outcome.icon"
+                variant="subtle"
+                class="shrink-0"
+            />
         </div>
 
         <template v-if="!isEditing">
             <!-- Each box is also its button: click the value you want. -->
             <div class="grid grid-cols-2 gap-3">
                 <button
+                    v-if="isPending || isSaved"
                     type="button"
                     class="rounded-md border border-default p-3 text-left hover:border-accented disabled:opacity-60"
                     :disabled="isBusy"
-                    @click="emit('reject', event)"
+                    @click="isPending ? emit('reject', event) : emit('revert', event)"
                 >
-                    <span class="mb-1 block text-xs text-muted">Now</span>
+                    <span class="mb-1 block text-xs text-muted">{{ beforeLabel }}</span>
                     <span class="text-sm whitespace-pre-line text-toned">{{ currentText }}</span>
                 </button>
+                <div v-else class="rounded-md border border-default p-3">
+                    <span class="mb-1 block text-xs text-muted">{{ beforeLabel }}</span>
+                    <span class="text-sm whitespace-pre-line text-toned">{{ currentText }}</span>
+                </div>
+
                 <button
+                    v-if="isPending"
                     type="button"
                     class="rounded-md border border-success/50 bg-success/10 p-3 text-left hover:border-success disabled:opacity-60"
                     :disabled="isBusy"
                     @click="emit('accept', event)"
                 >
-                    <span class="mb-1 block text-xs text-success">Suggested</span>
+                    <span class="mb-1 block text-xs text-success">{{ afterLabel }}</span>
                     <span class="text-sm whitespace-pre-line text-highlighted">{{ suggestedText }}</span>
                 </button>
+                <div
+                    v-else
+                    class="rounded-md border p-3"
+                    :class="isSaved ? 'border-success bg-success/10 ring-1 ring-success' : 'border-default opacity-70'"
+                >
+                    <span class="mb-1 flex items-center gap-1 text-xs" :class="isSaved ? 'text-success' : 'text-muted'">
+                        <UIcon v-if="isSaved" name="i-lucide-check" class="size-3.5" />
+                        {{ afterLabel }}
+                    </span>
+                    <span
+                        class="text-sm whitespace-pre-line"
+                        :class="isSaved ? 'text-highlighted' : 'text-toned line-through'"
+                    >
+                        {{ suggestedText }}
+                    </span>
+                </div>
             </div>
-            <div class="grid grid-cols-2 gap-3">
+
+            <div v-if="isPending" class="grid grid-cols-2 gap-3">
                 <UButton block color="neutral" label="Keep current" :disabled="isBusy" @click="emit('reject', event)" />
                 <UButton
                     block
@@ -161,8 +228,24 @@ async function saveEdit() {
                     @click="emit('accept', event)"
                 />
             </div>
+            <div v-else-if="isSaved" class="grid grid-cols-2 gap-3">
+                <UButton
+                    block
+                    color="neutral"
+                    icon="i-lucide-undo-2"
+                    label="Change back to this"
+                    :loading="isBusy"
+                    @click="emit('revert', event)"
+                />
+                <p class="flex items-center justify-center gap-1 text-sm text-success">
+                    <UIcon name="i-lucide-check" class="size-4" />
+                    Saved {{ formatRelativeTime({ value: event.resolved_at ?? event.created_at }) }}
+                    <template v-if="event.resolved_by ?? event.actor">
+                        by {{ (event.resolved_by ?? event.actor)!.name }}
+                    </template>
+                </p>
+            </div>
         </template>
-
         <div v-else class="space-y-2 rounded-md border border-default p-3">
             <p class="text-xs text-muted">{{ fieldLabel }}</p>
             <UTextarea v-if="editorKind === 'text'" v-model="draftText" autoresize :rows="2" class="w-full" />
@@ -202,7 +285,9 @@ async function saveEdit() {
         </div>
 
         <p class="text-xs text-muted">
-            <template v-if="event.reason">Why: {{ event.reason }}</template>
+            {{ CHANGE_SOURCE_LABELS[event.source] }}<template v-if="event.actor"> by {{ event.actor.name }}</template> ·
+            {{ formatRelativeTime({ value: event.created_at }) }}
+            <template v-if="event.reason"> · Why: {{ event.reason }}</template>
             <template v-if="event.evidence">
                 · from {{ event.evidence.counterpart ?? event.evidence.from_address }},
                 {{ formatDate({ value: event.evidence.sent_at }) }}

@@ -182,7 +182,7 @@ async function resolveDraft({ funderId, action }: { funderId: string; action: 'c
                         </p>
                     </template>
                     <div class="divide-y divide-default">
-                        <ActivitySuggestionCard
+                        <ActivityChangeCard
                             v-for="event in pending.data"
                             :key="event.id"
                             :event="event"
