@@ -78,6 +78,7 @@ function classification(overrides: Record<string, unknown>) {
         summary: 'UBS approved the $500k design grant, landing by Jan 15.',
         reason: 'Tom says the board approved it.',
         confidence: 0.95,
+        is_personal_exchange: true,
         last_contact_on: '2026-10-05',
         relationship_status: 'committed',
         opportunity_updates: [],
@@ -371,5 +372,102 @@ describe('inbound webhook', () => {
         })
         expect(response.status).toBe(400)
         expect(queuedForwards).not.toContain('rcv_bad')
+    })
+})
+
+describe('basic funder facts from a real exchange', () => {
+    /**
+     * A new funder and an email with it, classified by a fake AI.
+     *
+     * @param input.name - Funder name (also makes the email domain unique).
+     * @param input.relationshipStatus - Where the relationship stands first.
+     * @param input.from - Who sent the email.
+     * @param input.answer - Overrides for the AI's answer.
+     * @returns The funder after processing.
+     */
+    async function classifyFor({
+        name,
+        relationshipStatus,
+        from,
+        answer,
+    }: {
+        name: string
+        relationshipStatus: 'no_contact' | 'early' | 'active' | 'dead'
+        from: string
+        answer: Record<string, unknown>
+    }) {
+        const { createFunderWithDetails } = await import('#server/utils/funders.ts')
+        const { processFunderEmail } = await import('#server/utils/mail/classify.ts')
+        const { findFunder } = await import('#server/database/funders.ts')
+        const domain = `${name.toLowerCase()}.org`
+        const newFunderId = await createFunderWithDetails({
+            name,
+            relationshipStatus,
+            contacts: [{ name: 'Sam', email: `sam@${domain}` }],
+        })
+        const { provider } = fakeAi({
+            answers: [classification({ relationship_status: null, confidence: 0.4, ...answer })],
+        })
+        await processFunderEmail({
+            email: email({
+                from: from.replace('{domain}', domain),
+                to: [from.includes('{domain}') ? 'leslie@theearthbank.org' : `sam@${domain}`],
+                sentAt: new Date('2026-10-09T15:00:00Z'),
+            }),
+            funderId: newFunderId,
+            source: 'gmail',
+            mailboxUserId: userId,
+            ai: provider,
+        })
+        return (await findFunder({ funderId: newFunderId }))!
+    }
+
+    it('a personal reply from the funder makes it active, however unsure the AI was', async () => {
+        const funder = await classifyFor({
+            name: 'Replyco',
+            relationshipStatus: 'no_contact',
+            from: 'sam@{domain}',
+            answer: { is_personal_exchange: true, last_contact_on: '2026-10-09' },
+        })
+        expect(funder.relationship_status).toBe('active')
+        expect(funder.last_contact_at?.toISOString().slice(0, 10)).toBe('2026-10-09')
+    })
+
+    it('writing to them makes the relationship early', async () => {
+        const funder = await classifyFor({
+            name: 'Outreachco',
+            relationshipStatus: 'no_contact',
+            from: 'leslie@theearthbank.org',
+            answer: { is_personal_exchange: true, last_contact_on: '2026-10-09' },
+        })
+        expect(funder.relationship_status).toBe('early')
+    })
+
+    it('a newsletter changes nothing', async () => {
+        const funder = await classifyFor({
+            name: 'Newsco',
+            relationshipStatus: 'no_contact',
+            from: 'sam@{domain}',
+            answer: { is_personal_exchange: false, last_contact_on: '2026-10-09' },
+        })
+        expect(funder.relationship_status).toBe('no_contact')
+        expect(funder.last_contact_at).toBeNull()
+    })
+
+    it('never moves a relationship backwards or revives a dead one', async () => {
+        const active = await classifyFor({
+            name: 'Steadyco',
+            relationshipStatus: 'active',
+            from: 'leslie@theearthbank.org',
+            answer: { is_personal_exchange: true, relationship_status: 'early', confidence: 0.95 },
+        })
+        expect(active.relationship_status).toBe('active')
+        const dead = await classifyFor({
+            name: 'Goneco',
+            relationshipStatus: 'dead',
+            from: 'sam@{domain}',
+            answer: { is_personal_exchange: true },
+        })
+        expect(dead.relationship_status).toBe('dead')
     })
 })

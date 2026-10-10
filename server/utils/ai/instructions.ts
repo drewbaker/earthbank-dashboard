@@ -13,7 +13,9 @@ Decide what, if anything, the email changes:
 - Dates: expected_decision_on / expected_receipt_on only when the email gives or strongly implies a date. Use YYYY-MM-DD; resolve relative dates ("end of next month") against the email's sent date.
 - next_step: a short instruction for the Earth Bank team, e.g. "Send revised budget to Tom by Nov 15".
 - Refer to opportunities only by the ids given. Do not invent ids.
+- is_personal_exchange: a plain yes/no. Yes when Earth Bank and a person at the funder are actually writing to each other (even briefly, even just scheduling). No for newsletters, announcements, press releases, mass event invitations and automated mail.
 - last_contact_on: the email's sent date when it is a real exchange with someone at the funder.
+- relationship_status: the dashboard sets the basic levels itself from is_personal_exchange (no contact becomes early on any real exchange, and active once the funder writes back personally), so don't suggest early or active. Suggest advanced (serious, specific funding talks), committed or dead only when the email shows it.
 
 Privacy matters. The summary and reasons are shown to the whole team and kept permanently:
 - State only funding-relevant facts. Never copy personal details, health, family, salary, HR or legal matters, passwords, account numbers or anything unrelated to the funding relationship.

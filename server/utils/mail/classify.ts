@@ -336,25 +336,53 @@ async function applyClassification({
         pending += (await applyFieldChanges({ ...common, changes: review as never, status: 'pending' })).length
     }
 
-    const funderChanges: Record<string, ChangeValue> = {}
-    if (
-        classification.last_contact_on &&
-        (!funder.last_contact_at || classification.last_contact_on > funder.last_contact_at)
-    ) {
-        funderChanges.last_contact_at = classification.last_contact_on
-    }
-    if (classification.relationship_status) {
-        funderChanges.relationship_status = classification.relationship_status
+    // Facts read off the email itself (did we really exchange email with this person, and who wrote)
+    // aren't held back by the AI's confidence: last contact, and the basic relationship levels.
+    const factualChanges: Record<string, ChangeValue> = {}
+    if (classification.is_personal_exchange) {
+        const sentOn = classification.last_contact_on ?? toDateOnly({ date: email.sentAt })
+        if (sentOn && (!funder.last_contact_at || sentOn > funder.last_contact_at)) {
+            factualChanges.last_contact_at = sentOn
+        }
+        const relationshipFloor = basicRelationshipLevel({ fromAddress: email.from })
+        // A funder marked dead stays dead until someone decides otherwise.
+        if (
+            funder.relationship_status !== 'dead' &&
+            relationshipRank({ status: relationshipFloor }) > relationshipRank({ status: funder.relationship_status })
+        ) {
+            factualChanges.relationship_status = relationshipFloor
+        }
     }
     await propose({
         entityType: 'funder',
         entityId: funder.id,
-        changes: funderChanges,
-        // Last contact is a fact read off the email itself, so it isn't held back by low confidence.
-        confidence: funderChanges.relationship_status ? classification.confidence : 1,
-        reason: classification.reason,
-        riskyFields: new Set(classification.relationship_status === 'dead' ? ['relationship_status'] : []),
+        changes: factualChanges,
+        confidence: 1,
+        reason: factualReason({ changes: factualChanges, fromAddress: email.from }),
+        riskyFields: new Set(),
     })
+
+    // Judgement calls beyond the basics (advanced, committed, dead) keep the AI's confidence, and a
+    // move to dead always waits for review. The AI never moves a relationship backwards.
+    const suggested = classification.relationship_status
+    const isJudgementMove =
+        suggested !== null &&
+        (suggested === 'dead' ||
+            relationshipRank({ status: suggested }) >
+                Math.max(
+                    relationshipRank({ status: funder.relationship_status }),
+                    relationshipRank({ status: (factualChanges.relationship_status as string | undefined) ?? null }),
+                ))
+    if (suggested && isJudgementMove && suggested !== factualChanges.relationship_status) {
+        await propose({
+            entityType: 'funder',
+            entityId: funder.id,
+            changes: { relationship_status: suggested },
+            confidence: classification.confidence,
+            reason: classification.reason,
+            riskyFields: new Set(suggested === 'dead' ? ['relationship_status'] : []),
+        })
+    }
 
     for (const update of classification.opportunity_updates) {
         const opportunity = funder.opportunities.find(candidate => candidate.id === update.opportunity_id)
@@ -415,4 +443,48 @@ async function applyClassification({
         }).catch(error => console.info('[mail] contact not added', error instanceof Error ? error.message : error))
     }
     return { applied, pending }
+}
+
+// Relationship levels in the order a funder moves through them (dead is outside the order).
+const RELATIONSHIP_LEVELS = ['no_contact', 'early', 'active', 'advanced', 'committed']
+
+/**
+ * Where a relationship stands in the order, for "only move forward" checks.
+ *
+ * @param input.status - A relationship status, or null.
+ * @returns Its position (-1 for unknown or dead).
+ */
+function relationshipRank({ status }: { status: string | null }) {
+    return status ? RELATIONSHIP_LEVELS.indexOf(status) : -1
+}
+
+/**
+ * The relationship level a real exchange proves: writing to them is at least early; them writing
+ * back personally means we're in dialogue (active).
+ *
+ * @param input.fromAddress - Who sent the email.
+ * @returns `early` or `active`.
+ */
+function basicRelationshipLevel({ fromAddress }: { fromAddress: string }) {
+    return config.internalEmailDomains.includes(emailDomain({ email: fromAddress })) ? 'early' : 'active'
+}
+
+/**
+ * Plain reason for the factual changes, so the team sees why no confidence was needed.
+ *
+ * @param input.changes - The factual changes.
+ * @param input.fromAddress - Who sent the email.
+ * @returns The reason.
+ */
+function factualReason({ changes, fromAddress }: { changes: Record<string, ChangeValue>; fromAddress: string }) {
+    const isFromEarthBank = config.internalEmailDomains.includes(emailDomain({ email: fromAddress }))
+    const parts = [
+        isFromEarthBank ? 'Earth Bank wrote to someone at this funder' : 'Someone at this funder wrote to Earth Bank',
+    ]
+    if (changes.relationship_status === 'active') {
+        parts.push('a personal reply from the funder means the relationship is active')
+    } else if (changes.relationship_status === 'early') {
+        parts.push('a real exchange means the relationship has started')
+    }
+    return `${parts.join('; ')}.`
 }

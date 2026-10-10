@@ -48,6 +48,7 @@ function noteContact({ sentOn }: { sentOn: string }) {
         summary: 'Check-in.',
         reason: 'Routine.',
         confidence: 0.9,
+        is_personal_exchange: true,
         last_contact_on: sentOn,
         relationship_status: null,
         opportunity_updates: [],

@@ -11,6 +11,11 @@ export const EmailClassification = z.object({
     summary: z.string().describe('One or two sentences, at most 300 characters, stating only the funding facts.'),
     reason: z.string().describe('Why the suggested changes follow from the email, for the team to review.'),
     confidence: z.number().describe('0 to 1: how sure you are about the suggested changes overall.'),
+    is_personal_exchange: z
+        .boolean()
+        .describe(
+            'True when this is a real exchange between Earth Bank and a person at the funder (written to or by them). False for newsletters, announcements, press releases, event invitations sent to many people and automated messages.',
+        ),
     last_contact_on: z
         .string()
         .nullable()
@@ -18,7 +23,9 @@ export const EmailClassification = z.object({
     relationship_status: z
         .enum(RELATIONSHIP_STATUSES)
         .nullable()
-        .describe('New relationship status, or null to leave it.'),
+        .describe(
+            'Only for moves beyond what the dashboard sets itself: advanced, committed or dead. Null to leave it.',
+        ),
     opportunity_updates: z.array(
         z.object({
             opportunity_id: z.string().describe('Id of an existing opportunity from the context.'),
