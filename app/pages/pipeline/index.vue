@@ -303,8 +303,14 @@ async function openCreatedFunder(funder: FunderDetail) {
 
         <template #body>
             <div class="space-y-6">
-                <PipelineStageOverview v-if="view === 'opportunities'" :asks="trackStageAsks" />
-                <PipelineGoalSummary v-if="visibleGoals.length" :goals="visibleGoals" />
+                <!-- Opportunities: goal stats beside the stage donut, then the funder bars, then the list. -->
+                <template v-if="view === 'opportunities'">
+                    <div class="grid gap-6 lg:grid-cols-2">
+                        <PipelineGoalSummary v-if="visibleGoals.length" :goals="visibleGoals" is-stacked />
+                        <PipelineStageOverview :asks="trackStageAsks" part="pie" />
+                    </div>
+                    <PipelineStageOverview :asks="trackStageAsks" part="bars" />
+                </template>
                 <PipelineCoverageMap v-if="view === 'funders'" :opportunities="trackOpportunities" />
 
                 <UTable

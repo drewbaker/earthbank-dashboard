@@ -6,7 +6,9 @@ import { useStageColors } from '~/composables/useChartPalette.ts'
 import type { StageAsk } from '~/utils/stage-asks.ts'
 import { formatMoney } from '~/utils/format.ts'
 
-const props = defineProps<{ asks: StageAsk[] }>()
+// `part` lets a page place the funder bars and the donut separately (Pipeline puts the donut beside
+// the goal stats and the bars below); the default shows both side by side.
+const props = withDefaults(defineProps<{ asks: StageAsk[]; part?: 'both' | 'bars' | 'pie' }>(), { part: 'both' })
 const stageColors = useStageColors()
 
 // Furthest along first, as the team reads the pipeline. Declined asks are left out.
@@ -81,8 +83,8 @@ function shareOfTotal({ amount }: { amount: number }) {
 
 <template>
     <UCard v-if="groups.length" :ui="{ body: 'p-4 sm:p-5' }">
-        <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-            <div class="space-y-4">
+        <div class="grid gap-6" :class="{ 'lg:grid-cols-[minmax(0,1fr)_18rem]': part === 'both' }">
+            <div v-if="part !== 'pie'" class="space-y-4">
                 <section v-for="group in groups" :key="group.stage" class="space-y-1">
                     <h3 class="flex items-center gap-2 text-xs font-semibold tracking-wide text-highlighted uppercase">
                         <span class="size-2.5 rounded-sm" :style="{ backgroundColor: stageColors[group.stage] }" />
@@ -123,7 +125,15 @@ function shareOfTotal({ amount }: { amount: number }) {
                 </section>
             </div>
 
-            <div v-if="slices.length" class="space-y-3 lg:sticky lg:top-4 lg:self-start">
+            <div
+                v-if="part !== 'bars' && slices.length"
+                class="space-y-3"
+                :class="
+                    part === 'pie'
+                        ? 'grid items-center gap-4 sm:grid-cols-[13rem_minmax(0,1fr)]'
+                        : 'lg:sticky lg:top-4 lg:self-start'
+                "
+            >
                 <ClientOnly>
                     <DonutChart
                         :data="slices.map(slice => slice.total)"
