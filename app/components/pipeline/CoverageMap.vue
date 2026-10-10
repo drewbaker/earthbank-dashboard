@@ -8,8 +8,7 @@ import type { CoverageAsk } from '~/utils/coverage-asks.ts'
 import { formatMoney } from '~/utils/format.ts'
 
 // Also used by the funder-facing share page, so it takes plain asks rather than opportunities.
-// `description` replaces the explanation under the title (the share page uses a shorter one).
-const props = defineProps<{ asks: CoverageAsk[]; description?: string }>()
+const props = defineProps<{ asks: CoverageAsk[] }>()
 const palette = useChartPalette()
 
 // Declined asks don't count toward coverage.
@@ -87,10 +86,7 @@ function askCount({ count }: { count: number }) {
         <template #header>
             <h2 class="font-medium text-highlighted">Geographic coverage</h2>
             <p class="text-xs text-muted">
-                {{
-                    description ??
-                    'Countries shaded by the money asked for them (an ask counts in full for every country it covers). Global asks cover every country and are shown on their own. Declined asks are left out.'
-                }}
+                Countries shaded by region of focus. Global asks cover every country and are also shown on their own.
             </p>
         </template>
         <ClientOnly>
