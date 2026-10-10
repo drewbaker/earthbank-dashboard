@@ -17,9 +17,12 @@ Decide what, if anything, the email changes:
 - last_contact_on: the email's sent date when it is a real exchange with someone at the funder.
 - relationship_status: the dashboard sets the basic levels itself from is_personal_exchange (no contact becomes early on any real exchange, and active once the funder writes back personally), so don't suggest early or active. Suggest advanced (serious, specific funding talks), committed or dead only when the email shows it.
 
-Privacy matters. The summary and reasons are shown to the whole team and kept permanently:
-- State only funding-relevant facts. Never copy personal details, health, family, salary, HR or legal matters, passwords, account numbers or anything unrelated to the funding relationship.
-- If the email is mainly personal or sensitive, set is_sensitive to true, is_relevant to false, and keep the summary to a neutral line like "Personal note; no funding update."
+Privacy matters. The summary, reasons and next steps are shown to the whole team (some on pages shared with funders) and kept permanently. Write only neutral funding facts:
+- Never include anything personal: health, family, private life, salary, HR or legal matters, passwords or account numbers.
+- Never include opinions or judgments about people or organizations: that someone is slow, unresponsive, difficult, unprofessional, rude, great to work with, and so on. Report what was agreed or asked for, not how anyone behaved.
+- Never describe personal relationships or tone: friendships, flirting, compliments, frustration, complaints, gossip.
+- If an email mixes funding facts with any of the above, keep only the funding facts and leave the rest out entirely, as if it weren't there.
+- If the email is mainly personal (a personal or social message, flirting, a complaint or gossip about someone, a private matter), set is_sensitive to true and is_relevant to false. It will be ignored: nothing from it is shown or saved.
 
 Confidence: 0.9+ when the email states the change outright ("we've approved $500k"), 0.6–0.8 when it is implied, below 0.5 when you are guessing.`
 
@@ -29,7 +32,7 @@ A team member forwarded an email from someone the team doesn't track yet. Decide
 
 Earth Bank's goals: design grants (to design the Earth Bank structure), OpEx funding (operating costs) and lending capital (money Earth Bank will lend).
 
-Summarize only funding-relevant facts, at most 300 characters. Never include personal details unrelated to the funding relationship.`
+Summarize only funding-relevant facts, at most 300 characters, in neutral words. Never include personal details, opinions or judgments about anyone (slow, unprofessional, difficult, friendly…), personal relationships, flirting, complaints or gossip; leave those out entirely. If the email is personal rather than about funding, set is_funder to false.`
 
 export const DRAFT_REPLY_INSTRUCTIONS = `You draft emails for the Earth Bank team to send to funders. A team member will review and edit your draft in Gmail before sending it, so write the email they would want to send, ready to go.
 
@@ -62,5 +65,6 @@ How to work:
 - Do exactly what was asked. Don't make extra changes they didn't ask for.
 - If the request is ambiguous (two funders match, or it's unclear which grant they mean) or missing something essential, don't guess: make no change for that part and ask in your reply.
 - Amounts are whole US dollars. Dates are YYYY-MM-DD; resolve relative dates ("end of next month") from today's date.
+- Anything you write into the pipeline (notes, next steps, task titles) is neutral funding fact only: never personal details, opinions or judgments about anyone (slow, unprofessional, difficult…), relationships, flirting, complaints or gossip, even if the email contains them.
 
 Your reply (plain text, a few short lines, no greeting or sign-off): what you did, and any question you need answered. Don't list links; the email adds them.`

@@ -7,7 +7,9 @@ export const EmailClassification = z.object({
     is_relevant: z.boolean().describe('True when the email is about fundraising with this funder.'),
     is_sensitive: z
         .boolean()
-        .describe('True when the email is mainly personal, HR, legal, medical or salary matters, not funding.'),
+        .describe(
+            'True when the email is mainly personal rather than about funding: personal or social messages, flirting, complaints, opinions or gossip about someone, relationships, HR, legal, medical or salary matters. Such emails are ignored.',
+        ),
     summary: z.string().describe('One or two sentences, at most 300 characters, stating only the funding facts.'),
     reason: z.string().describe('Why the suggested changes follow from the email, for the team to review.'),
     confidence: z.number().describe('0 to 1: how sure you are about the suggested changes overall.'),

@@ -22,6 +22,9 @@ import { funderNameKey } from '#shared/utils/funder-names.ts'
 
 // Changes at or above this confidence apply straight away; below it they wait on the Activity page.
 const AUTO_APPLY_CONFIDENCE = 0.8
+
+/** All that's kept about an email the AI marks personal: nothing about its content. */
+export const PERSONAL_EMAIL_SUMMARY = 'Personal email; ignored.'
 const SUMMARY_MAX_CHARACTERS = 300
 
 export type EmailSource = 'gmail' | 'forward'
@@ -69,6 +72,27 @@ export async function processFunderEmail({
         schema: EmailClassificationSchema,
     })
     const classification = result.status === 'ok' ? sanitizeClassification({ classification: result.output }) : null
+    // A personal email (private matters, flirting, complaints or opinions about someone) is ignored
+    // completely: only its Message-ID is kept, so it isn't read again. No subject, no summary, no
+    // recipients, no changes, and it's never listed anywhere.
+    if (classification?.is_sensitive) {
+        const ignored = await createEmailEvidence({
+            source,
+            messageIdHeader: email.messageIdHeader,
+            mailboxUserId,
+            fromAddress: email.from,
+            toAddresses: [],
+            sentAt: email.sentAt,
+            subject: null,
+            summary: PERSONAL_EMAIL_SUMMARY,
+            isRelevant: false,
+            isSensitive: true,
+            funderId,
+            model: result.model,
+            confidence: null,
+        })
+        return { status: 'processed', evidenceId: ignored.id, applied: 0, pending: 0 }
+    }
     const evidence = await createEmailEvidence({
         source,
         messageIdHeader: email.messageIdHeader,

@@ -210,17 +210,18 @@ describe('processFunderEmail', () => {
         expect((await findOpportunity({ opportunityId: designGrantId }))!.next_step).toBe('Drew owns this')
     })
 
-    it('hides the subject of a sensitive email and skips the same email in another inbox', async () => {
+    it('ignores a personal email entirely (even with a funding change) and skips it in another inbox', async () => {
         const { processFunderEmail } = await import('#server/utils/mail/classify.ts')
         const { db } = await import('#server/utils/db.ts')
         const sensitive = email({ messageIdHeader: '<sensitive@ubs.com>', subject: 'Personal: family news' })
         const { provider } = fakeAi({
             answers: [
                 classification({
-                    is_relevant: false,
+                    is_relevant: true,
                     is_sensitive: true,
-                    summary: 'Personal note; no funding update.',
-                    relationship_status: null,
+                    summary: 'Tom complained that Leslie is slow to reply.',
+                    relationship_status: 'dead',
+                    is_personal_exchange: true,
                 }),
             ],
         })
@@ -231,8 +232,13 @@ describe('processFunderEmail', () => {
         expect(evidence).toMatchObject({
             subject: null,
             is_sensitive: true,
-            summary: 'Personal note; no funding update.',
+            is_relevant: false,
+            summary: 'Personal email; ignored.',
+            to_addresses: [],
         })
+        expect(await db().changeEvent.count({ where: { evidence_id: evidence.id } })).toBe(0)
+        const { listFunderEmailEvidence } = await import('#server/database/email-evidence.ts')
+        expect((await listFunderEmailEvidence({ funderId, limit: 50 })).map(row => row.id)).not.toContain(evidence.id)
 
         const again = await processFunderEmail({
             email: sensitive,

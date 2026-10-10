@@ -79,11 +79,16 @@ function sortHeader<Row>({
     return h('span', { class: 'inline-flex items-center' }, [
         button,
         h(UTooltip, { text: GLOSSARY[term], ui: { content: 'max-w-72 h-auto whitespace-normal py-1.5' } }, () =>
-            h(UIcon, {
-                name: 'i-lucide-info',
-                class: 'size-3.5 cursor-help text-muted hover:text-highlighted',
-                'aria-label': GLOSSARY[term],
-            }),
+            h(
+                'span',
+                {
+                    class: 'inline-flex size-6 cursor-help items-center justify-center rounded-full text-muted hover:bg-elevated hover:text-highlighted',
+                    tabindex: 0,
+                    role: 'img',
+                    'aria-label': GLOSSARY[term],
+                },
+                [h(UIcon, { name: 'i-lucide-info', class: 'size-3.5' })],
+            ),
         ),
     ])
 }

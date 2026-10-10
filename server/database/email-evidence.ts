@@ -109,7 +109,8 @@ export function linkEmailEvidenceToFunder({
  */
 export function listFunderEmailEvidence({ funderId, limit }: { funderId: string; limit: number }) {
     return db().emailEvidence.findMany({
-        where: { funder_id: funderId },
+        // Personal emails are kept only so they aren't read twice; they're never listed.
+        where: { funder_id: funderId, is_sensitive: false },
         include: { mailbox_user: true, _count: { select: { change_events: true } } },
         orderBy: [{ sent_at: 'desc' }, { id: 'desc' }],
         take: limit,
@@ -123,7 +124,7 @@ export function listFunderEmailEvidence({ funderId, limit }: { funderId: string;
  * @returns The count.
  */
 export function countFunderEmailEvidence({ funderId }: { funderId: string }) {
-    return db().emailEvidence.count({ where: { funder_id: funderId } })
+    return db().emailEvidence.count({ where: { funder_id: funderId, is_sensitive: false } })
 }
 
 /**
