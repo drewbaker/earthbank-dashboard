@@ -204,15 +204,18 @@ async function resolveDraft({ funderId, action }: { funderId: string; action: 'c
                             </div>
                         </div>
                     </template>
-                    <PipelineChangeTimeline
-                        v-if="feedEvents.length"
-                        :events="feedEvents"
-                        show-entity-name
-                        :busy-event-id="busyEventId"
-                        @accept="acceptChange"
-                        @reject="rejectChange"
-                        @revert="revertChange"
-                    />
+                    <div v-if="feedEvents.length" class="divide-y divide-default">
+                        <ActivityChangeCard
+                            v-for="event in feedEvents"
+                            :key="event.id"
+                            :event="event"
+                            :is-busy="busyEventId === event.id"
+                            @accept="acceptChange"
+                            @reject="rejectChange"
+                            @revert="revertChange"
+                            @edited="reloadActivity"
+                        />
+                    </div>
                     <p v-else class="text-sm text-muted">No changes match.</p>
                     <div v-if="nextCursor" class="mt-4 flex justify-center">
                         <UButton label="Load more" color="neutral" :loading="isLoadingMore" @click="loadMore" />

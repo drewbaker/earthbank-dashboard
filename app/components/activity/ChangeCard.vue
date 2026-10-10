@@ -62,6 +62,21 @@ const STATUS_DETAILS: Record<
     reverted: { title: 'changed back', badge: 'Reverted', color: 'error', icon: 'i-lucide-undo-2' },
     superseded: { title: 'not changed', badge: 'Out of date', color: 'neutral', icon: 'i-lucide-clock' },
 }
+// Who saved it: whoever accepted the suggestion, else whoever made the change, else where it came from.
+const savedBy = computed(
+    () =>
+        props.event.resolved_by?.name ??
+        props.event.actor?.name ??
+        CHANGE_SOURCE_LABELS[props.event.source].replace(/^./, letter => letter.toLowerCase()),
+)
+
+// Why a suggestion that wasn't applied ended up that way.
+const OUTCOME_NOTES: Partial<Record<ChangeEvent['status'], string>> = {
+    superseded: 'A newer email or edit changed this field, so the suggestion was retired.',
+    rejected: 'The current value was kept.',
+    reverted: 'This was changed back.',
+}
+
 const outcome = computed(() => (props.event.status === 'pending' ? null : STATUS_DETAILS[props.event.status]))
 
 // AI suggestions read "Now / Suggested"; everything else is a record of what changed.
@@ -239,10 +254,7 @@ async function saveEdit() {
                 />
                 <p class="flex items-center justify-center gap-1 text-sm text-success">
                     <UIcon name="i-lucide-check" class="size-4" />
-                    Saved {{ formatRelativeTime({ value: event.resolved_at ?? event.created_at }) }}
-                    <template v-if="event.resolved_by ?? event.actor">
-                        by {{ (event.resolved_by ?? event.actor)!.name }}
-                    </template>
+                    Saved {{ formatRelativeTime({ value: event.resolved_at ?? event.created_at }) }} by {{ savedBy }}
                 </p>
             </div>
         </template>
@@ -288,6 +300,7 @@ async function saveEdit() {
             {{ CHANGE_SOURCE_LABELS[event.source] }}<template v-if="event.actor"> by {{ event.actor.name }}</template> ·
             {{ formatRelativeTime({ value: event.created_at }) }}
             <template v-if="event.reason"> · Why: {{ event.reason }}</template>
+            <template v-if="OUTCOME_NOTES[event.status]"> · {{ OUTCOME_NOTES[event.status] }}</template>
             <template v-if="event.evidence">
                 · from {{ event.evidence.counterpart ?? event.evidence.from_address }},
                 {{ formatDate({ value: event.evidence.sent_at }) }}
