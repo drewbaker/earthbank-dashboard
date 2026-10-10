@@ -1,15 +1,9 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import { useDebounce } from '@vueuse/core'
 import { computed, h, ref, resolveComponent, watch } from 'vue'
 import { navigateTo, useAsyncData, useRoute, useRouter, useSeoMeta, useToast } from '#imports'
-import type { FunderTier, GoalType, OpportunityStage } from '#shared/constants/pipeline.ts'
-import {
-    FUNDER_TIER_DETAILS,
-    FUNDER_TIERS,
-    OPPORTUNITY_STAGE_DETAILS,
-    OPPORTUNITY_STAGES,
-} from '#shared/constants/pipeline.ts'
+import type { GoalType, OpportunityStage } from '#shared/constants/pipeline.ts'
+import { OPPORTUNITY_STAGE_DETAILS } from '#shared/constants/pipeline.ts'
 import type { Funder, FunderDetail, FunderList, Opportunity, OpportunityList } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { usePipelineReference } from '~/composables/usePipelineReference.ts'
@@ -22,43 +16,28 @@ const api = useApi()
 const toast = useToast()
 const route = useRoute()
 const router = useRouter()
-const { goals, goalItems } = usePipelineReference()
+const { goals } = usePipelineReference()
 
 type PipelineView = 'opportunities' | 'funders' | 'board'
-const ALL = 'all'
 
 // Grants (design grants and OpEx: short-term, months) and lending capital (years) are worked very
-// differently, so each gets its own tab with its own goals, filters and totals.
+// differently, so each gets its own tab with its own goals and totals.
 type PipelineTrack = 'grants' | 'lending'
 const TRACK_GOAL_TYPES: Record<PipelineTrack, GoalType[]> = {
     grants: ['design_grant', 'opex'],
     lending: ['lending_capital'],
 }
 
-// Filters live in the URL so a filtered view can be shared or bookmarked.
+// The tab and view live in the URL so a view can be shared or bookmarked. Everything is shown: the
+// list is short enough that filters only got in the way.
 const track = ref<PipelineTrack>(route.query.track === 'lending' ? 'lending' : 'grants')
 const view = ref<PipelineView>((route.query.view as PipelineView) ?? 'opportunities')
-const goalFilter = ref<GoalType | typeof ALL>((route.query.goal as GoalType) ?? ALL)
-const stageFilter = ref<OpportunityStage | typeof ALL>((route.query.stage as OpportunityStage) ?? ALL)
-const tierFilter = ref<FunderTier | typeof ALL>((route.query.tier as FunderTier) ?? ALL)
-const searchText = ref(typeof route.query.q === 'string' ? route.query.q : '')
-const includeClosed = ref(route.query.closed === '1')
-const debouncedSearch = useDebounce(searchText, 250)
 
-watch(track, () => {
-    goalFilter.value = ALL
-})
-
-watch([track, view, goalFilter, stageFilter, tierFilter, debouncedSearch, includeClosed], () => {
+watch([track, view], () => {
     router.replace({
         query: {
             track: track.value === 'grants' ? undefined : track.value,
             view: view.value === 'opportunities' ? undefined : view.value,
-            goal: goalFilter.value === ALL ? undefined : goalFilter.value,
-            stage: stageFilter.value === ALL ? undefined : stageFilter.value,
-            tier: tierFilter.value === ALL ? undefined : tierFilter.value,
-            q: debouncedSearch.value || undefined,
-            closed: includeClosed.value ? '1' : undefined,
         },
     })
 })
@@ -66,28 +45,15 @@ watch([track, view, goalFilter, stageFilter, tierFilter, debouncedSearch, includ
 const { data: opportunityList, refresh: refreshOpportunities } = await useAsyncData('pipeline.opportunities', () =>
     api<OpportunityList>({
         path: '/opportunities',
-        // Always every stage: the overview counts approved and received money; the table hides
-        // closed asks itself unless "Closed" is on.
         query: { include_closed: true, limit: 500 },
     }),
 )
 
-const { data: funderList, refresh: refreshFunders } = await useAsyncData(
-    'pipeline.funders',
-    () =>
-        api<FunderList>({
-            path: '/funders',
-            query: {
-                tier: tierFilter.value === ALL ? undefined : tierFilter.value,
-                q: debouncedSearch.value || undefined,
-                limit: 500,
-            },
-        }),
-    { watch: [tierFilter, debouncedSearch] },
+const { data: funderList, refresh: refreshFunders } = await useAsyncData('pipeline.funders', () =>
+    api<FunderList>({ path: '/funders', query: { limit: 500 } }),
 )
 
-// The goal types shown: the tab's, narrowed by the goal filter.
-const visibleGoalTypes = computed(() => (goalFilter.value === ALL ? TRACK_GOAL_TYPES[track.value] : [goalFilter.value]))
+const visibleGoalTypes = computed(() => TRACK_GOAL_TYPES[track.value])
 
 // Funders in play for this tab's goals; prospects with no opportunity yet appear in both tabs.
 const visibleFunders = computed(() =>
@@ -98,34 +64,26 @@ const visibleFunders = computed(() =>
     ),
 )
 
+// Design grants are what funds OpEx, so the separate OpEx goal isn't shown.
 const visibleGoals = computed(() =>
-    (goals.data.value?.data ?? []).filter(goal => TRACK_GOAL_TYPES[track.value].includes(goal.type)),
+    (goals.data.value?.data ?? []).filter(
+        goal => goal.type !== 'opex' && TRACK_GOAL_TYPES[track.value].includes(goal.type),
+    ),
 )
 
-// This tab's asks (goal filter applied), for the stage overview.
+// This tab's asks, for the stage overview and the coverage map.
 const trackOpportunities = computed(() =>
     (opportunityList.value?.data ?? []).filter(opportunity => visibleGoalTypes.value.includes(opportunity.goal_type)),
 )
 
 const trackStageAsks = computed(() => stageAsksFromOpportunities({ opportunities: trackOpportunities.value }))
 
-const visibleOpportunities = computed(() => {
-    const search = debouncedSearch.value.toLowerCase()
-    return (opportunityList.value?.data ?? []).filter(
-        opportunity =>
-            visibleGoalTypes.value.includes(opportunity.goal_type) &&
-            (includeClosed.value ||
-                view.value === 'board' ||
-                stageFilter.value !== ALL ||
-                OPPORTUNITY_STAGE_DETAILS[opportunity.stage].isOpen) &&
-            (stageFilter.value === ALL || opportunity.stage === stageFilter.value) &&
-            (tierFilter.value === ALL || opportunity.funder.tier === tierFilter.value) &&
-            (!search ||
-                opportunity.funder.name.toLowerCase().includes(search) ||
-                opportunity.name.toLowerCase().includes(search) ||
-                (opportunity.next_step ?? '').toLowerCase().includes(search)),
-    )
-})
+// Every ask in the tab, declined ones last (the list's own order otherwise).
+const visibleOpportunities = computed(() =>
+    [...trackOpportunities.value].sort(
+        (first, second) => Number(first.stage === 'lost') - Number(second.stage === 'lost'),
+    ),
+)
 
 const viewItems = [
     { label: 'Opportunities', value: 'opportunities', icon: 'i-lucide-hand-coins' },
@@ -136,23 +94,6 @@ const trackItems = [
     { label: 'Design Grants', value: 'grants', icon: 'i-lucide-pencil-ruler' },
     { label: 'Lending Capital', value: 'lending', icon: 'i-lucide-landmark' },
 ]
-// Within the grants tab, design grants and OpEx can be told apart; lending has one goal.
-const goalFilterItems = computed(() => [
-    { label: 'Design grants & OpEx', value: ALL },
-    ...goalItems.filter(item => TRACK_GOAL_TYPES.grants.includes(item.value)),
-])
-const stageFilterItems = [
-    { label: 'All stages', value: ALL },
-    ...OPPORTUNITY_STAGES.map(stage => ({ label: OPPORTUNITY_STAGE_DETAILS[stage].label, value: stage })),
-]
-const tierFilterItems = [
-    { label: 'All tiers', value: ALL },
-    ...FUNDER_TIERS.map(tier => ({
-        label: `${FUNDER_TIER_DETAILS[tier].label} · ${FUNDER_TIER_DETAILS[tier].description}`,
-        value: tier,
-    })),
-]
-
 const isFunderModalOpen = ref(false)
 const isOpportunityModalOpen = ref(false)
 const editingOpportunity = ref<Opportunity | null>(null)
@@ -356,21 +297,7 @@ async function openCreatedFunder(funder: FunderDetail) {
                 <UTabs v-model="track" :items="trackItems" :content="false" variant="link" class="-mb-px" />
             </UDashboardToolbar>
             <UDashboardToolbar>
-                <template #left>
-                    <UTabs v-model="view" :items="viewItems" :content="false" size="sm" />
-                </template>
-                <template #right>
-                    <UInput v-model="searchText" icon="i-lucide-search" placeholder="Search" class="w-44" />
-                    <USelect v-if="track === 'grants'" v-model="goalFilter" :items="goalFilterItems" class="w-48" />
-                    <USelect
-                        v-if="view === 'opportunities'"
-                        v-model="stageFilter"
-                        :items="stageFilterItems"
-                        class="w-40"
-                    />
-                    <USelect v-model="tierFilter" :items="tierFilterItems" class="w-36" />
-                    <USwitch v-if="view === 'opportunities'" v-model="includeClosed" label="Closed" />
-                </template>
+                <UTabs v-model="view" :items="viewItems" :content="false" size="sm" />
             </UDashboardToolbar>
         </template>
 
@@ -378,6 +305,7 @@ async function openCreatedFunder(funder: FunderDetail) {
             <div class="space-y-6">
                 <PipelineStageOverview v-if="view === 'opportunities'" :asks="trackStageAsks" />
                 <PipelineGoalSummary v-if="visibleGoals.length" :goals="visibleGoals" />
+                <PipelineCoverageMap v-if="view === 'funders'" :opportunities="trackOpportunities" />
 
                 <UTable
                     v-if="view === 'opportunities'"

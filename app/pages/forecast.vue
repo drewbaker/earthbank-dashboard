@@ -247,7 +247,7 @@ async function deleteScenario() {
                                 quarter.
                             </p>
                         </template>
-                        <ReportsLendingCapitalChart :opportunities="lendingOpportunities?.data ?? []" :height="240" />
+                        <ForecastLendingCapitalChart :opportunities="lendingOpportunities?.data ?? []" :height="240" />
                     </UCard>
 
                     <ForecastPlannedExpenses

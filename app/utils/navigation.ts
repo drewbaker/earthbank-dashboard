@@ -5,7 +5,6 @@ export const primaryNavigation: NavigationMenuItem[] = [
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: '/' },
     { label: 'Pipeline', icon: 'i-lucide-hand-coins', to: '/pipeline' },
     { label: 'Forecast', icon: 'i-lucide-chart-line', to: '/forecast' },
-    { label: 'Reports', icon: 'i-lucide-chart-column', to: '/reports' },
     { label: 'Milestones & Tasks', icon: 'i-lucide-list-checks', to: '/milestones' },
     { label: 'Activity', icon: 'i-lucide-activity', to: '/activity' },
 ]
