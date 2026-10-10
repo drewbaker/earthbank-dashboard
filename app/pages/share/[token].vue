@@ -239,7 +239,11 @@ const columns = computed<TableColumn<SharedAsk>[]>(() =>
                         <p class="py-6 text-center text-sm text-muted">Nothing to show here yet.</p>
                     </template>
                 </UTable>
-                <PipelineCoverageMap v-if="sections?.map" :asks="coverageAsks" />
+                <PipelineCoverageMap
+                    v-if="sections?.map"
+                    :asks="coverageAsks"
+                    description="Countries shaded by region of focus. Global asks cover every country and are also shown on their own."
+                />
                 <p class="text-center text-xs text-muted">Confidential. Please don't forward this link.</p>
             </template>
         </main>
