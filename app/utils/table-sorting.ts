@@ -78,7 +78,7 @@ function sortHeader<Row>({
     }
     return h('span', { class: 'inline-flex items-center' }, [
         button,
-        h(UTooltip, { text: GLOSSARY[term], ui: { content: 'max-w-72 h-auto whitespace-normal py-1.5' } }, () =>
+        h(UTooltip, { text: GLOSSARY[term] }, () =>
             h(
                 'span',
                 {

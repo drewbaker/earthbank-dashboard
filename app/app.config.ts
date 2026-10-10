@@ -18,5 +18,12 @@ export default {
         selectMenu: { defaultVariants: { variant: 'soft' } },
         inputMenu: { defaultVariants: { variant: 'soft' } },
         inputNumber: { defaultVariants: { variant: 'soft' } },
+        // Tooltips wrap instead of cutting text off with "…", up to 300px (or 80% of a narrow screen).
+        tooltip: {
+            slots: {
+                content: 'h-auto max-w-[min(300px,80vw)] py-1.5',
+                text: 'whitespace-normal [overflow-wrap:anywhere]',
+            },
+        },
     },
 }

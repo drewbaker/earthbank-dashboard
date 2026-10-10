@@ -6,12 +6,7 @@ defineProps<{ term: GlossaryTerm }>()
 </script>
 
 <template>
-    <UTooltip
-        :text="GLOSSARY[term]"
-        :content="{ side: 'top' }"
-        :delay-duration="100"
-        :ui="{ content: 'max-w-72 h-auto whitespace-normal py-1.5' }"
-    >
+    <UTooltip :text="GLOSSARY[term]" :content="{ side: 'top' }" :delay-duration="100">
         <!-- A 24px target around the 14px icon, pulled in with negative margins so it doesn't shift text. -->
         <span
             class="-my-1 ml-0.5 inline-flex size-6 cursor-help items-center justify-center rounded-full align-middle text-muted hover:bg-elevated hover:text-highlighted focus-visible:outline-2 focus-visible:outline-primary"
