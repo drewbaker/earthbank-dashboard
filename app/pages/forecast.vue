@@ -107,7 +107,7 @@ const inflowColumns: TableColumn<ForecastInflow>[] = sortableColumns({
             id: 'weighted_cents',
             accessorFn: inflow => inflow.weighted_cents,
             header: 'Weighted',
-            meta: { class: { th: 'text-right', td: 'text-right text-muted' } },
+            meta: { class: { th: 'text-right', td: 'text-right text-muted' }, term: 'weighted' },
             cell: ({ row }) => formatMoney({ cents: row.original.weighted_cents, compact: true }),
         },
     ],
@@ -120,11 +120,13 @@ const comparison = computed(() => {
     const rows = [
         {
             label: 'Committed money only',
+            term: 'runway_committed' as const,
             base: baseProjection.value.runway.committed,
             scenario: scenarioProjection.value?.runway.committed,
         },
         {
             label: 'Weighted pipeline',
+            term: 'runway_weighted' as const,
             base: baseProjection.value.runway.weighted,
             scenario: scenarioProjection.value?.runway.weighted,
         },
@@ -311,7 +313,9 @@ async function deleteScenario() {
                                     :key="row.label"
                                     class="border-b border-default last:border-0"
                                 >
-                                    <td class="px-4 py-2 text-highlighted">{{ row.label }}</td>
+                                    <td class="px-4 py-2 text-highlighted">
+                                        {{ row.label }}<TermHint :term="row.term" />
+                                    </td>
                                     <td class="px-4 py-2">{{ runwayText({ end: row.base }) }}</td>
                                     <td
                                         class="px-4 py-2"

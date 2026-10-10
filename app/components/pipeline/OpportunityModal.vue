@@ -231,7 +231,7 @@ async function saveOpportunity() {
                 <UFormField
                     label="Geographic focus"
                     name="focus_areas"
-                    help="Countries, regions, or Global. Shown on the coverage map in Reports."
+                    help="Countries, regions, or Global. Shown on the coverage map (Pipeline → Funders and share pages)."
                     class="sm:col-span-2"
                 >
                     <USelectMenu

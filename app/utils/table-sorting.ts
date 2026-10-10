@@ -1,11 +1,22 @@
 import type { TableColumn } from '@nuxt/ui'
-import type { Column } from '@tanstack/vue-table'
+import type { Column, RowData } from '@tanstack/vue-table'
 import { h } from 'vue'
-import { UButton } from '#components'
+import { UButton, UIcon, UTooltip } from '#components'
+import type { GlossaryTerm } from '~/utils/glossary.ts'
+import { GLOSSARY } from '~/utils/glossary.ts'
+
+declare module '@tanstack/vue-table' {
+    // Columns can name a glossary term to explain in their header.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    interface ColumnMeta<TData extends RowData, TValue> {
+        term?: GlossaryTerm
+    }
+}
 
 /**
  * Make every column with a text header sortable by clicking it: first click sorts ascending, the
- * next descending. Columns opt out with `enableSorting: false` (or an empty or custom header).
+ * next descending. Columns opt out with `enableSorting: false` (or an empty or custom header), and
+ * `meta.term` adds a hover explanation from the glossary next to the header.
  * Missing values sort last either way; columns whose cell isn't a plain value give an `accessorFn`
  * that returns what to sort by.
  *
@@ -21,7 +32,8 @@ export function sortableColumns<Row>({ columns }: { columns: TableColumn<Row>[] 
         return {
             sortUndefined: 'last',
             ...column,
-            header: ({ column: tableColumn }: { column: Column<Row> }) => sortHeader({ label, tableColumn }),
+            header: ({ column: tableColumn }: { column: Column<Row> }) =>
+                sortHeader({ label, tableColumn, term: column.meta?.term }),
         } as TableColumn<Row>
     })
 }
@@ -33,11 +45,20 @@ export function sortableColumns<Row>({ columns }: { columns: TableColumn<Row>[] 
  *
  * @param input.label - The column's name.
  * @param input.tableColumn - TanStack's column, for its sort state.
+ * @param input.term - Glossary term to explain on hover, if any.
  * @returns The header content.
  */
-function sortHeader<Row>({ label, tableColumn }: { label: string; tableColumn: Column<Row> }) {
+function sortHeader<Row>({
+    label,
+    tableColumn,
+    term,
+}: {
+    label: string
+    tableColumn: Column<Row>
+    term?: GlossaryTerm
+}) {
     const sorted = tableColumn.getIsSorted()
-    return h(UButton, {
+    const button = h(UButton, {
         label,
         color: 'neutral',
         variant: 'ghost',
@@ -52,4 +73,17 @@ function sortHeader<Row>({ label, tableColumn }: { label: string; tableColumn: C
         'aria-label': `Sort by ${label}`,
         onClick: () => tableColumn.toggleSorting(sorted === 'asc'),
     })
+    if (!term) {
+        return button
+    }
+    return h('span', { class: 'inline-flex items-center' }, [
+        button,
+        h(UTooltip, { text: GLOSSARY[term], ui: { content: 'max-w-72 h-auto whitespace-normal py-1.5' } }, () =>
+            h(UIcon, {
+                name: 'i-lucide-info',
+                class: 'size-3.5 cursor-help text-dimmed',
+                'aria-label': GLOSSARY[term],
+            }),
+        ),
+    ])
 }

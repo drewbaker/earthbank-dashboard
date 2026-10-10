@@ -41,7 +41,7 @@ function securedPercent({ goal }: { goal: Goal }) {
                     {{
                         formatMoney({ cents: goal.totals.committed_cents + goal.totals.received_cents, compact: true })
                     }}
-                    <span class="text-sm font-normal text-muted">secured</span>
+                    <span class="text-sm font-normal text-muted">secured<TermHint term="secured" /></span>
                 </p>
                 <p v-if="goal.target_amount_cents" class="text-xs text-muted">
                     of {{ formatMoney({ cents: goal.target_amount_cents, compact: true }) }} target
@@ -59,13 +59,13 @@ function securedPercent({ goal }: { goal: Goal }) {
 
             <dl class="grid grid-cols-2 gap-2 text-sm">
                 <div>
-                    <dt class="text-muted">Weighted pipeline</dt>
+                    <dt class="text-muted">Weighted pipeline<TermHint term="weighted_pipeline" /></dt>
                     <dd class="font-medium text-highlighted">
                         {{ formatMoney({ cents: goal.totals.weighted_open_cents, compact: true }) }}
                     </dd>
                 </div>
                 <div>
-                    <dt class="text-muted">Open asks</dt>
+                    <dt class="text-muted">Open asks<TermHint term="open_asks" /></dt>
                     <dd class="font-medium text-highlighted">
                         {{ formatMoney({ cents: goal.totals.open_amount_cents, compact: true }) }}
                     </dd>

@@ -84,8 +84,18 @@ const runwayTiles = computed(() => {
     const projection = baseProjection.value
     return projection
         ? [
-              { label: 'Runway on committed money', end: projection.runway.committed, color: 'text-highlighted' },
-              { label: 'Runway with weighted pipeline', end: projection.runway.weighted, color: 'text-muted' },
+              {
+                  label: 'Runway on committed money',
+                  term: 'runway_committed' as const,
+                  end: projection.runway.committed,
+                  color: 'text-highlighted',
+              },
+              {
+                  label: 'Runway with weighted pipeline',
+                  term: 'runway_weighted' as const,
+                  end: projection.runway.weighted,
+                  color: 'text-muted',
+              },
           ]
         : []
 })
@@ -130,7 +140,7 @@ function describeRunway({ end }: { end: RunwayEnd }) {
 
                 <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <UCard>
-                        <p class="text-sm text-muted">Cash on hand</p>
+                        <p class="text-sm text-muted">Cash on hand<TermHint term="cash_on_hand" /></p>
                         <p class="mt-1 text-3xl font-semibold text-highlighted">
                             {{ formatMoney({ cents: cash?.balance_cents, compact: true, unknown: 'Not set' }) }}
                         </p>
@@ -145,7 +155,7 @@ function describeRunway({ end }: { end: RunwayEnd }) {
                         </p>
                     </UCard>
                     <UCard>
-                        <p class="text-sm text-muted">Monthly burn</p>
+                        <p class="text-sm text-muted">Monthly burn<TermHint term="monthly_burn" /></p>
                         <p class="mt-1 text-3xl font-semibold text-highlighted">
                             {{ formatMoney({ cents: cash?.monthly_burn_cents, compact: true, unknown: 'Not set' }) }}
                         </p>
@@ -160,7 +170,7 @@ function describeRunway({ end }: { end: RunwayEnd }) {
                         </p>
                     </UCard>
                     <UCard v-for="tile in runwayTiles" :key="tile.label">
-                        <p class="text-sm text-muted">{{ tile.label }}</p>
+                        <p class="text-sm text-muted">{{ tile.label }}<TermHint :term="tile.term" /></p>
                         <p class="mt-1 text-3xl font-semibold" :class="tile.color">
                             {{ describeRunway({ end: tile.end }).headline }}
                         </p>

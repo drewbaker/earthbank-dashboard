@@ -156,7 +156,7 @@ const opportunityColumns: TableColumn<Opportunity>[] = sortableColumns({
         {
             accessorKey: 'weighted_amount_cents',
             header: 'Weighted',
-            meta: { class: { th: 'text-right', td: 'text-right text-muted' } },
+            meta: { class: { th: 'text-right', td: 'text-right text-muted' }, term: 'weighted' },
             cell: ({ row }) =>
                 `${formatMoney({ cents: row.original.weighted_amount_cents, compact: true })} · ${row.original.probability}%`,
         },
@@ -164,6 +164,7 @@ const opportunityColumns: TableColumn<Opportunity>[] = sortableColumns({
             id: 'expected_receipt_at',
             accessorFn: opportunity => opportunity.expected_receipt_at ?? undefined,
             header: 'Expected',
+            meta: { term: 'expected' },
             cell: ({ row }) => formatDate({ value: row.original.expected_receipt_at, unknown: 'Not set' }),
         },
         {
@@ -240,7 +241,7 @@ const funderColumns: TableColumn<Funder>[] = sortableColumns({
             id: 'secured',
             accessorFn: funder => funder.totals.committed_amount_cents + funder.totals.received_amount_cents,
             header: 'Secured',
-            meta: { class: { th: 'text-right', td: 'text-right' } },
+            meta: { class: { th: 'text-right', td: 'text-right' }, term: 'secured' },
             cell: ({ row }) =>
                 formatMoney({
                     cents: row.original.totals.committed_amount_cents + row.original.totals.received_amount_cents,
@@ -251,7 +252,7 @@ const funderColumns: TableColumn<Funder>[] = sortableColumns({
             id: 'open',
             accessorFn: funder => funder.totals.open_amount_cents,
             header: 'Open asks',
-            meta: { class: { th: 'text-right', td: 'text-right text-muted' } },
+            meta: { class: { th: 'text-right', td: 'text-right text-muted' }, term: 'open_asks' },
             cell: ({ row }) => formatMoney({ cents: row.original.totals.open_amount_cents, compact: true }),
         },
         {

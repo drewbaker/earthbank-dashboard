@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import type { ForecastEvent, RunwayEnd, RunwayProjection } from '#shared/forecast/project-runway.ts'
 import { useChartPalette } from '~/composables/useChartPalette.ts'
 import { formatDate, formatMoney } from '~/utils/format.ts'
+import type { GlossaryTerm } from '~/utils/glossary.ts'
 
 const props = defineProps<{
     projection: RunwayProjection
@@ -83,6 +84,13 @@ const legend = computed(() => [
         ? [{ key: 'below', name: '$0: out of cash', color: palette.value.deficit, isDashed: true }]
         : []),
 ])
+
+// What each legend entry means, on hover.
+const LEGEND_TERMS: Record<string, GlossaryTerm> = {
+    committed: 'committed_money_only',
+    weighted: 'weighted_pipeline',
+    below: 'out_of_cash',
+}
 
 // Tooltip rows, committed first.
 const tooltipSeries = computed(
@@ -178,7 +186,7 @@ function formatTooltipTitle(row: ChartRow) {
                             : item.color,
                     }"
                 />
-                {{ item.name }}
+                {{ item.name }}<TermHint v-if="LEGEND_TERMS[item.key]" :term="LEGEND_TERMS[item.key]!" />
             </span>
         </div>
         <LineChart
