@@ -81,7 +81,7 @@ function sortHeader<Row>({
         h(UTooltip, { text: GLOSSARY[term], ui: { content: 'max-w-72 h-auto whitespace-normal py-1.5' } }, () =>
             h(UIcon, {
                 name: 'i-lucide-info',
-                class: 'size-3.5 cursor-help text-dimmed',
+                class: 'size-3.5 cursor-help text-muted hover:text-highlighted',
                 'aria-label': GLOSSARY[term],
             }),
         ),

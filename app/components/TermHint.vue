@@ -13,7 +13,7 @@ defineProps<{ term: GlossaryTerm }>()
     >
         <UIcon
             name="i-lucide-info"
-            class="ml-1 inline size-3.5 shrink-0 cursor-help align-[-2px] text-dimmed hover:text-muted"
+            class="ml-1 inline size-3.5 shrink-0 cursor-help align-[-2px] text-muted hover:text-highlighted"
             :aria-label="GLOSSARY[term]"
             role="img"
         />
