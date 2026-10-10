@@ -62,17 +62,13 @@ watch([track, view, goalFilter, stageFilter, tierFilter, debouncedSearch, includ
     })
 })
 
-const { data: opportunityList, refresh: refreshOpportunities } = await useAsyncData(
-    'pipeline.opportunities',
-    () =>
-        api<OpportunityList>({
-            path: '/opportunities',
-            query: {
-                include_closed: includeClosed.value || view.value === 'board',
-                limit: 500,
-            },
-        }),
-    { watch: [includeClosed, view] },
+const { data: opportunityList, refresh: refreshOpportunities } = await useAsyncData('pipeline.opportunities', () =>
+    api<OpportunityList>({
+        path: '/opportunities',
+        // Always every stage: the overview counts approved and received money; the table hides
+        // closed asks itself unless "Closed" is on.
+        query: { include_closed: true, limit: 500 },
+    }),
 )
 
 const { data: funderList, refresh: refreshFunders } = await useAsyncData(
@@ -105,11 +101,20 @@ const visibleGoals = computed(() =>
     (goals.data.value?.data ?? []).filter(goal => TRACK_GOAL_TYPES[track.value].includes(goal.type)),
 )
 
+// This tab's asks (goal filter applied), for the stage overview.
+const trackOpportunities = computed(() =>
+    (opportunityList.value?.data ?? []).filter(opportunity => visibleGoalTypes.value.includes(opportunity.goal_type)),
+)
+
 const visibleOpportunities = computed(() => {
     const search = debouncedSearch.value.toLowerCase()
     return (opportunityList.value?.data ?? []).filter(
         opportunity =>
             visibleGoalTypes.value.includes(opportunity.goal_type) &&
+            (includeClosed.value ||
+                view.value === 'board' ||
+                stageFilter.value !== ALL ||
+                OPPORTUNITY_STAGE_DETAILS[opportunity.stage].isOpen) &&
             (stageFilter.value === ALL || opportunity.stage === stageFilter.value) &&
             (tierFilter.value === ALL || opportunity.funder.tier === tierFilter.value) &&
             (!search ||
@@ -364,6 +369,7 @@ async function openCreatedFunder(funder: FunderDetail) {
 
         <template #body>
             <div class="space-y-6">
+                <PipelineStageOverview v-if="view === 'opportunities'" :opportunities="trackOpportunities" />
                 <PipelineGoalSummary v-if="visibleGoals.length" :goals="visibleGoals" />
 
                 <UTable
