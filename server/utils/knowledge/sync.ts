@@ -27,8 +27,9 @@ export type KnowledgeSyncSummary = {
 }
 
 /**
- * Bring one Drive folder's documents up to date: new and changed files are downloaded and their
- * text extracted; unchanged files are skipped; files no longer in the folder are removed.
+ * Bring one source's documents up to date (a folder's files, or the one connected file): new and
+ * changed files are downloaded and their text extracted; unchanged files are skipped; files no longer
+ * in the folder are removed.
  *
  * @param input.knowledgeSourceId - The source.
  * @param input.now - Sync time.
@@ -52,7 +53,7 @@ export async function syncKnowledgeSource({
     if (!drive && !refreshToken) {
         await recordKnowledgeSync({
             knowledgeSourceId,
-            lastError: 'The stored Google access could not be read. Reconnect the folder.',
+            lastError: `The stored Google access could not be read. Reconnect the ${source.kind}.`,
             status: 'error',
         })
         return { skipped: 'no usable token' }
@@ -60,7 +61,10 @@ export async function syncKnowledgeSource({
     const client = drive ?? new GoogleKnowledgeDrive({ refreshToken: refreshToken! })
 
     try {
-        const files = await client.listFiles({ folderId: source.drive_folder_id })
+        const files =
+            source.kind === 'file'
+                ? await connectedFile({ drive: client, itemId: source.drive_item_id })
+                : await client.listFiles({ folderId: source.drive_item_id })
         const versions = await knowledgeDocumentVersions()
         const summary: KnowledgeSyncSummary = {
             files: files.length,
@@ -107,15 +111,15 @@ export async function syncKnowledgeSource({
         return summary
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        // invalid_grant: access was revoked or expired; 404: the folder was deleted or unshared.
+        // invalid_grant: access was revoked or expired; 404: the folder or file was deleted or unshared.
         const isRevoked = /invalid_grant|unauthorized_client/i.test(message)
         const isGone = (error as { status?: number })?.status === 404
         await recordKnowledgeSync({
             knowledgeSourceId,
             lastError: isRevoked
-                ? 'Google access was revoked or expired. Reconnect the folder.'
+                ? `Google access was revoked or expired. Reconnect the ${source.kind}.`
                 : isGone
-                  ? 'The folder was not found. It may have been deleted or unshared.'
+                  ? `The ${source.kind} was not found. It may have been deleted or unshared.`
                   : message.slice(0, 500),
             status: isRevoked || isGone ? 'error' : undefined,
         })
@@ -124,6 +128,22 @@ export async function syncKnowledgeSource({
         }
         throw error
     }
+}
+
+/**
+ * The one file a file source is about, as a list like a folder's.
+ *
+ * @param input.drive - Drive client.
+ * @param input.itemId - The file's id.
+ * @returns The file.
+ * @throws An error with status 404 when it's gone, unshared or no longer a file.
+ */
+async function connectedFile({ drive, itemId }: { drive: KnowledgeDrive; itemId: string }) {
+    const item = await drive.getItem({ itemId })
+    if (!item?.file) {
+        throw Object.assign(new Error('Drive file not found'), { status: 404 })
+    }
+    return [item.file]
 }
 
 /**

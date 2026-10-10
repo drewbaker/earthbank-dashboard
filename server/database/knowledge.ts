@@ -2,26 +2,31 @@ import { db } from '#server/utils/db.ts'
 import { newId } from '#server/utils/ids.ts'
 
 /**
- * Add a Drive folder as a knowledge source, or refresh its token and name when it's already connected.
+ * Add a Drive folder or file as a knowledge source, or refresh its token and name when it's already
+ * connected.
  *
- * @param input.driveFolderId - Google Drive folder id.
- * @param input.name - Folder name from Drive.
+ * @param input.driveItemId - Google Drive folder or file id.
+ * @param input.kind - `folder` or `file`.
+ * @param input.name - Its name in Drive.
  * @param input.connectedById - The user whose Google access reads it.
  * @param input.refreshTokenEncrypted - Their encrypted refresh token (drive.readonly).
  * @returns The source row.
  */
 export function upsertKnowledgeSource({
-    driveFolderId,
+    driveItemId,
+    kind,
     name,
     connectedById,
     refreshTokenEncrypted,
 }: {
-    driveFolderId: string
+    driveItemId: string
+    kind: 'folder' | 'file'
     name: string
     connectedById: string
     refreshTokenEncrypted: string
 }) {
     const fields = {
+        kind,
         name,
         connected_by_id: connectedById,
         refresh_token_encrypted: refreshTokenEncrypted,
@@ -29,8 +34,8 @@ export function upsertKnowledgeSource({
         last_error: null,
     }
     return db().knowledgeSource.upsert({
-        where: { drive_folder_id: driveFolderId },
-        create: { id: newId({ kind: 'knowledgeSource' }), drive_folder_id: driveFolderId, ...fields },
+        where: { drive_item_id: driveItemId },
+        create: { id: newId({ kind: 'knowledgeSource' }), drive_item_id: driveItemId, ...fields },
         update: fields,
     })
 }

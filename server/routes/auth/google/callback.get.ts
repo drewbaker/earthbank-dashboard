@@ -35,7 +35,7 @@ export default defineEventHandler(async event => {
         return connectGmail({ event, googleSub: check.identity.googleSub, email: check.identity.email, ...result })
     }
     if (result.purpose === 'connect_drive') {
-        return connectDriveFolder({ event, googleSub: check.identity.googleSub, ...result })
+        return connectDriveItem({ event, googleSub: check.identity.googleSub, ...result })
     }
 
     const existing = await findUserByGoogleSub({ googleSub: check.identity.googleSub })
@@ -122,29 +122,29 @@ async function connectGmail({
 }
 
 /**
- * Finish "Connect a Drive folder": the Google account must be the signed-in user's own, Google must
- * have granted read-only Drive access with a refresh token, and the folder must be one they can read.
+ * Finish "Connect a Drive folder or file": the Google account must be the signed-in user's own, Google
+ * must have granted read-only Drive access with a refresh token, and the item must be one they can read.
  * Then save it as a knowledge source and queue its first sync.
  *
  * @param input.event - The callback request.
  * @param input.googleSub - Google subject of the account that consented.
- * @param input.driveFolderId - The folder chosen before the redirect.
+ * @param input.driveItemId - The folder or file chosen before the redirect.
  * @param input.refreshToken - Refresh token from Google.
  * @param input.grantedScopes - Scopes Google granted.
  * @param input.redirectPath - Where to send the browser afterwards.
  * @returns The redirect response.
  */
-async function connectDriveFolder({
+async function connectDriveItem({
     event,
     googleSub,
-    driveFolderId,
+    driveItemId,
     refreshToken,
     grantedScopes,
     redirectPath,
 }: {
     event: H3Event
     googleSub: string
-    driveFolderId: string | null
+    driveItemId: string | null
     refreshToken: string | null
     grantedScopes: string
     redirectPath: string
@@ -154,16 +154,17 @@ async function connectDriveFolder({
     if (!auth || !user || user.id !== auth.user.id) {
         return sendRedirect(event, `${redirectPath}?drive=wrong_account`, 302)
     }
-    if (!driveFolderId || !refreshToken || !hasGoogleScope({ grantedScopes, scope: 'drive.readonly' })) {
+    if (!driveItemId || !refreshToken || !hasGoogleScope({ grantedScopes, scope: 'drive.readonly' })) {
         return sendRedirect(event, `${redirectPath}?drive=not_granted`, 302)
     }
-    const folder = await new GoogleKnowledgeDrive({ refreshToken }).getFolder({ folderId: driveFolderId })
-    if (!folder) {
-        return sendRedirect(event, `${redirectPath}?drive=folder_not_found`, 302)
+    const item = await new GoogleKnowledgeDrive({ refreshToken }).getItem({ itemId: driveItemId })
+    if (!item) {
+        return sendRedirect(event, `${redirectPath}?drive=not_found`, 302)
     }
     const source = await upsertKnowledgeSource({
-        driveFolderId: folder.id,
-        name: folder.name,
+        driveItemId: item.id,
+        kind: item.kind,
+        name: item.name,
         connectedById: user.id,
         refreshTokenEncrypted: encryptSecret({ plaintext: refreshToken }),
     })
@@ -172,7 +173,7 @@ async function connectDriveFolder({
         action: 'knowledge_source.connected',
         entityType: 'knowledge_source',
         entityId: source.id,
-        changes: { name: folder.name },
+        changes: { name: item.name, kind: item.kind },
         ip: requestIp({ event }),
     })
     await enqueueKnowledgeSync({ knowledgeSourceId: source.id })

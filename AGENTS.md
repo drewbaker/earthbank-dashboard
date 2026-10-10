@@ -34,7 +34,7 @@ Names used throughout: **Earth Bank Dashboard** (display name), `earthbank_dashb
 | Scenario | `scn` | A named set of forecast adjustments |
 | Mailbox connection | `mbx` | A user's connected Gmail (encrypted refresh token) |
 | Email evidence | `eml` | Metadata and an AI summary of an email that caused an update (never the body) |
-| Knowledge source | `ksr` | A connected Google Drive folder of Earth Bank documents (encrypted refresh token) |
+| Knowledge source | `ksr` | A connected Google Drive folder or single file of Earth Bank documents (encrypted refresh token) |
 | Share link | `shl` | A secret, password-protected link that shows funders a read-only pipeline summary |
 | Knowledge document | `kdc` | One file from a knowledge folder with its extracted text; pinned or excluded for AI drafting |
 | Change event | `chg` | Every change to a funder or opportunity field, with source (manual, import, AI), evidence and reason |
@@ -911,7 +911,7 @@ Keeps funder and opportunity status current from email, without the AI ever seei
 
 ### Knowledge (Google Drive)
 
-- Settings → Knowledge connects Drive folders by link. `SyncKnowledgeJob` lists each folder (subfolders included, capped at 500 files), downloads only new or changed files, and stores their text: Google Docs and Slides exported as text, Sheets and .xlsx with every tab, Word .docx via `mammoth`, PowerPoint .pptx (slide text and speaker notes, unzipped with `fflate`), PDFs via `unpdf`, plain text/CSV/Markdown. Old binary .doc/.ppt files and images are listed as "Not readable"; files of a type that becomes readable are retried on the next sync. Files over 20 MB or failed exports are recorded with their status.
+- Settings → Knowledge connects Drive folders or single files by link (folder, Docs/Sheets/Slides, `file/d/…` and `open?id=` links; `kind` is set from Drive). `SyncKnowledgeJob` lists each folder (subfolders included, capped at 500 files) or reads the one file, downloads only new or changed files, and stores their text: Google Docs and Slides exported as text, Sheets and .xlsx with every tab, Word .docx via `mammoth`, PowerPoint .pptx (slide text and speaker notes, unzipped with `fflate`), PDFs via `unpdf`, plain text/CSV/Markdown. Old binary .doc/.ppt files and images are listed as "Not readable"; files of a type that becomes readable are retried on the next sync. Files over 20 MB or failed exports are recorded with their status.
 - People can **pin** a document (always given to the AI in full) or **exclude** it (never given).
 - For each draft, `selectKnowledge` includes every usable document when they total under ~300k characters, in a stable order so the reference block is prompt-cached; otherwise pinned documents plus the best-matching passages (BM25 over ~1,500-character chunks) up to the budget.
 

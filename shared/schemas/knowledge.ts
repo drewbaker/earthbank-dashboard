@@ -5,7 +5,9 @@ export const KNOWLEDGE_DOCUMENT_STATUSES = ['indexed', 'unsupported', 'too_large
 
 export const KnowledgeSource = z.object({
     id: z.string(),
-    drive_folder_id: z.string(),
+    drive_item_id: z.string(),
+    /** A folder (everything inside it is read) or a single file. */
+    kind: z.enum(['folder', 'file']),
     name: z.string(),
     drive_url: z.string(),
     status: z.enum(['active', 'error']),

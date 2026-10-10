@@ -18,7 +18,7 @@ const { data: documents, refresh: refreshDocuments } = await useAsyncData('setti
     api<KnowledgeDocumentList>({ path: '/knowledge/documents' }),
 )
 
-const folderLink = ref('')
+const driveLink = ref('')
 const busySourceId = ref<string | null>(null)
 const busyDocumentId = ref<string | null>(null)
 
@@ -39,18 +39,18 @@ const connectResult = computed(() => {
         {
             connected: {
                 color: 'success' as const,
-                text: 'Folder connected. Its documents are being read now; refresh in a minute.',
+                text: 'Connected. Its documents are being read now; refresh in a minute.',
             },
             wrong_account: { color: 'error' as const, text: 'Connect with the same Google account you sign in with.' },
             not_granted: {
                 color: 'warning' as const,
                 text: 'Google did not grant access to Drive. Try again and allow access.',
             },
-            folder_not_found: {
+            not_found: {
                 color: 'error' as const,
-                text: "That folder couldn't be opened with your account. Check the link and that it's shared with you.",
+                text: "That couldn't be opened with your account. Check the link and that it's shared with you.",
             },
-            invalid_folder: { color: 'error' as const, text: 'Paste a Google Drive folder link.' },
+            invalid_link: { color: 'error' as const, text: 'Paste a link to a Google Drive folder or file.' },
         }[typeof result === 'string' ? result : ''] ?? null
     )
 })
@@ -60,18 +60,18 @@ const readableCount = computed(
 )
 
 /**
- * Start connecting a folder: Google asks for read-only Drive access, then the folder is added.
+ * Start connecting a folder or file: Google asks for read-only Drive access, then it's added.
  *
  * @returns Nothing; the browser leaves the page.
  */
-function connectFolder() {
-    window.location.href = `/auth/google/drive?folder=${encodeURIComponent(folderLink.value.trim())}`
+function connectDriveLink() {
+    window.location.href = `/auth/google/drive?item=${encodeURIComponent(driveLink.value.trim())}`
 }
 
 /**
- * Queue a sync of one folder.
+ * Queue a sync of one folder or file.
  *
- * @param input.sourceId - The folder.
+ * @param input.sourceId - The source.
  * @returns Resolves once queued.
  */
 async function syncSource({ sourceId }: { sourceId: string }) {
@@ -85,7 +85,7 @@ async function syncSource({ sourceId }: { sourceId: string }) {
             result.status === 'already_queued'
                 ? {
                       title: 'Already syncing',
-                      description: 'A sync of this folder is running. Large folders take a few minutes.',
+                      description: 'A sync is already running. Large folders take a few minutes.',
                       color: 'info',
                   }
                 : {
@@ -102,16 +102,16 @@ async function syncSource({ sourceId }: { sourceId: string }) {
 }
 
 /**
- * Disconnect a folder and delete its synced documents.
+ * Disconnect a folder or file and delete its synced documents.
  *
- * @param input.sourceId - The folder.
+ * @param input.sourceId - The source.
  * @returns Resolves once removed.
  */
 async function removeSource({ sourceId }: { sourceId: string }) {
     busySourceId.value = sourceId
     try {
         await api({ path: `/knowledge/sources/${sourceId}`, method: 'DELETE' })
-        toast.add({ title: 'Folder disconnected', color: 'success' })
+        toast.add({ title: 'Disconnected', color: 'success' })
         await Promise.all([refreshSources(), refreshDocuments()])
     } catch (error) {
         toast.add({ title: apiErrorMessage({ error }), color: 'error' })
@@ -152,12 +152,13 @@ async function updateDocument({
 
         <section class="space-y-4">
             <div>
-                <h2 class="text-lg font-semibold text-highlighted">Google Drive folders</h2>
+                <h2 class="text-lg font-semibold text-highlighted">Google Drive folders and files</h2>
                 <p class="text-sm text-muted">
-                    Documents in these folders (business models, explainers, decks) inform AI-drafted emails to funders,
-                    so drafts use Earth Bank's own facts and figures. Only files inside the folders you connect are
-                    read. Google Docs, Sheets and Slides, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), PDFs and text
-                    files are read; old .doc and .ppt files need converting first. Folders re-sync every night.
+                    These documents (business models, explainers, decks) inform AI-drafted emails to funders, so drafts
+                    use Earth Bank's own facts and figures. Only the files you connect, and files inside the folders you
+                    connect, are read. Google Docs, Sheets and Slides, Word (.docx), PowerPoint (.pptx), Excel (.xlsx),
+                    PDFs and text files are read; old .doc and .ppt files need converting first. Everything re-syncs
+                    every night.
                 </p>
             </div>
 
@@ -165,7 +166,10 @@ async function updateDocument({
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div class="text-sm">
                         <p class="flex items-center gap-2 text-highlighted">
-                            <UIcon name="i-lucide-folder" class="size-4 text-muted" />
+                            <UIcon
+                                :name="source.kind === 'file' ? 'i-lucide-file-text' : 'i-lucide-folder'"
+                                class="size-4 text-muted"
+                            />
                             <a :href="source.drive_url" target="_blank" class="hover:underline">{{ source.name }}</a>
                             <UBadge
                                 :label="source.status === 'active' ? 'Connected' : 'Needs reconnecting'"
@@ -174,7 +178,8 @@ async function updateDocument({
                             />
                         </p>
                         <p class="text-muted">
-                            {{ source.document_count }} files · connected by
+                            <template v-if="source.kind === 'folder'">{{ source.document_count }} files · </template>
+                            connected by
                             {{ source.connected_by?.name ?? 'someone' }}
                             ·
                             {{
@@ -188,7 +193,7 @@ async function updateDocument({
                     <div class="flex gap-2">
                         <UButton
                             v-if="source.status === 'error'"
-                            :to="`/auth/google/drive?folder=${source.drive_folder_id}`"
+                            :to="`/auth/google/drive?item=${source.drive_item_id}`"
                             external
                             label="Reconnect"
                             variant="solid"
@@ -212,26 +217,26 @@ async function updateDocument({
             </UCard>
 
             <UCard>
-                <form class="flex flex-col gap-3 sm:flex-row sm:items-end" @submit.prevent="connectFolder">
+                <form class="flex flex-col gap-3 sm:flex-row sm:items-end" @submit.prevent="connectDriveLink">
                     <UFormField
-                        label="Add a folder"
-                        name="folder"
-                        help="Paste the folder's link from Google Drive. Google will ask you to allow read-only Drive access."
+                        label="Add a folder or file"
+                        name="drive_link"
+                        help="Paste a link to a Drive folder (every file in it is read) or to one file (a Doc, Sheet, Slides deck, PDF…). Google will ask you to allow read-only Drive access."
                         class="flex-1"
                     >
                         <UInput
-                            v-model="folderLink"
-                            placeholder="https://drive.google.com/drive/folders/…"
+                            v-model="driveLink"
+                            placeholder="https://drive.google.com/drive/folders/… or https://docs.google.com/document/d/…"
                             icon="i-lucide-link"
                             class="w-full"
                         />
                     </UFormField>
                     <UButton
                         type="submit"
-                        label="Connect folder"
-                        icon="i-lucide-folder-plus"
+                        label="Connect"
+                        icon="i-lucide-link"
                         variant="solid"
-                        :disabled="!folderLink.trim()"
+                        :disabled="!driveLink.trim()"
                     />
                 </form>
             </UCard>

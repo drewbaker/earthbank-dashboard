@@ -14,31 +14,38 @@ export type DriveFile = {
     sizeBytes: number | null
 }
 
+/** A connected Drive item: a folder (everything inside it is read) or one file. */
+export type DriveItem = { id: string; name: string; kind: 'folder' | 'file'; file: DriveFile | null }
+
 /** What syncing needs from Drive; tests pass a fake. */
 export interface KnowledgeDrive {
-    getFolder(input: { folderId: string }): Promise<{ id: string; name: string } | null>
+    getItem(input: { itemId: string }): Promise<DriveItem | null>
     listFiles(input: { folderId: string }): Promise<DriveFile[]>
     exportFile(input: { fileId: string; mimeType: string }): Promise<Uint8Array>
     downloadFile(input: { fileId: string }): Promise<Uint8Array>
 }
 
 /**
- * Pull a Drive folder id out of what someone pasted: a folder URL or a bare id.
+ * Pull a Drive id out of what someone pasted: a folder or file link (Drive, Docs, Sheets, Slides) or a
+ * bare id. Whether it's a folder or a file is checked with Drive when it's connected.
  *
- * @param input.value - e.g. `https://drive.google.com/drive/folders/1AbC…?usp=sharing`.
- * @returns The folder id, or null when it doesn't look like one.
+ * @param input.value - e.g. `https://drive.google.com/drive/folders/1AbC…?usp=sharing` or
+ *   `https://docs.google.com/document/d/1AbC…/edit`.
+ * @returns The id, or null when it doesn't look like one.
  */
-export function parseDriveFolderId({ value }: { value: string }) {
+export function parseDriveItemId({ value }: { value: string }) {
     const trimmed = value.trim()
     const fromUrl =
-        trimmed.match(/\/folders\/([A-Za-z0-9_-]{10,})/)?.[1] ?? trimmed.match(/[?&]id=([A-Za-z0-9_-]{10,})/)?.[1]
+        trimmed.match(/\/folders\/([A-Za-z0-9_-]{10,})/)?.[1] ??
+        trimmed.match(/\/d\/([A-Za-z0-9_-]{10,})/)?.[1] ??
+        trimmed.match(/[?&]id=([A-Za-z0-9_-]{10,})/)?.[1]
     const id = fromUrl ?? trimmed
     return /^[A-Za-z0-9_-]{10,200}$/.test(id) ? id : null
 }
 
 /**
  * Read-only access to Google Drive, authorized by one person's refresh token (drive.readonly).
- * Only the connected folder and the folders inside it are ever listed.
+ * Only connected files, and connected folders and the folders inside them, are ever read.
  */
 export class GoogleKnowledgeDrive implements KnowledgeDrive {
     private readonly api: drive_v3.Drive
@@ -53,19 +60,40 @@ export class GoogleKnowledgeDrive implements KnowledgeDrive {
     }
 
     /**
-     * A folder's name, checking it exists, is readable and is a folder.
+     * A folder or file, checking it exists and is readable.
      *
-     * @param input.folderId - Drive folder id.
-     * @returns Id and name, or null when it isn't a readable folder.
+     * @param input.itemId - Drive folder or file id.
+     * @returns The item (with the file's details when it's a file), or null when it can't be read.
      */
-    async getFolder({ folderId }: { folderId: string }) {
+    async getItem({ itemId }: { itemId: string }): Promise<DriveItem | null> {
         try {
             const { data } = await this.api.files.get({
-                fileId: folderId,
-                fields: 'id, name, mimeType',
+                fileId: itemId,
+                fields: 'id, name, mimeType, modifiedTime, webViewLink, size',
                 supportsAllDrives: true,
             })
-            return data.mimeType === FOLDER_MIME_TYPE && data.id ? { id: data.id, name: data.name ?? 'Folder' } : null
+            if (!data.id) {
+                return null
+            }
+            if (data.mimeType === FOLDER_MIME_TYPE) {
+                return { id: data.id, name: data.name ?? 'Folder', kind: 'folder', file: null }
+            }
+            if (data.mimeType === 'application/vnd.google-apps.shortcut') {
+                return null
+            }
+            return {
+                id: data.id,
+                name: data.name ?? 'Untitled',
+                kind: 'file',
+                file: {
+                    id: data.id,
+                    name: data.name ?? 'Untitled',
+                    mimeType: data.mimeType ?? 'application/octet-stream',
+                    modifiedAt: new Date(data.modifiedTime ?? Date.now()),
+                    webViewLink: data.webViewLink ?? null,
+                    sizeBytes: data.size ? Number(data.size) : null,
+                },
+            }
         } catch (error) {
             if (isNotFound({ error })) {
                 return null
@@ -135,7 +163,7 @@ export class GoogleKnowledgeDrive implements KnowledgeDrive {
     /**
      * Direct children of one folder, all pages.
      *
-     * @param input.parentId - Folder id (validated by `parseDriveFolderId` or returned by Drive).
+     * @param input.parentId - Folder id (validated by `parseDriveItemId` or returned by Drive).
      * @returns Files and folders.
      */
     private async listChildren({ parentId }: { parentId: string }) {

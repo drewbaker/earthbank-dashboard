@@ -488,7 +488,10 @@ model EmailEvidence {
 // person who connected it (drive.readonly). Only files inside the folder are ever read.
 model KnowledgeSource {
     id                      String    @id
-    drive_folder_id         String    @unique
+    // A Drive folder (everything inside it is read) or a single file.
+    drive_item_id           String    @unique
+    // folder | file
+    kind                    String    @default("folder")
     name                    String
     connected_by_id         String?
     // Empty when access was removed (the person was deactivated); someone reconnects the folder.

@@ -42,7 +42,8 @@ beforeAll(async () => {
     userId = (await createTestUser({ email: 'drew@theearthbank.org', name: 'Drew Baker' })).id
     sourceId = (
         await upsertKnowledgeSource({
-            driveFolderId: 'folder-1234567890',
+            driveItemId: 'folder-1234567890',
+            kind: 'folder',
             name: 'Earth Bank Shared',
             connectedById: userId,
             refreshTokenEncrypted: encryptSecret({ plaintext: 'drive-token' }),
@@ -73,7 +74,7 @@ afterAll(async () => {
 function fakeDrive({ files }: { files: (DriveFile & { text: string })[] }) {
     const reads: string[] = []
     const drive: KnowledgeDrive = {
-        getFolder: async ({ folderId }) => ({ id: folderId, name: 'Earth Bank Shared' }),
+        getItem: async ({ itemId }) => ({ id: itemId, name: 'Earth Bank Shared', kind: 'folder', file: null }),
         listFiles: async () => files,
         exportFile: async ({ fileId }) => {
             reads.push(fileId)
@@ -142,6 +143,39 @@ describe('Drive knowledge sync', () => {
             'Old memo.doc': 'unsupported',
             'Huge.pdf': 'too_large',
         })
+    })
+
+    it('reads a single connected file', async () => {
+        const { syncKnowledgeSource } = await import('#server/utils/knowledge/sync.ts')
+        const { upsertKnowledgeSource, listKnowledgeDocuments } = await import('#server/database/knowledge.ts')
+        const { encryptSecret } = await import('#server/utils/crypto.ts')
+        const fileSourceId = (
+            await upsertKnowledgeSource({
+                driveItemId: 'onepager-1234567890',
+                kind: 'file',
+                name: 'One pager',
+                connectedById: userId,
+                refreshTokenEncrypted: encryptSecret({ plaintext: 'drive-token' }),
+            })
+        ).id
+        const onePager = driveFile({
+            id: 'onepager-1234567890',
+            name: 'One pager',
+            mimeType: 'application/vnd.google-apps.document',
+            text: 'Earth Bank in one page.',
+        })
+        const { drive } = fakeDrive({ files: [onePager] })
+        drive.getItem = async ({ itemId }) => ({ id: itemId, name: 'One pager', kind: 'file', file: onePager })
+        drive.listFiles = async () => {
+            throw new Error('a file source must not list a folder')
+        }
+        const summary = await syncKnowledgeSource({ knowledgeSourceId: fileSourceId, now: new Date(), drive })
+        expect(summary).toMatchObject({ files: 1, indexed: 1 })
+        const documents = await listKnowledgeDocuments()
+        expect(documents.find(document => document.name === 'One pager')?.status).toBe('indexed')
+        // Remove it again so the folder tests below see only the folder's documents.
+        const { deleteKnowledgeSource } = await import('#server/database/knowledge.ts')
+        await deleteKnowledgeSource({ knowledgeSourceId: fileSourceId })
     })
 
     it('skips unchanged files, re-reads changed ones, removes deleted ones and keeps pins', async () => {
@@ -329,7 +363,7 @@ describe('Drive knowledge sync of newly readable types', () => {
         })
         const deck = buildPptx({ slides: [{ paragraphs: ['Lending model: 4% blended'] }] })
         const drive: KnowledgeDrive = {
-            getFolder: async ({ folderId }) => ({ id: folderId, name: 'Earth Bank Shared' }),
+            getItem: async ({ itemId }) => ({ id: itemId, name: 'Earth Bank Shared', kind: 'folder', file: null }),
             listFiles: async () => [
                 {
                     id: 'pptx-deck',
@@ -369,7 +403,7 @@ describe('Drive knowledge sync of sensitive documents', () => {
         })
         const reads: string[] = []
         const drive: KnowledgeDrive = {
-            getFolder: async ({ folderId }) => ({ id: folderId, name: 'Earth Bank Shared' }),
+            getItem: async ({ itemId }) => ({ id: itemId, name: 'Earth Bank Shared', kind: 'folder', file: null }),
             listFiles: async () => [
                 {
                     id: 'wire-instructions',

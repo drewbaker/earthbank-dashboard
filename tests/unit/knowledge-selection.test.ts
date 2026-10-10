@@ -2,7 +2,7 @@
 // passages that best match the email; and how files become text.
 import { describe, expect, it } from 'vitest'
 import { buildDocx, buildPptx } from '#root/tests/helpers/office-files.ts'
-import { parseDriveFolderId } from '#server/utils/knowledge/drive.ts'
+import { parseDriveItemId } from '#server/utils/knowledge/drive.ts'
 import { contentPlan, extractText, spreadsheetText } from '#server/utils/knowledge/extract.ts'
 import { chunkText, scoreChunks, selectKnowledge } from '#server/utils/knowledge/select.ts'
 
@@ -159,15 +159,25 @@ describe('Drive file handling', () => {
         expect(text).toBe('## Assumptions\nLoan size | 250000\nRate | 0.065\nStart | 2027-01-01')
     })
 
-    it('reads folder ids from links and bare ids, and rejects anything else', () => {
+    it('reads folder and file ids from links and bare ids, and rejects anything else', () => {
         expect(
-            parseDriveFolderId({ value: 'https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOp?usp=sharing' }),
+            parseDriveItemId({ value: 'https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOp?usp=sharing' }),
         ).toBe('1AbCdEfGhIjKlMnOp')
-        expect(parseDriveFolderId({ value: 'https://drive.google.com/drive/u/0/folders/0B_xyz-1234567890' })).toBe(
+        expect(parseDriveItemId({ value: 'https://drive.google.com/drive/u/0/folders/0B_xyz-1234567890' })).toBe(
             '0B_xyz-1234567890',
         )
-        expect(parseDriveFolderId({ value: ' 1AbCdEfGhIjKlMnOp ' })).toBe('1AbCdEfGhIjKlMnOp')
-        expect(parseDriveFolderId({ value: "x' or name contains 'a" })).toBeNull()
-        expect(parseDriveFolderId({ value: 'short' })).toBeNull()
+        expect(parseDriveItemId({ value: ' 1AbCdEfGhIjKlMnOp ' })).toBe('1AbCdEfGhIjKlMnOp')
+        expect(parseDriveItemId({ value: 'https://docs.google.com/document/d/1DocIdAbcdefgh/edit?tab=t.0' })).toBe(
+            '1DocIdAbcdefgh',
+        )
+        expect(parseDriveItemId({ value: 'https://docs.google.com/spreadsheets/d/1SheetIdAbcdef/edit#gid=0' })).toBe(
+            '1SheetIdAbcdef',
+        )
+        expect(parseDriveItemId({ value: 'https://drive.google.com/file/d/1PdfIdAbcdefgh/view?usp=drive_link' })).toBe(
+            '1PdfIdAbcdefgh',
+        )
+        expect(parseDriveItemId({ value: 'https://drive.google.com/open?id=1OpenIdAbcdefg' })).toBe('1OpenIdAbcdefg')
+        expect(parseDriveItemId({ value: "x' or name contains 'a" })).toBeNull()
+        expect(parseDriveItemId({ value: 'short' })).toBeNull()
     })
 })

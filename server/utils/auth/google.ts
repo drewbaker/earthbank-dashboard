@@ -21,7 +21,7 @@ const OAuthState = z.object({
     codeVerifier: z.string(),
     redirectPath: z.string(),
     purpose: z.enum(OAUTH_PURPOSES).default('sign_in'),
-    driveFolderId: z.string().optional(),
+    driveItemId: z.string().optional(),
 })
 
 /**
@@ -77,7 +77,7 @@ export function safeRedirectPath({ redirect }: { redirect: unknown }) {
  * @param input.redirectPath - Same-site path to return to afterwards.
  * @param input.purpose - `sign_in`, `connect_gmail` or `connect_drive`.
  * @param input.loginHint - Email to preselect in Google's account chooser.
- * @param input.driveFolderId - The folder being connected (`connect_drive`).
+ * @param input.driveItemId - The folder being connected (`connect_drive`).
  * @returns The Google authorization URL to redirect to.
  */
 export async function beginGoogleSignIn({
@@ -85,13 +85,13 @@ export async function beginGoogleSignIn({
     redirectPath,
     purpose = 'sign_in',
     loginHint,
-    driveFolderId,
+    driveItemId,
 }: {
     event: H3Event
     redirectPath: string
     purpose?: OAuthPurpose
     loginHint?: string
-    driveFolderId?: string
+    driveItemId?: string
 }) {
     const client = googleOAuthClient()
     const { codeVerifier, codeChallenge } = await client.generateCodeVerifierAsync()
@@ -99,7 +99,7 @@ export async function beginGoogleSignIn({
     setCookie(
         event,
         OAUTH_STATE_COOKIE_NAME,
-        encryptSecret({ plaintext: JSON.stringify({ state, codeVerifier, redirectPath, purpose, driveFolderId }) }),
+        encryptSecret({ plaintext: JSON.stringify({ state, codeVerifier, redirectPath, purpose, driveItemId }) }),
         {
             httpOnly: true,
             sameSite: 'lax',
@@ -147,7 +147,7 @@ export async function completeGoogleSignIn({ event, code, state }: { event: H3Ev
         payload: ticket.getPayload() ?? null,
         redirectPath: stored.redirectPath,
         purpose: stored.purpose,
-        driveFolderId: stored.driveFolderId ?? null,
+        driveItemId: stored.driveItemId ?? null,
         refreshToken: tokens.refresh_token ?? null,
         grantedScopes: tokens.scope ?? '',
     }

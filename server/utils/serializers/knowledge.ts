@@ -21,9 +21,13 @@ export function serializeKnowledgeSource({
 }): KnowledgeSource {
     return {
         id: source.id,
-        drive_folder_id: source.drive_folder_id,
+        drive_item_id: source.drive_item_id,
         name: source.name,
-        drive_url: `https://drive.google.com/drive/folders/${source.drive_folder_id}`,
+        kind: source.kind === 'file' ? 'file' : 'folder',
+        drive_url:
+            source.kind === 'file'
+                ? `https://drive.google.com/file/d/${source.drive_item_id}/view`
+                : `https://drive.google.com/drive/folders/${source.drive_item_id}`,
         status: source.status === 'error' ? 'error' : 'active',
         connected_by: serializeUserSummary({ user: source.connected_by }),
         document_count: source._count.documents,
