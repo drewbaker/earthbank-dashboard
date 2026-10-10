@@ -168,14 +168,18 @@ const opportunityColumns: TableColumn<Opportunity>[] = [
         cell: ({ row }) =>
             h('div', { class: 'flex items-center gap-2' }, [
                 h(PipelineTierBadge, { tier: row.original.funder.tier }),
-                h(
-                    NuxtLink,
-                    {
-                        to: `/pipeline/funders/${row.original.funder.id}`,
-                        class: 'font-medium text-highlighted hover:underline',
-                    },
-                    () => row.original.funder.name,
-                ),
+                // The ask's name under the funder's, so a funder with several grants reads clearly.
+                h('div', { class: 'min-w-0' }, [
+                    h(
+                        NuxtLink,
+                        {
+                            to: `/pipeline/funders/${row.original.funder.id}`,
+                            class: 'font-medium text-highlighted hover:underline',
+                        },
+                        () => row.original.funder.name,
+                    ),
+                    h('p', { class: 'truncate text-xs text-muted' }, row.original.name),
+                ]),
             ]),
     },
     {
