@@ -165,7 +165,7 @@ describe('processFunderEmail', () => {
         })
         // next_step applies (last contact didn't move forward); stage → lost and the lower amount wait.
         expect(result).toMatchObject({ status: 'processed', applied: 1, pending: 2 })
-        const pending = await listChangeEventRows({ entityIds: [designGrantId], status: 'pending', limit: 10 })
+        const pending = await listChangeEventRows({ entityIds: [designGrantId], statuses: ['pending'], limit: 10 })
         expect(pending.map(event => event.field).sort()).toEqual(['amount_cents', 'stage'])
     })
 

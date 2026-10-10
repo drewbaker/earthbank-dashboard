@@ -96,8 +96,18 @@ const savedBy = computed(
     () =>
         props.event.resolved_by?.name ??
         props.event.actor?.name ??
-        CHANGE_SOURCE_LABELS[props.event.source].replace(/^./, letter => letter.toLowerCase()),
+        lowercaseSourceLabel({ label: CHANGE_SOURCE_LABELS[props.event.source] }),
 )
+
+/**
+ * A source label to read mid-sentence ("by import"), keeping "AI" in capitals.
+ *
+ * @param input.label - e.g. "AI from email", "Import".
+ * @returns e.g. "AI from email", "import".
+ */
+function lowercaseSourceLabel({ label }: { label: string }) {
+    return label.startsWith('AI') ? label : label.charAt(0).toLowerCase() + label.slice(1)
+}
 
 // Why a suggestion that wasn't applied ended up that way.
 const OUTCOME_NOTES: Partial<Record<ChangeEvent['status'], string>> = {

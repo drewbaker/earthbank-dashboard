@@ -36,6 +36,11 @@ export const ListChangeEventsQuery = CursorQuery.extend({
     entity_id: z.string().optional(),
     funder_id: z.string().optional(),
     source: z.enum(CHANGE_SOURCES).optional(),
-    status: z.enum(CHANGE_STATUSES).optional(),
+    /** One status, or several separated by commas (e.g. "applied,pending"). */
+    status: z
+        .string()
+        .transform(value => value.split(',').map(part => part.trim()))
+        .pipe(z.array(z.enum(CHANGE_STATUSES)).min(1))
+        .optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
 })

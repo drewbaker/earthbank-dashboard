@@ -17,7 +17,7 @@ import type { ChangeEntityType, ChangeEvent } from '#shared/schemas/index.ts'
  * @param input.entityId - Only this entity.
  * @param input.funderId - A funder and all of its opportunities.
  * @param input.source - Only this source.
- * @param input.status - Only this status.
+ * @param input.statuses - Only these statuses.
  * @param input.cursor - Continue after this event id.
  * @param input.limit - Page size.
  * @param input.viewer - The signed-in person; only emails from their own inbox get an "Open in Gmail" link.
@@ -28,7 +28,7 @@ export async function listChangeEventFeed({
     entityId,
     funderId,
     source,
-    status,
+    statuses,
     cursor,
     limit,
     viewer,
@@ -37,7 +37,7 @@ export async function listChangeEventFeed({
     entityId?: string
     funderId?: string
     source?: ChangeSource
-    status?: ChangeStatus
+    statuses?: ChangeStatus[]
     cursor?: string
     limit: number
     viewer?: { id: string; email: string }
@@ -46,7 +46,7 @@ export async function listChangeEventFeed({
     if (funderId) {
         entityIds = [funderId, ...(await listOpportunityIdsForFunder({ funderId }))]
     }
-    const rows = await listChangeEventRows({ entityType, entityIds, source, status, cursor, limit })
+    const rows = await listChangeEventRows({ entityType, entityIds, source, statuses, cursor, limit })
     const page = rows.slice(0, limit)
     const [names, evidence] = await Promise.all([loadEntityNames({ events: page }), loadEvidence({ events: page })])
     return {

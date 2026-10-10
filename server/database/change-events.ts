@@ -144,7 +144,7 @@ export function findChangeEvent({ changeEventId }: { changeEventId: string }) {
  * @param input.entityType - Only this entity type.
  * @param input.entityIds - Only these entities (e.g. a funder and its opportunities).
  * @param input.source - Only this source.
- * @param input.status - Only this status.
+ * @param input.statuses - Only these statuses.
  * @param input.cursor - Return events older than this id.
  * @param input.limit - Page size.
  * @returns Up to `limit + 1` events (the extra one tells the caller there's more).
@@ -153,14 +153,14 @@ export function listChangeEventRows({
     entityType,
     entityIds,
     source,
-    status,
+    statuses,
     cursor,
     limit,
 }: {
     entityType?: ChangeEntityType
     entityIds?: string[]
     source?: ChangeSource
-    status?: ChangeStatus
+    statuses?: ChangeStatus[]
     cursor?: string
     limit: number
 }) {
@@ -169,7 +169,7 @@ export function listChangeEventRows({
             entity_type: entityType,
             entity_id: entityIds ? { in: entityIds } : undefined,
             source,
-            status,
+            status: statuses ? { in: statuses } : undefined,
             id: cursor ? { lt: cursor } : undefined,
         },
         include: CHANGE_EVENT_INCLUDE,

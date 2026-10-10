@@ -65,7 +65,8 @@ const { data: myTasks, refresh: refreshMyTasks } = await useAsyncData('overview.
     api<TaskList>({ path: '/tasks', query: { assignee_id: currentUser.value?.id } }),
 )
 const { data: recentChanges, refresh: refreshChanges } = await useAsyncData('overview.changes', () =>
-    api<ChangeEventList>({ path: '/change-events', query: { limit: 8 } }),
+    // Only changes that took effect or still could: not retired, kept or reverted suggestions.
+    api<ChangeEventList>({ path: '/change-events', query: { limit: 8, status: 'applied,pending' } }),
 )
 await inputs
 

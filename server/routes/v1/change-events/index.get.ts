@@ -9,7 +9,7 @@ defineRouteMeta({
         tags: ['Change log'],
         summary: 'List changes',
         description:
-            'Every change to funders and opportunities, newest first. Filter by entity, funder (includes its opportunities), source or status.',
+            'Every change to funders and opportunities, newest first. Filter by entity, funder (includes its opportunities), source or status (comma-separate several).',
         parameters: [
             { name: 'entity_type', in: 'query', schema: { type: 'string', enum: ['funder', 'opportunity'] } },
             { name: 'entity_id', in: 'query', schema: { type: 'string' } },
@@ -44,7 +44,7 @@ export default defineApiHandler(async event => {
         entityId: query.entity_id,
         funderId: query.funder_id,
         source: query.source,
-        status: query.status,
+        statuses: query.status,
         cursor: query.cursor,
         limit: query.limit,
         viewer: { id: ctx.user.id, email: ctx.user.email },
