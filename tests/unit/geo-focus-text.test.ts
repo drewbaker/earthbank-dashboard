@@ -26,3 +26,17 @@ describe('focusCodesFromText', () => {
         expect(focusCodesFromText({ text: null })).toEqual({ codes: [], unmatched: [] })
     })
 })
+
+describe('map country ids', () => {
+    it('maps the dashboard’s 2-letter codes to the map’s 3-letter ids', async () => {
+        const { MAP_COUNTRY_IDS } = await import('#shared/constants/map-country-ids.ts')
+        expect(MAP_COUNTRY_IDS.CN).toBe('CHN')
+        expect(MAP_COUNTRY_IDS.KE).toBe('KEN')
+        expect(MAP_COUNTRY_IDS.US).toBe('USA')
+    })
+
+    it('names an unknown code instead of throwing', async () => {
+        const { geoFocusLabel } = await import('#shared/utils/geo-focus.ts')
+        expect(geoFocusLabel({ code: 'CHN' })).toBe('CHN')
+    })
+})

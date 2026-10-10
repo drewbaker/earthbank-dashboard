@@ -28,7 +28,12 @@ export function geoFocusLabel({ code }: { code: string }) {
     if (region) {
         return region.label
     }
-    return COUNTRY_NAMES.of(code) ?? code
+    // Intl throws a RangeError for anything that isn't a 2-letter region code.
+    try {
+        return COUNTRY_NAMES.of(code) ?? code
+    } catch {
+        return code
+    }
 }
 
 /**

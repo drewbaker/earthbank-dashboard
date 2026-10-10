@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Opportunity } from '#shared/schemas/index.ts'
+import { MAP_COUNTRY_IDS } from '#shared/constants/map-country-ids.ts'
 import { GLOBAL_FOCUS } from '#shared/constants/regions.ts'
 import { countriesInFocus, geoFocusLabel } from '#shared/utils/geo-focus.ts'
 import { useChartPalette } from '~/composables/useChartPalette.ts'
@@ -24,7 +25,11 @@ const areas = computed(() => {
             byCountry.set(country, entry)
         }
     }
-    return [...byCountry.entries()].map(([id, entry]) => ({ id, value: entry.amount, ...entry }))
+    // The map's features are keyed by 3-letter codes; countries it doesn't draw are dropped.
+    return [...byCountry.entries()].flatMap(([country, entry]) => {
+        const id = MAP_COUNTRY_IDS[country]
+        return id ? [{ id, value: entry.amount, ...entry }] : []
+    })
 })
 
 const areasById = computed(() => new Map(areas.value.map(area => [area.id, area])))
@@ -32,7 +37,7 @@ const areasById = computed(() => new Map(areas.value.map(area => [area.id, area]
 /**
  * Coverage of the hovered country, by its map id.
  *
- * @param input.id - The map feature's id (ISO code).
+ * @param input.id - The map feature's id (3-letter ISO code).
  * @returns The asks covering it, or undefined.
  */
 function coverageOf({ id }: { id: unknown }) {
@@ -40,13 +45,16 @@ function coverageOf({ id }: { id: unknown }) {
 }
 
 /**
- * A country's name from its map id.
+ * A hovered country's name: ours from its 2-letter code, else the map's own name.
  *
- * @param input.id - ISO code.
+ * @param input.properties - The map feature's properties (`iso_a2`, `name`).
  * @returns The name.
  */
-function countryName({ id }: { id: unknown }) {
-    return geoFocusLabel({ code: String(id) })
+function countryName({ properties }: { properties: Record<string, unknown> | undefined }) {
+    const code = properties?.iso_a2
+    return typeof code === 'string' && /^[A-Z]{2}$/.test(code)
+        ? geoFocusLabel({ code })
+        : String(properties?.name ?? 'Unknown')
 }
 
 const globalAsks = computed(() => active.value.filter(opportunity => opportunity.focus_areas.includes(GLOBAL_FOCUS)))
@@ -78,7 +86,7 @@ const globalAmount = computed(() =>
                         v-if="kind === 'feature' && values"
                         class="max-w-64 space-y-1 rounded-md border border-default bg-elevated p-3 text-sm shadow-lg"
                     >
-                        <p class="font-medium text-highlighted">{{ countryName({ id: values.id }) }}</p>
+                        <p class="font-medium text-highlighted">{{ countryName({ properties: values.properties }) }}</p>
                         <template v-if="coverageOf({ id: values.id })">
                             <p>
                                 {{ coverageOf({ id: values.id })!.count }} ask{{
