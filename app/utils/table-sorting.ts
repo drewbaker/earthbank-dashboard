@@ -1,6 +1,7 @@
 import type { TableColumn } from '@nuxt/ui'
 import type { Column } from '@tanstack/vue-table'
-import { h, resolveComponent } from 'vue'
+import { h } from 'vue'
+import { UButton } from '#components'
 
 /**
  * Make every column with a text header sortable by clicking it: first click sorts ascending, the
@@ -28,7 +29,7 @@ export function sortableColumns<Row>({ columns }: { columns: TableColumn<Row>[] 
 /**
  * A header button showing the column's sort state.
  *
- * Called while the table renders, so the globally registered Nuxt UI button resolves.
+ * Nuxt UI components aren't registered globally, so the button is imported, not resolved by name.
  *
  * @param input.label - The column's name.
  * @param input.tableColumn - TanStack's column, for its sort state.
@@ -36,7 +37,7 @@ export function sortableColumns<Row>({ columns }: { columns: TableColumn<Row>[] 
  */
 function sortHeader<Row>({ label, tableColumn }: { label: string; tableColumn: Column<Row> }) {
     const sorted = tableColumn.getIsSorted()
-    return h(resolveComponent('UButton'), {
+    return h(UButton, {
         label,
         color: 'neutral',
         variant: 'ghost',
