@@ -37,7 +37,7 @@ defineRouteMeta({
 })
 
 export default defineApiHandler(async event => {
-    requireUser({ event })
+    const { ctx } = requireUser({ event })
     const query = parseQuery({ event, schema: ListChangeEventsQuery })
     return listChangeEventFeed({
         entityType: query.entity_type,
@@ -47,5 +47,6 @@ export default defineApiHandler(async event => {
         status: query.status,
         cursor: query.cursor,
         limit: query.limit,
+        viewerEmail: ctx.user.email,
     })
 })

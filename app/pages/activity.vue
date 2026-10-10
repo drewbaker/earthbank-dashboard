@@ -181,14 +181,17 @@ async function resolveDraft({ funderId, action }: { funderId: string; action: 'c
                             Suggestions the AI wasn't sure enough about, or that mark an ask lost or lower an amount.
                         </p>
                     </template>
-                    <PipelineChangeTimeline
-                        :events="pending.data"
-                        show-entity-name
-                        :busy-event-id="busyEventId"
-                        @accept="acceptChange"
-                        @reject="rejectChange"
-                        @revert="revertChange"
-                    />
+                    <div class="divide-y divide-default">
+                        <ActivitySuggestionCard
+                            v-for="event in pending.data"
+                            :key="event.id"
+                            :event="event"
+                            :is-busy="busyEventId === event.id"
+                            @accept="acceptChange"
+                            @reject="rejectChange"
+                            @edited="reloadActivity"
+                        />
+                    </div>
                 </UCard>
 
                 <UCard>

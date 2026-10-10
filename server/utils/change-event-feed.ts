@@ -20,6 +20,7 @@ import type { ChangeEntityType, ChangeEvent } from '#shared/schemas/index.ts'
  * @param input.status - Only this status.
  * @param input.cursor - Continue after this event id.
  * @param input.limit - Page size.
+ * @param input.viewerEmail - The signed-in person, so "Open in Gmail" links open their own inbox.
  * @returns `{ data, next_cursor, has_more }`.
  */
 export async function listChangeEventFeed({
@@ -30,6 +31,7 @@ export async function listChangeEventFeed({
     status,
     cursor,
     limit,
+    viewerEmail,
 }: {
     entityType?: ChangeEntityType
     entityId?: string
@@ -38,6 +40,7 @@ export async function listChangeEventFeed({
     status?: ChangeStatus
     cursor?: string
     limit: number
+    viewerEmail?: string
 }) {
     let entityIds = entityId ? [entityId] : undefined
     if (funderId) {
@@ -52,6 +55,7 @@ export async function listChangeEventFeed({
                 event,
                 ...names.get(event.entity_id),
                 evidence: event.evidence_id ? (evidence.get(event.evidence_id) ?? null) : null,
+                viewerEmail,
             }),
         ),
         next_cursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
@@ -66,6 +70,7 @@ export async function listChangeEventFeed({
  * @param input.entityName - Display name of the funder or opportunity.
  * @param input.funderId - The funder it belongs to.
  * @param input.evidence - The email behind an AI change, if any.
+ * @param input.viewerEmail - The signed-in person, for the evidence's Gmail link.
  * @returns The API representation.
  */
 export function serializeChangeEvent({
@@ -73,11 +78,13 @@ export function serializeChangeEvent({
     entityName = null,
     funderId = null,
     evidence = null,
+    viewerEmail,
 }: {
     event: ChangeEventRow
     entityName?: string | null
     funderId?: string | null
     evidence?: (EmailEvidenceRow & { mailbox_user: UserRow | null }) | null
+    viewerEmail?: string
 }): ChangeEvent {
     return {
         id: event.id,
@@ -92,7 +99,7 @@ export function serializeChangeEvent({
         status: event.status as ChangeStatus,
         actor: serializeUserSummary({ user: event.actor_user }),
         evidence_id: event.evidence_id,
-        evidence: evidence ? serializeEmailEvidence({ evidence }) : null,
+        evidence: evidence ? serializeEmailEvidence({ evidence, viewerEmail }) : null,
         reason: event.reason,
         confidence: event.confidence,
         resolved_at: toIsoDateTime({ date: event.resolved_at }),

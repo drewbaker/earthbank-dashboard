@@ -59,16 +59,19 @@ export function changeFieldLabel({ field }: { field: string }) {
  * @param input.field - Field name.
  * @param input.value - Value as stored in the change log.
  * @param input.lookups - User names and goal types for id fields.
+ * @param input.isFullText - Show long text in full instead of cutting it at 120 characters.
  * @returns Display text.
  */
 export function formatChangeValue({
     field,
     value,
     lookups,
+    isFullText = false,
 }: {
     field: string
     value: unknown
     lookups: ChangeValueLookups
+    isFullText?: boolean
 }) {
     if (value === null || value === undefined || value === '') {
         return 'empty'
@@ -98,6 +101,6 @@ export function formatChangeValue({
             if (field.endsWith('_at')) {
                 return formatDate({ value: value as string })
             }
-            return String(value).length > 120 ? `${String(value).slice(0, 117)}…` : String(value)
+            return !isFullText && String(value).length > 120 ? `${String(value).slice(0, 117)}…` : String(value)
     }
 }
