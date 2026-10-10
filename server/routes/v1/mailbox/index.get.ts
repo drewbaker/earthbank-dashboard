@@ -6,7 +6,6 @@ import { requireUser } from '#server/utils/auth.ts'
 import { hasGoogleScope } from '#server/utils/auth/google.ts'
 import { config } from '#server/utils/config.ts'
 import { toIsoDateTime } from '#server/utils/dates.ts'
-import { forwardingAddressFor } from '#server/utils/mail/inbound.ts'
 import { MailboxSyncStatus } from '#shared/schemas/index.ts'
 
 defineRouteMeta({
@@ -40,7 +39,6 @@ export default defineApiHandler(async event => {
               }
             : null,
         dashboard_address: config.dashboardEmailAddress,
-        forwarding_address: await forwardingAddressFor({ userId: ctx.user.id }),
     }
 })
 

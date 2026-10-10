@@ -246,9 +246,8 @@ describe('processFunderEmail', () => {
 
 describe('forwarded email', () => {
     it('drafts a new funder from an unknown sender', async () => {
-        const { processForwardedEmail, regenerateForwardingAddress } = await import('#server/utils/mail/inbound.ts')
+        const { processForwardedEmail } = await import('#server/utils/mail/inbound.ts')
         const { db } = await import('#server/utils/db.ts')
-        const address = await regenerateForwardingAddress({ userId })
         const { provider } = fakeAi({
             answers: [
                 {
@@ -270,13 +269,16 @@ describe('forwarded email', () => {
             today: '2026-10-07',
             fetchReceivedEmail: async () => ({
                 id: 'rcv_1',
-                from: 'drew.personal@gmail.com',
-                to: [address],
-                receivedFor: [address],
+                from: 'drew@theearthbank.org',
+                to: ['dashboard@theearthbank.org'],
+                receivedFor: ['dashboard@mail.theearthbank.org'],
                 subject: 'Fwd: Earth Bank',
-                text: 'FYI\n\n---------- Forwarded message ---------\nFrom: Jane Doe <jane@northwind.org>\nDate: Tue, Oct 6, 2026 at 4:12 PM\nSubject: Earth Bank\nTo: <drew.personal@gmail.com>\n\nWe would love to talk about a $250k grant.',
+                text: 'FYI\n\n---------- Forwarded message ---------\nFrom: Jane Doe <jane@northwind.org>\nDate: Tue, Oct 6, 2026 at 4:12 PM\nSubject: Earth Bank\nTo: <drew@theearthbank.org>\n\nWe would love to talk about a $250k grant.',
                 html: null,
-                headers: null,
+                headers: {
+                    'Authentication-Results':
+                        'mx.google.com; dkim=pass header.i=@theearthbank.org; dmarc=pass header.from=theearthbank.org',
+                },
                 createdAt: '2026-10-07T10:00:00Z',
             }),
         })
@@ -290,10 +292,8 @@ describe('forwarded email', () => {
         expect(draft.opportunities[0]!.amount_cents).toBe(25_000_000n)
     })
 
-    it('ignores mail to an address that was replaced', async () => {
-        const { processForwardedEmail, regenerateForwardingAddress } = await import('#server/utils/mail/inbound.ts')
-        const oldAddress = await regenerateForwardingAddress({ userId })
-        await regenerateForwardingAddress({ userId })
+    it('ignores mail from someone outside the team', async () => {
+        const { processForwardedEmail } = await import('#server/utils/mail/inbound.ts')
         const { provider } = fakeAi({ answers: [] })
         const result = await processForwardedEmail({
             receivedEmailId: 'rcv_2',
@@ -302,8 +302,8 @@ describe('forwarded email', () => {
             fetchReceivedEmail: async () => ({
                 id: 'rcv_2',
                 from: 'someone@example.org',
-                to: [oldAddress],
-                receivedFor: [oldAddress],
+                to: ['dashboard@theearthbank.org'],
+                receivedFor: ['dashboard@mail.theearthbank.org'],
                 subject: 'Hi',
                 text: 'Hello',
                 html: null,

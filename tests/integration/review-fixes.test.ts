@@ -195,8 +195,7 @@ describe('staff addresses', () => {
     })
 
     it('a note with no forwarded email goes to the assistant as instructions, not to funder matching', async () => {
-        const { processForwardedEmail, regenerateForwardingAddress } = await import('#server/utils/mail/inbound.ts')
-        const address = await regenerateForwardingAddress({ userId })
+        const { processForwardedEmail } = await import('#server/utils/mail/inbound.ts')
         const { provider, prompts } = fakeAi({ answers: [] })
         const result = await processForwardedEmail({
             receivedEmailId: 'rcv_plain',
@@ -204,13 +203,16 @@ describe('staff addresses', () => {
             today: '2026-10-01',
             fetchReceivedEmail: async () => ({
                 id: 'rcv_plain',
-                from: 'steve.personal@gmail.com',
-                to: [address],
-                receivedFor: [address],
+                from: 'steve@theearthbank.org',
+                to: ['dashboard@theearthbank.org'],
+                receivedFor: ['dashboard@mail.theearthbank.org'],
                 subject: 'note',
                 text: 'Just a note to myself',
                 html: null,
-                headers: null,
+                headers: {
+                    'Authentication-Results':
+                        'mx.google.com; dkim=pass header.i=@theearthbank.org; dmarc=pass header.from=theearthbank.org',
+                },
                 createdAt: '2026-10-01T00:00:00Z',
             }),
         })
@@ -218,7 +220,7 @@ describe('staff addresses', () => {
         expect(result).toMatchObject({ kind: 'instructions', actions: [] })
         expect(prompts[0]).toContain('Just a note to myself')
         const { db } = await import('#server/utils/db.ts')
-        expect(await db().contact.count({ where: { email: 'steve.personal@gmail.com' } })).toBe(0)
+        expect(await db().contact.count({ where: { email: 'steve@theearthbank.org' } })).toBe(0)
     })
 })
 

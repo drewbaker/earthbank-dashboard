@@ -1,7 +1,6 @@
 // Covers which email the dashboard reads: funder matching by address and domain (never free-mail
 // domains), the Gmail search queries, body cleanup, forwarded-message unwrapping and forwarding tokens.
 import { describe, expect, it } from 'vitest'
-import { forwardingTokenFrom } from '#server/utils/mail/inbound.ts'
 import { buildFunderMailQueries, buildFunderMatchIndex, matchFunder } from '#server/utils/mail/matching.ts'
 import { htmlToText, stripQuotedText, unwrapForwardedMessage } from '#server/utils/mail/normalize.ts'
 
@@ -73,19 +72,5 @@ describe('email text cleanup', () => {
             subject: 'Earth Bank',
             text: 'We would love to talk about a $250k grant.',
         })
-    })
-})
-
-describe('forwardingTokenFrom', () => {
-    it('finds the token in the private address', () => {
-        expect(
-            forwardingTokenFrom({
-                recipients: ['Updates+abc123@MAIL.theearthbank.org'],
-                domain: 'mail.theearthbank.org',
-            }),
-        ).toBe('abc123')
-        expect(
-            forwardingTokenFrom({ recipients: ['updates@mail.theearthbank.org'], domain: 'mail.theearthbank.org' }),
-        ).toBeNull()
     })
 })

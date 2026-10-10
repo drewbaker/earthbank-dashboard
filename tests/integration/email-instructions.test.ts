@@ -168,6 +168,24 @@ describe('instructions to the dashboard address', () => {
         expect(funder.contacts[0]!.email).toBe('jane@northwind.org')
     })
 
+    it('reads the subject as the request when the body is empty', async () => {
+        const { processInboundEmail } = await import('#server/utils/mail/inbound.ts')
+        const email = received({ subject: 'Whats the latest on UBS?', text: '' })
+        const { provider, prompts } = fakeAi({
+            answers: [],
+            toolScripts: [{ calls: [], reply: 'UBS is in discussion.' }],
+        })
+        const result = await processInboundEmail({
+            receivedEmailId: email.id,
+            ai: provider,
+            today: '2026-10-07',
+            fetchReceivedEmail: async () => email,
+        })
+        expect(result).toMatchObject({ kind: 'instructions', isVerified: true })
+        expect(prompts[0]).toContain('<instructions>\nWhats the latest on UBS?')
+        expect(sentEmails.at(-1)!.text).toContain('UBS is in discussion.')
+    })
+
     it('changes nothing when the email fails authentication, and warns the sender', async () => {
         const { processInboundEmail } = await import('#server/utils/mail/inbound.ts')
         const { db } = await import('#server/utils/db.ts')

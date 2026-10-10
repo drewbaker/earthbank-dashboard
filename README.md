@@ -10,7 +10,7 @@ The product spec and house conventions are in [AGENTS.md](AGENTS.md); the delive
 - **Pipeline**: funders, contacts and opportunities by goal (Design Grants, OpEx, Lending Capital) and stage; table, funder list and drag-and-drop board; full change history with revert
 - **Milestones & Tasks**: milestones with tasks, assignees and deadlines; drag to reorder; "by person" view; comments and file attachments; email alerts on assignment and comments, plus a weekday digest
 - **Forecast**: 24-month cash projection with a live scenario builder (slip a funding date, change an amount or probability, add a hire or one-off cost, change burn); saved scenarios
-- **Email intelligence**: connect Gmail and the AI keeps funder stages, amounts, dates and next steps current from funder email only, with the email summary and reasoning behind every change; forward any email to a private address; review, accept or revert on the Activity page
+- **Email intelligence**: connect Gmail and the AI keeps funder stages, amounts, dates and next steps current from funder email only, with the email summary and reasoning behind every change; email or forward to dashboard@theearthbank.org with a request and the AI does it and replies; review, accept or revert on the Activity page
 - **Email drafts**: funders waiting on a reply are flagged; **Draft email** has the AI write a reply in the thread's tone, using the pipeline and Earth Bank's Drive documents, and saves it to your Gmail drafts (never sends)
 - **Knowledge**: connect Earth Bank's Google Drive folder (business models, explainers) so drafts use the team's own facts; pin or exclude documents
 - **Bank data** from Bookeeping.ai (or entered by hand)

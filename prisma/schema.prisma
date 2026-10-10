@@ -46,7 +46,6 @@ model User {
     scenarios           Scenario[]
     planned_expenses    PlannedExpense[]
     mailbox_connection  MailboxConnection?
-    inbound_addresses   InboundAddress[]
     email_evidence      EmailEvidence[]
     knowledge_sources   KnowledgeSource[]
     share_links         ShareLink[]
@@ -484,20 +483,6 @@ model EmailEvidence {
 }
 
 // A user's private forwarding address: updates+<token>@INBOUND_EMAIL_DOMAIN.
-model InboundAddress {
-    id              String    @id
-    user_id         String
-    // Looked up by hash; the encrypted copy lets Settings show the address again.
-    token_hash      String    @unique
-    token_encrypted String
-    revoked_at      DateTime?
-    created_at      DateTime  @default(now())
-
-    user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
-    @@index([user_id])
-    @@map("inbound_address")
-}
 
 // A Google Drive folder whose documents inform AI-drafted emails. Read with the refresh token of the
 // person who connected it (drive.readonly). Only files inside the folder are ever read.

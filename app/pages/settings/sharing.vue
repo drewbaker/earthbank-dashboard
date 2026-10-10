@@ -61,19 +61,19 @@ async function copyText({ text, title }: { text: string; title: string }) {
 }
 
 /**
- * Turn a link off for everyone who has it.
+ * Delete a link: it stops working for everyone who has it.
  *
  * @param input.link - The link.
- * @returns Resolves once turned off.
+ * @returns Resolves once deleted.
  */
 async function revokeLink({ link }: { link: ShareLink }) {
-    if (!window.confirm(`Turn off "${link.label}"? Anyone with it loses access straight away.`)) {
+    if (!window.confirm(`Delete "${link.label}"? Anyone with the link loses access straight away.`)) {
         return
     }
     busyLinkId.value = link.id
     try {
         await api({ path: `/share-links/${link.id}`, method: 'DELETE' })
-        toast.add({ title: 'Link turned off', color: 'success' })
+        toast.add({ title: 'Link deleted', color: 'success' })
         await refresh()
     } catch (error) {
         toast.add({ title: apiErrorMessage({ error }), color: 'error' })
@@ -173,8 +173,8 @@ async function revokeLink({ link }: { link: ShareLink }) {
                             size="sm"
                             color="error"
                             variant="ghost"
-                            icon="i-lucide-link-2-off"
-                            label="Turn off"
+                            icon="i-lucide-trash-2"
+                            label="Delete"
                             :loading="busyLinkId === link.id"
                             @click="revokeLink({ link })"
                         />

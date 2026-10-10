@@ -20,7 +20,6 @@ export const ID_PREFIXES = {
     mailboxConnection: 'mbx',
     emailEvidence: 'eml',
     changeEvent: 'chg',
-    inboundAddress: 'iad',
     knowledgeSource: 'ksr',
     knowledgeDocument: 'kdc',
     plannedExpense: 'pex',
