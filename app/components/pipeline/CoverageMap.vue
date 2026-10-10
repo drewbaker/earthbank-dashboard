@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { useElementSize } from '@vueuse/core'
+import { geoEqualEarth, geoPath } from 'd3-geo'
+import type { MultiPolygon } from 'geojson'
+import { computed, ref, useTemplateRef } from 'vue'
 import { MAP_COUNTRY_IDS } from '#shared/constants/map-country-ids.ts'
 import { GLOBAL_FOCUS } from '#shared/constants/regions.ts'
 import { countriesInFocus, geoFocusLabel } from '#shared/utils/geo-focus.ts'
@@ -10,6 +13,37 @@ import { formatMoney } from '~/utils/format.ts'
 // Also used by the funder-facing share page, so it takes plain asks rather than opportunities.
 const props = defineProps<{ asks: CoverageAsk[] }>()
 const palette = useChartPalette()
+
+// The map is fitted to the inhabited world (latitude -56° to 84°) at the card's width, with the height
+// following from that. Antarctica has no asks, and the chart library's own fit misjudges its size,
+// which pushed the rest of the world down and cut off the bottom of Australia and South America.
+const MAP_PADDING = 8
+const INHABITED_WORLD: MultiPolygon = {
+    type: 'MultiPolygon',
+    coordinates: Array.from({ length: 36 }, (_, index) => {
+        const west = -180 + index * 10
+        return [
+            [
+                [west, -56],
+                [west, 84],
+                [west + 10, 84],
+                [west + 10, -56],
+                [west, -56],
+            ],
+        ]
+    }),
+}
+const mapBox = useTemplateRef<HTMLElement>('mapBox')
+const { width: mapBoxWidth } = useElementSize(mapBox)
+const mapView = computed(() => {
+    const width = Math.max(320, Math.round(mapBoxWidth.value || 900))
+    const projection = geoEqualEarth().fitWidth(width - MAP_PADDING * 2, INHABITED_WORLD)
+    const [[, top], [, bottom]] = geoPath(projection).bounds(INHABITED_WORLD)
+    const height = Math.round(bottom - top + MAP_PADDING * 2)
+    const [x, y] = projection.translate()
+    projection.translate([x + MAP_PADDING, y - top + MAP_PADDING])
+    return { projection, height }
+})
 
 // Declined asks don't count toward coverage.
 const active = computed(() => props.asks.filter(ask => ask.stage !== 'lost'))
@@ -90,13 +124,14 @@ function askCount({ count }: { count: number }) {
             </p>
         </template>
         <ClientOnly>
-            <div class="relative">
+            <div ref="mapBox" class="relative">
                 <TopoJSONMap
                     :data="{ areas }"
                     value="value"
                     :color-range="['#d1fae5', palette.committed]"
-                    :height="380"
-                    projection="equalEarth"
+                    :height="mapView.height"
+                    :projection="mapView.projection"
+                    :fit-view="false"
                 >
                     <template #tooltip="{ kind, values }">
                         <div
