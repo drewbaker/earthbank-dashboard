@@ -35,6 +35,7 @@ Names used throughout: **Earth Bank Dashboard** (display name), `earthbank_dashb
 | Mailbox connection | `mbx` | A user's connected Gmail (encrypted refresh token) |
 | Email evidence | `eml` | Metadata and an AI summary of an email that caused an update (never the body) |
 | Knowledge source | `ksr` | A connected Google Drive folder of Earth Bank documents (encrypted refresh token) |
+| Share link | `shl` | A secret, password-protected link that shows funders a read-only pipeline summary |
 | Knowledge document | `kdc` | One file from a knowledge folder with its extracted text; pinned or excluded for AI drafting |
 | Change event | `chg` | Every change to a funder or opportunity field, with source (manual, import, AI), evidence and reason |
 | Audit log | `aud` | |
@@ -47,7 +48,7 @@ Names used throughout: **Earth Bank Dashboard** (display name), `earthbank_dashb
     5. Model runway scenarios: slip a funding date, change an amount, add a hire or a one-off cost, and see when OpEx runs out.
     6. Review AI-proposed updates from email, with evidence and reasoning, then accept, revert or override them.
     7. See which funders are waiting on a reply, and have the AI draft it (from the thread, the pipeline and Earth Bank's Drive documents) into the sender's Gmail drafts for review.
-- **Public surfaces**: none, apart from `/healthz`, the Google OAuth callback and the inbound-email webhook (signature-verified).
+- **Public surfaces**: none, apart from `/healthz`, the Google OAuth callback, the inbound-email webhook (signature-verified), and funder share pages (`/share/{secret}`, password-protected; see §10 Sharing).
 - **Background work**:
     - Bookeeping.ai sync (hourly): accounts, balances, transactions.
     - Gmail sync per connected user (every 15 min), plus a backfill when a funder is added.
@@ -900,6 +901,12 @@ Keeps funder and opportunity status current from email, without the AI ever seei
 - **Sync progress**: `mailbox_connection` records the running sync (`sync_state` queued/running, `sync_phase` searching/checking/reading, done/total) and the last result; Settings → Email polls it every 2 seconds while a sync is active. A sync that hasn't reported for 20 minutes is shown as finished (it was interrupted; its retry reports again).
 - **Reply needed**: a funder whose latest relevant email is from them (not an Earth Bank domain) has `awaiting_reply_since` set, shown on the pipeline and funder page.
 - **Drafting** (`server/utils/mail/draft-reply.ts`): `POST /v1/funders/{id}/reply-draft` finds the latest thread with the funder in the author's own Gmail (same funder search, last 12 months), reads up to 10 messages live, and sends them with the pipeline record, the author's guidance (default: the opportunity's next step) and the selected Drive documents to the AI (`DRAFT_REPLY_INSTRUCTIONS`, effort medium). Thread text is labelled as data, not instructions. Recipients (reply-all minus the author, their aliases and forwarding addresses) and the subject are computed in code; the AI writes the body, "before sending" notes and which documents it used. Nothing from the thread or the draft is stored; the audit log records only that a draft was made. `POST /v1/mailbox/drafts` saves the edited email to Gmail drafts in the thread (`In-Reply-To`/`References`); the person sends it from Gmail.
+
+### Sharing with funders
+
+- Settings → Sharing creates **share links**: `/share/{token}` plus a password. The token is 256 random bits, stored hashed (and encrypted so Settings can show the link again); the password is hashed with scrypt (`server/utils/passwords.ts`). Turning a link off (`revoked_at`) stops it at once.
+- `POST /v1/shared/{token}/unlock` checks the password (10 wrong tries per link per 15 minutes, in memory) and sets a signed, per-link, httpOnly cookie for 12 hours; `GET /v1/shared/{token}` then returns the summary. Neither needs a session.
+- The summary (`buildSharedPipeline`) has Design Grants (design grants + OpEx) and Lending Capital, each ask with only: funder name, contact **names**, geographic focus names, amount, stage, and (if the link allows) the first sentence of the next step. Declined asks and draft or archived funders are left out. Never emails, notes, owners, probabilities or AI reasoning. The page reuses `PipelineStageOverview` with no links into the dashboard; every response is `noindex`.
 
 ### Knowledge (Google Drive)
 

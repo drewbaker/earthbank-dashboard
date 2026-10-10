@@ -2,11 +2,11 @@
 import { computed } from 'vue'
 import type { OpportunityStage } from '#shared/constants/pipeline.ts'
 import { OPPORTUNITY_STAGE_DETAILS, OPPORTUNITY_STAGES } from '#shared/constants/pipeline.ts'
-import type { Opportunity } from '#shared/schemas/index.ts'
 import { useStageColors } from '~/composables/useChartPalette.ts'
+import type { StageAsk } from '~/utils/stage-asks.ts'
 import { formatMoney } from '~/utils/format.ts'
 
-const props = defineProps<{ opportunities: Opportunity[] }>()
+const props = defineProps<{ asks: StageAsk[] }>()
 const stageColors = useStageColors()
 
 // Furthest along first, as the team reads the pipeline. Declined asks are left out.
@@ -17,19 +17,19 @@ const MAX_BARS_PER_STAGE = 6
 
 const groups = computed(() =>
     STAGES_BY_PROGRESS.map(stage => {
-        const asks = props.opportunities.filter(opportunity => opportunity.stage === stage)
+        const asks = props.asks.filter(ask => ask.stage === stage)
         const priced = asks
-            .filter(opportunity => (opportunity.amount_cents ?? 0) > 0)
+            .filter(ask => (ask.amount_cents ?? 0) > 0)
             .sort((first, second) => second.amount_cents! - first.amount_cents!)
         const hidden = priced.slice(MAX_BARS_PER_STAGE)
         return {
             stage,
-            total: priced.reduce((sum, opportunity) => sum + opportunity.amount_cents!, 0),
+            total: priced.reduce((sum, ask) => sum + ask.amount_cents!, 0),
             count: asks.length,
             shown: priced.slice(0, MAX_BARS_PER_STAGE),
             hiddenCount: hidden.length,
-            hiddenTotal: hidden.reduce((sum, opportunity) => sum + opportunity.amount_cents!, 0),
-            unpriced: asks.filter(opportunity => !opportunity.amount_cents),
+            hiddenTotal: hidden.reduce((sum, ask) => sum + ask.amount_cents!, 0),
+            unpriced: asks.filter(ask => !ask.amount_cents),
         }
     }).filter(group => group.count > 0),
 )
@@ -45,12 +45,7 @@ const pieCategories = computed(() =>
     ),
 )
 const largestAsk = computed(() =>
-    Math.max(
-        1,
-        ...props.opportunities
-            .filter(opportunity => opportunity.stage !== 'lost')
-            .map(opportunity => opportunity.amount_cents ?? 0),
-    ),
+    Math.max(1, ...props.asks.filter(ask => ask.stage !== 'lost').map(ask => ask.amount_cents ?? 0)),
 )
 
 /**
@@ -82,19 +77,6 @@ function barWidth({ amount }: { amount: number }) {
 function shareOfTotal({ amount }: { amount: number }) {
     return `${Math.round((amount / pieTotal.value) * 100)}%`
 }
-
-/**
- * Funder name, plus the ask's name when the funder has more than one ask here.
- *
- * @param input.opportunity - The ask.
- * @returns The row label.
- */
-function askLabel({ opportunity }: { opportunity: Opportunity }) {
-    const hasSeveral =
-        props.opportunities.filter(other => other.funder.id === opportunity.funder.id && other.stage !== 'lost')
-            .length > 1
-    return hasSeveral ? `${opportunity.funder.name} · ${opportunity.name}` : opportunity.funder.name
-}
 </script>
 
 <template>
@@ -110,26 +92,24 @@ function askLabel({ opportunity }: { opportunity: Opportunity }) {
                         </span>
                     </h3>
                     <div
-                        v-for="opportunity in group.shown"
-                        :key="opportunity.id"
+                        v-for="ask in group.shown"
+                        :key="ask.key"
                         class="grid grid-cols-[minmax(7rem,13rem)_1fr] items-center gap-3 text-sm"
                     >
-                        <NuxtLink
-                            :to="`/pipeline/funders/${opportunity.funder.id}`"
-                            class="truncate text-default hover:underline"
-                        >
-                            {{ askLabel({ opportunity }) }}
+                        <NuxtLink v-if="ask.url" :to="ask.url" class="truncate text-default hover:underline">
+                            {{ ask.label }}
                         </NuxtLink>
+                        <span v-else class="truncate text-default">{{ ask.label }}</span>
                         <div class="flex items-center gap-2">
                             <div
                                 class="h-3.5 rounded-sm"
                                 :style="{
-                                    width: barWidth({ amount: opportunity.amount_cents! }),
+                                    width: barWidth({ amount: ask.amount_cents! }),
                                     backgroundColor: stageColors[group.stage],
                                 }"
                             />
                             <span class="shrink-0 text-xs font-medium text-highlighted">
-                                {{ formatMoney({ cents: opportunity.amount_cents!, compact: true }) }}
+                                {{ formatMoney({ cents: ask.amount_cents!, compact: true }) }}
                             </span>
                         </div>
                     </div>
@@ -138,7 +118,7 @@ function askLabel({ opportunity }: { opportunity: Opportunity }) {
                     </p>
                     <p v-if="group.unpriced.length" class="text-xs text-muted">
                         <span class="italic">Amount TBD:</span>
-                        {{ group.unpriced.map(opportunity => opportunity.funder.name).join(' · ') }}
+                        {{ group.unpriced.map(ask => ask.organization).join(' · ') }}
                     </p>
                 </section>
             </div>

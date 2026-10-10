@@ -187,3 +187,35 @@ export function listOpportunitiesWithFunderGeoFocus({ funderId }: { funderId?: s
         select: { id: true, focus_areas: true, funder: { select: { geo_focus: true } } },
     })
 }
+
+/**
+ * Every live ask for the funder-facing share page, with what that page may show: the funder's name
+ * and contact names, never anything else about them.
+ *
+ * @returns Opportunities of active (non-draft, non-archived) funders, excluding declined ones.
+ */
+export function listSharedPipelineRows() {
+    return db().opportunity.findMany({
+        where: {
+            archived_at: null,
+            stage: { not: 'lost' },
+            funder: { archived_at: null, status: { not: 'draft' } },
+        },
+        select: {
+            name: true,
+            stage: true,
+            amount_cents: true,
+            next_step: true,
+            focus_areas: true,
+            goal: { select: { type: true } },
+            funder: {
+                select: {
+                    name: true,
+                    geo_focus: true,
+                    contacts: { where: { archived_at: null }, select: { name: true }, orderBy: { created_at: 'asc' } },
+                },
+            },
+        },
+        orderBy: [{ amount_cents: { sort: 'desc', nulls: 'last' } }, { id: 'asc' }],
+    })
+}

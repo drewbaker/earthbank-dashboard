@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { config } from '#server/utils/config.ts'
 
 // Fixed key for local development only, so a fresh checkout works without setup.
@@ -92,4 +92,41 @@ export function secretsMatch({ expected, actual }: { expected: string; actual: s
     const expectedBytes = Buffer.from(expected)
     const actualBytes = Buffer.from(actual)
     return expectedBytes.length === actualBytes.length && timingSafeEqual(expectedBytes, actualBytes)
+}
+
+/**
+ * Sign a value so it can travel in a cookie and come back unchanged. The signing key is derived
+ * from `APP_ENCRYPTION_KEY`, so it never needs its own secret.
+ *
+ * @param input.value - The value (must not contain "~").
+ * @returns `<value>~<signature>`.
+ */
+export function signValue({ value }: { value: string }) {
+    return `${value}~${valueSignature({ value })}`
+}
+
+/**
+ * Read back a `signValue` result.
+ *
+ * @param input.signed - The signed value.
+ * @returns The original value, or null when the signature doesn't match.
+ */
+export function verifySignedValue({ signed }: { signed: string }) {
+    const separator = signed.lastIndexOf('~')
+    if (separator < 1) {
+        return null
+    }
+    const value = signed.slice(0, separator)
+    return secretsMatch({ expected: valueSignature({ value }), actual: signed.slice(separator + 1) }) ? value : null
+}
+
+/**
+ * HMAC-SHA256 of a value with a key kept apart from the encryption key.
+ *
+ * @param input.value - The value.
+ * @returns base64url signature.
+ */
+function valueSignature({ value }: { value: string }) {
+    const key = createHash('sha256').update('earthbank-dashboard-signing').update(encryptionKey()).digest()
+    return createHmac('sha256', key).update(value).digest('base64url')
 }

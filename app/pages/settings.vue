@@ -9,6 +9,7 @@ const settingsSections: NavigationMenuItem[] = [
     { label: 'Email', icon: 'i-lucide-mail', to: '/settings/email' },
     { label: 'Knowledge', icon: 'i-lucide-library', to: '/settings/knowledge' },
     { label: 'Import', icon: 'i-lucide-file-spreadsheet', to: '/settings/import' },
+    { label: 'Sharing', icon: 'i-lucide-share-2', to: '/settings/sharing' },
 ]
 </script>
 

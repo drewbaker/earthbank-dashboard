@@ -24,6 +24,7 @@ export const ID_PREFIXES = {
     knowledgeSource: 'ksr',
     knowledgeDocument: 'kdc',
     plannedExpense: 'pex',
+    shareLink: 'shl',
 } as const
 
 export type IdKind = keyof typeof ID_PREFIXES

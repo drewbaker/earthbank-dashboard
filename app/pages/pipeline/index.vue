@@ -14,6 +14,7 @@ import type { Funder, FunderDetail, FunderList, Opportunity, OpportunityList } f
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { usePipelineReference } from '~/composables/usePipelineReference.ts'
 import { formatDate, formatMoney } from '~/utils/format.ts'
+import { stageAsksFromOpportunities } from '~/utils/stage-asks.ts'
 
 useSeoMeta({ title: 'Pipeline · Earth Bank Dashboard' })
 
@@ -105,6 +106,8 @@ const visibleGoals = computed(() =>
 const trackOpportunities = computed(() =>
     (opportunityList.value?.data ?? []).filter(opportunity => visibleGoalTypes.value.includes(opportunity.goal_type)),
 )
+
+const trackStageAsks = computed(() => stageAsksFromOpportunities({ opportunities: trackOpportunities.value }))
 
 const visibleOpportunities = computed(() => {
     const search = debouncedSearch.value.toLowerCase()
@@ -373,7 +376,7 @@ async function openCreatedFunder(funder: FunderDetail) {
 
         <template #body>
             <div class="space-y-6">
-                <PipelineStageOverview v-if="view === 'opportunities'" :opportunities="trackOpportunities" />
+                <PipelineStageOverview v-if="view === 'opportunities'" :asks="trackStageAsks" />
                 <PipelineGoalSummary v-if="visibleGoals.length" :goals="visibleGoals" />
 
                 <UTable

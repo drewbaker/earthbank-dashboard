@@ -58,6 +58,13 @@ import {
 } from '#shared/schemas/scenarios.ts'
 import { StageProbabilities } from '#shared/schemas/settings.ts'
 import {
+    CreateShareLinkRequest,
+    SharedPipeline,
+    ShareLink,
+    ShareLinkList,
+    UnlockShareLinkRequest,
+} from '#shared/schemas/share-links.ts'
+import {
     Attachment,
     Comment,
     CreateCommentRequest,
@@ -86,6 +93,7 @@ export * from '#shared/schemas/opportunities.ts'
 export * from '#shared/schemas/planned-expenses.ts'
 export * from '#shared/schemas/scenarios.ts'
 export * from '#shared/schemas/settings.ts'
+export * from '#shared/schemas/share-links.ts'
 export * from '#shared/schemas/tasks.ts'
 export * from '#shared/schemas/users.ts'
 
@@ -161,4 +169,9 @@ export const openapiSchemas: Record<string, z.ZodType> = {
     PlannedExpenseList,
     CreatePlannedExpenseRequest,
     UpdatePlannedExpenseRequest,
+    ShareLink,
+    ShareLinkList,
+    CreateShareLinkRequest,
+    UnlockShareLinkRequest,
+    SharedPipeline,
 }

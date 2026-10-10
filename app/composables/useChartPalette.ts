@@ -9,28 +9,29 @@ const SERIES_COLORS = {
     dark: { committed: '#16a34a', weighted: '#3b82f6', scenario: '#ea580c', deficit: '#ef4444' },
 } as const
 
-// Grant stage colors, checked with the dataviz validator. Open stages are one blue ramp that reads
-// "further along" as it strengthens (darker on light, lighter on dark); approved and received money
-// get their own hues. Every use pairs the color with the stage name and amount.
+// Grant stage colors, after the nuxt-charts shadcn dashboard (indigo, emerald, orange, purple, amber,
+// pink), ordered so neighbouring stages contrast, and checked with the dataviz validator (CVD and
+// normal-vision separation) on each mode's surface. Identified is neutral gray on purpose: not yet
+// engaged. Every use pairs the color with the stage name and amount.
 const STAGE_COLORS = {
     light: {
-        identified: '#86b6ef',
-        in_discussion: '#5598e7',
-        proposal: '#2a78d6',
-        due_diligence: '#1c5cab',
-        in_committee: '#104281',
-        committed: '#008300',
-        received: '#4a3aa7',
+        received: '#4f46e5',
+        committed: '#059669',
+        in_committee: '#ea580c',
+        due_diligence: '#9333ea',
+        proposal: '#ca8a04',
+        in_discussion: '#db2777',
+        identified: '#71717a',
         lost: '#a1a1aa',
     },
     dark: {
-        identified: '#184f95',
-        in_discussion: '#256abf',
-        proposal: '#3987e5',
-        due_diligence: '#6da7ec',
-        in_committee: '#9ec5f4',
-        committed: '#008300',
-        received: '#9085e9',
+        received: '#6366f1',
+        committed: '#059669',
+        in_committee: '#ea580c',
+        due_diligence: '#9333ea',
+        proposal: '#b45309',
+        in_discussion: '#db2777',
+        identified: '#71717a',
         lost: '#52525b',
     },
 } as const
