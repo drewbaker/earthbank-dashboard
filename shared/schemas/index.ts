@@ -60,6 +60,8 @@ import { StageProbabilities } from '#shared/schemas/settings.ts'
 import {
     CreateShareLinkRequest,
     SharedPipeline,
+    ShareSections,
+    UpdateShareLinkRequest,
     ShareLink,
     ShareLinkList,
     UnlockShareLinkRequest,
@@ -174,4 +176,6 @@ export const openapiSchemas: Record<string, z.ZodType> = {
     CreateShareLinkRequest,
     UnlockShareLinkRequest,
     SharedPipeline,
+    ShareSections,
+    UpdateShareLinkRequest,
 }

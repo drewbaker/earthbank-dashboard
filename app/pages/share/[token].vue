@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import { computed, h, ref, resolveComponent } from 'vue'
+import { computed, h, ref, resolveComponent, watch } from 'vue'
 import { definePageMeta, useAsyncData, useHead, useRoute, useSeoMeta } from '#imports'
 import { OPPORTUNITY_STAGES } from '#shared/constants/pipeline.ts'
 import type { SharedAsk, SharedPipeline } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { formatDate, formatMoney } from '~/utils/format.ts'
+import type { CoverageAsk } from '~/utils/coverage-asks.ts'
 import type { StageAsk } from '~/utils/stage-asks.ts'
 import { sortableColumns } from '~/utils/table-sorting.ts'
 
@@ -56,10 +57,33 @@ async function unlock() {
 
 type ShareTrack = 'design_grants' | 'lending_capital'
 const track = ref<ShareTrack>('design_grants')
-const trackItems = [
-    { label: 'Design Grants', value: 'design_grants', icon: 'i-lucide-pencil-ruler' },
-    { label: 'Lending Capital', value: 'lending_capital', icon: 'i-lucide-landmark' },
-]
+// What this link shows (all on unless the team turned parts off).
+const sections = computed(() => (page.value?.kind === 'ready' ? page.value.pipeline.sections : null))
+const trackItems = computed(() =>
+    [
+        { label: 'Design Grants', value: 'design_grants' as const, icon: 'i-lucide-pencil-ruler' },
+        { label: 'Lending Capital', value: 'lending_capital' as const, icon: 'i-lucide-landmark' },
+    ].filter(item => sections.value?.[item.value] !== false),
+)
+// Start on the first tab the link shows.
+watch(
+    trackItems,
+    items => {
+        if (items.length && !items.some(item => item.value === track.value)) {
+            track.value = items[0]!.value
+        }
+    },
+    { immediate: true },
+)
+const coverageAsks = computed<CoverageAsk[]>(() =>
+    asks.value.map((ask, index) => ({
+        key: `${track.value}-${index}`,
+        organization: ask.organization,
+        stage: ask.stage,
+        amount_cents: ask.amount_cents,
+        focus_areas: ask.focus_areas,
+    })),
+)
 
 const asks = computed<SharedAsk[]>(() => (page.value?.kind === 'ready' ? page.value.pipeline[track.value] : []))
 const goals = computed(() =>
@@ -186,14 +210,26 @@ const columns = computed<TableColumn<SharedAsk>[]>(() =>
             </UCard>
 
             <template v-else-if="page?.kind === 'ready'">
-                <UTabs v-model="track" :items="trackItems" :content="false" variant="link" />
-                <!-- Same layout as Pipeline: goal stats beside the stage donut, funder bars, then the list. -->
-                <div class="grid gap-6 lg:grid-cols-2">
-                    <PipelineGoalSummary v-if="goals.length" :goals="goals" is-stacked />
-                    <PipelineStageOverview :asks="stageAsks" part="pie" />
+                <UTabs
+                    v-if="trackItems.length > 1"
+                    v-model="track"
+                    :items="trackItems"
+                    :content="false"
+                    variant="link"
+                />
+                <!-- Same layout as Pipeline: goal stats beside the stage donut, funder bars, the list, then the
+                     coverage map. Each part can be turned off per link. -->
+                <div
+                    v-if="(sections?.stats && goals.length) || sections?.pie"
+                    class="grid gap-6"
+                    :class="{ 'lg:grid-cols-2': sections?.stats && goals.length && sections?.pie }"
+                >
+                    <PipelineGoalSummary v-if="sections?.stats && goals.length" :goals="goals" is-stacked />
+                    <PipelineStageOverview v-if="sections?.pie" :asks="stageAsks" part="pie" />
                 </div>
-                <PipelineStageOverview :asks="stageAsks" part="bars" />
+                <PipelineStageOverview v-if="sections?.bars" :asks="stageAsks" part="bars" />
                 <UTable
+                    v-if="sections?.table"
                     :data="asks"
                     :columns="columns"
                     class="rounded-md border border-default"
@@ -203,6 +239,7 @@ const columns = computed<TableColumn<SharedAsk>[]>(() =>
                         <p class="py-6 text-center text-sm text-muted">Nothing to show here yet.</p>
                     </template>
                 </UTable>
+                <PipelineCoverageMap v-if="sections?.map" :asks="coverageAsks" />
                 <p class="text-center text-xs text-muted">Confidential. Please don't forward this link.</p>
             </template>
         </main>

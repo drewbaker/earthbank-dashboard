@@ -8,6 +8,7 @@ import type { Funder, FunderDetail, FunderList, Opportunity, OpportunityList } f
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { usePipelineReference } from '~/composables/usePipelineReference.ts'
 import { formatDate, formatMoney } from '~/utils/format.ts'
+import { coverageAsksFromOpportunities } from '~/utils/coverage-asks.ts'
 import { stageAsksFromOpportunities } from '~/utils/stage-asks.ts'
 import { sortableColumns } from '~/utils/table-sorting.ts'
 
@@ -78,6 +79,7 @@ const trackOpportunities = computed(() =>
 )
 
 const trackStageAsks = computed(() => stageAsksFromOpportunities({ opportunities: trackOpportunities.value }))
+const trackCoverageAsks = computed(() => coverageAsksFromOpportunities({ opportunities: trackOpportunities.value }))
 
 // Every ask in the tab, declined ones last (the list's own order otherwise).
 const visibleOpportunities = computed(() =>
@@ -353,7 +355,7 @@ async function openCreatedFunder(funder: FunderDetail) {
                     </div>
                     <PipelineStageOverview :asks="trackStageAsks" part="bars" />
                 </template>
-                <PipelineCoverageMap v-if="view === 'funders'" :opportunities="trackOpportunities" />
+                <PipelineCoverageMap v-if="view === 'funders'" :asks="trackCoverageAsks" />
 
                 <UTable
                     v-if="view === 'opportunities'"

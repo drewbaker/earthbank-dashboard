@@ -577,6 +577,8 @@ model ShareLink {
     // made before passwords were kept.
     password_encrypted String?
     show_next_steps    Boolean   @default(true)
+    // Which parts of the page this link shows (ShareSections, validated in app code); null = all.
+    sections           Json?
     created_by_user_id String?
     last_viewed_at     DateTime?
     revoked_at         DateTime?

@@ -4,7 +4,7 @@ import { findActiveShareLinkByTokenHash, recordShareLinkView } from '#server/dat
 import { defineApiHandler } from '#server/utils/api.ts'
 import { hashToken } from '#server/utils/crypto.ts'
 import { notFound, unauthorized } from '#server/utils/errors.ts'
-import { buildSharedPipeline, isShareLinkUnlocked } from '#server/utils/share-links.ts'
+import { buildSharedPipeline, isShareLinkUnlocked, readShareSections } from '#server/utils/share-links.ts'
 
 defineRouteMeta({
     openAPI: {
@@ -35,5 +35,8 @@ export default defineApiHandler(async event => {
         throw unauthorized({ message: 'Enter the password to view this page.' })
     }
     await recordShareLinkView({ shareLinkId: link.id, viewedAt: new Date() })
-    return buildSharedPipeline({ showNextSteps: link.show_next_steps })
+    return buildSharedPipeline({
+        showNextSteps: link.show_next_steps,
+        sections: readShareSections({ value: link.sections }),
+    })
 })

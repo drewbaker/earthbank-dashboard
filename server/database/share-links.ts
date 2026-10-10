@@ -1,3 +1,4 @@
+import type { Prisma } from '#server/generated/prisma/client.ts'
 import { db } from '#server/utils/db.ts'
 import { newId } from '#server/utils/ids.ts'
 
@@ -10,6 +11,7 @@ import { newId } from '#server/utils/ids.ts'
  * @param input.passwordHash - scrypt hash of the password, or null for no password.
  * @param input.passwordEncrypted - The password, encrypted, so the team can see it again (null with none).
  * @param input.showNextSteps - Whether viewers see next steps.
+ * @param input.sections - Which parts of the page the link shows.
  * @param input.createdByUserId - Who made it.
  * @returns The row with its creator.
  */
@@ -20,6 +22,7 @@ export function createShareLinkRow({
     passwordHash,
     passwordEncrypted,
     showNextSteps,
+    sections,
     createdByUserId,
 }: {
     label: string
@@ -28,6 +31,7 @@ export function createShareLinkRow({
     passwordHash: string | null
     passwordEncrypted: string | null
     showNextSteps: boolean
+    sections: Prisma.InputJsonValue
     createdByUserId: string
 }) {
     return db().shareLink.create({
@@ -39,6 +43,7 @@ export function createShareLinkRow({
             password_hash: passwordHash,
             password_encrypted: passwordEncrypted,
             show_next_steps: showNextSteps,
+            sections,
             created_by_user_id: createdByUserId,
         },
         include: { created_by: true },
@@ -98,4 +103,21 @@ export function revokeShareLinkRow({ shareLinkId, revokedAt }: { shareLinkId: st
  */
 export function recordShareLinkView({ shareLinkId, viewedAt }: { shareLinkId: string; viewedAt: Date }) {
     return db().shareLink.update({ where: { id: shareLinkId }, data: { last_viewed_at: viewedAt } })
+}
+
+/**
+ * Change a link's name or what it shows.
+ *
+ * @param input.shareLinkId - The link.
+ * @param input.data - Columns to set.
+ * @returns The updated row with its creator.
+ */
+export function updateShareLinkRow({
+    shareLinkId,
+    data,
+}: {
+    shareLinkId: string
+    data: { label?: string; show_next_steps?: boolean; sections?: Prisma.InputJsonValue }
+}) {
+    return db().shareLink.update({ where: { id: shareLinkId }, data, include: { created_by: true } })
 }

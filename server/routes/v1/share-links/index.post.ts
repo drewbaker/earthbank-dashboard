@@ -38,6 +38,7 @@ export default defineApiHandler(async event => {
         passwordHash: body.password ? await hashPassword({ password: body.password }) : null,
         passwordEncrypted: body.password ? encryptSecret({ plaintext: body.password }) : null,
         showNextSteps: body.show_next_steps,
+        sections: body.sections,
         createdByUserId: ctx.user.id,
     })
     await recordAudit({
@@ -45,7 +46,12 @@ export default defineApiHandler(async event => {
         action: 'share_link.created',
         entityType: 'share_link',
         entityId: link.id,
-        changes: { label: body.label, show_next_steps: body.show_next_steps, has_password: Boolean(body.password) },
+        changes: {
+            label: body.label,
+            show_next_steps: body.show_next_steps,
+            sections: body.sections,
+            has_password: Boolean(body.password),
+        },
         ip: requestIp({ event }),
     })
     setResponseStatus(event, 201)

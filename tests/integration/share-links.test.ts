@@ -58,6 +58,7 @@ describe('buildSharedPipeline', () => {
                 geo_focus: ['Africa', 'India'],
                 amount_cents: 100_000_000,
                 stage: 'in_committee',
+                focus_areas: ['region:africa', 'IN'],
                 next_step: 'Send Jim the v1 and v2 budgets.',
             },
         ])
@@ -66,6 +67,25 @@ describe('buildSharedPipeline', () => {
         expect(everything).not.toContain('@')
         expect(everything).not.toContain('Internal')
         expect(everything).not.toContain('Declined Fund')
+    })
+
+    it('leaves out the data for parts the link hides', async () => {
+        const { buildSharedPipeline } = await import('#server/utils/share-links.ts')
+        const { ShareSections } = await import('#shared/schemas/index.ts')
+        const pipeline = await buildSharedPipeline({
+            showNextSteps: true,
+            sections: ShareSections.parse({ table: false, map: false, lending_capital: false, stats: false }),
+        })
+        expect(pipeline.lending_capital).toEqual([])
+        expect(pipeline.design_grant_goals).toEqual([])
+        expect(pipeline.design_grants[0]).toMatchObject({
+            organization: 'Hewlett Foundation',
+            contacts: [],
+            geo_focus: [],
+            focus_areas: [],
+            next_step: null,
+        })
+        expect(JSON.stringify(pipeline)).not.toContain('Jim Stephenson')
     })
 
     it('leaves next steps out when the link hides them', async () => {
@@ -104,6 +124,7 @@ describe('share link routes', () => {
                 passwordHash: await hashPassword({ password: 'green-ledger-42' }),
                 passwordEncrypted: encryptSecret({ plaintext: 'green-ledger-42' }),
                 showNextSteps: true,
+                sections: {},
                 createdByUserId: userId,
             })
         ).id
@@ -163,6 +184,7 @@ describe('share link routes', () => {
             passwordHash: null,
             passwordEncrypted: null,
             showNextSteps: false,
+            sections: {},
             createdByUserId: userId,
         })
         const view = await call(new Request(`http://localhost/v1/shared/${openToken}`))

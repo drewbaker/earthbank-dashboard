@@ -3,6 +3,18 @@ import { OPPORTUNITY_STAGES } from '#shared/constants/pipeline.ts'
 import { IsoDateTime, listOf, UserSummary } from '#shared/schemas/common.ts'
 import { Goal } from '#shared/schemas/goals.ts'
 
+/** Which parts of the share page a link shows; anything missing is shown. */
+export const ShareSections = z.object({
+    design_grants: z.boolean().default(true),
+    lending_capital: z.boolean().default(true),
+    stats: z.boolean().default(true),
+    pie: z.boolean().default(true),
+    bars: z.boolean().default(true),
+    table: z.boolean().default(true),
+    map: z.boolean().default(true),
+})
+export type ShareSections = z.infer<typeof ShareSections>
+
 /** A funder-facing link, as the team sees it in Settings → Sharing. */
 export const ShareLink = z.object({
     id: z.string(),
@@ -12,6 +24,7 @@ export const ShareLink = z.object({
     /** Null when there's no password, or for links made before passwords were kept. */
     password: z.string().nullable(),
     show_next_steps: z.boolean(),
+    sections: ShareSections,
     created_by: UserSummary.nullable(),
     last_viewed_at: IsoDateTime.nullable(),
     created_at: IsoDateTime,
@@ -26,8 +39,18 @@ export const CreateShareLinkRequest = z.object({
     /** Empty for no password: the secret link alone opens the page. */
     password: z.union([z.literal(''), z.string().min(8, 'Use at least 8 characters, or leave it empty.').max(200)]),
     show_next_steps: z.boolean().default(true),
+    sections: ShareSections.default(ShareSections.parse({})),
 })
 export type CreateShareLinkRequest = z.infer<typeof CreateShareLinkRequest>
+
+export const UpdateShareLinkRequest = z
+    .object({
+        label: z.string().trim().min(1, 'Give the link a name.').max(120),
+        show_next_steps: z.boolean(),
+        sections: ShareSections,
+    })
+    .partial()
+export type UpdateShareLinkRequest = z.infer<typeof UpdateShareLinkRequest>
 
 export const UnlockShareLinkRequest = z.object({ password: z.string().min(1, 'Enter the password.').max(200) })
 export type UnlockShareLinkRequest = z.infer<typeof UnlockShareLinkRequest>
@@ -41,6 +64,8 @@ export const SharedAsk = z.object({
     geo_focus: z.array(z.string()),
     amount_cents: z.number().int().nullable(),
     stage: z.enum(OPPORTUNITY_STAGES),
+    /** Focus codes for the coverage map (countries, regions, "global"); empty when the map is off. */
+    focus_areas: z.array(z.string()),
     /** A short version of the next step, or null when the link hides next steps. */
     next_step: z.string().nullable(),
 })
@@ -49,6 +74,9 @@ export type SharedAsk = z.infer<typeof SharedAsk>
 export const SharedPipeline = z.object({
     title: z.string(),
     updated_at: IsoDateTime,
+    /** What to show; the data for hidden parts is left out of the response too. */
+    sections: ShareSections,
+    show_next_steps: z.boolean(),
     design_grants: z.array(SharedAsk),
     lending_capital: z.array(SharedAsk),
     /** The goal stats boxes, as on the Pipeline page (notes left out). */

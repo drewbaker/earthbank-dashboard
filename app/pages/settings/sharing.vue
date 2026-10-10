@@ -4,7 +4,7 @@ import { reactive, ref } from 'vue'
 import type { z } from 'zod'
 import { useAsyncData, useSeoMeta, useToast } from '#imports'
 import type { ShareLink, ShareLinkList } from '#shared/schemas/index.ts'
-import { CreateShareLinkRequest } from '#shared/schemas/index.ts'
+import { CreateShareLinkRequest, ShareSections } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { formatRelativeTime } from '~/utils/format.ts'
 
@@ -17,9 +17,70 @@ const { data: links, refresh } = await useAsyncData('settings.sharing.links', ()
     api<ShareLinkList>({ path: '/share-links' }),
 )
 
-const draft = reactive({ label: '', password: '', show_next_steps: true })
+const draft = reactive({ label: '', password: '', show_next_steps: true, sections: ShareSections.parse({}) })
 const isCreating = ref(false)
 const busyLinkId = ref<string | null>(null)
+
+// The link whose sections are being changed, and its edited settings.
+const editingLinkId = ref<string | null>(null)
+
+const SECTION_NAMES: Record<keyof ShareLink['sections'], string> = {
+    design_grants: 'Design Grants',
+    lending_capital: 'Lending Capital',
+    stats: 'stats',
+    pie: 'pie chart',
+    bars: 'bar charts',
+    table: 'table',
+    map: 'map',
+}
+
+/**
+ * What a link leaves out, for its row: "shows everything" or "hides Lending Capital, map".
+ *
+ * @param input.link - The link.
+ * @returns The phrase.
+ */
+function hiddenSummary({ link }: { link: ShareLink }) {
+    const hidden = (Object.keys(SECTION_NAMES) as (keyof ShareLink['sections'])[])
+        .filter(key => !link.sections[key])
+        .map(key => SECTION_NAMES[key])
+    if (link.sections.table && !link.show_next_steps) {
+        hidden.push('next steps')
+    }
+    return hidden.length ? `hides ${hidden.join(', ')}` : 'shows everything'
+}
+const editingSettings = reactive({ sections: ShareSections.parse({}), show_next_steps: true })
+
+/**
+ * Open a link's section switches.
+ *
+ * @param input.link - The link.
+ * @returns Nothing.
+ */
+function startEditingLink({ link }: { link: ShareLink }) {
+    Object.assign(editingSettings, { sections: { ...link.sections }, show_next_steps: link.show_next_steps })
+    editingLinkId.value = link.id
+}
+
+/**
+ * Save a link's section switches; people with the link see the change on their next load.
+ *
+ * @param input.link - The link.
+ * @returns Resolves once saved and the list is fresh.
+ */
+async function saveLinkSettings({ link }: { link: ShareLink }) {
+    busyLinkId.value = link.id
+    try {
+        await api({ path: `/share-links/${link.id}`, method: 'PATCH', body: { ...editingSettings } })
+        toast.add({ title: 'Link updated', color: 'success' })
+        editingLinkId.value = null
+        await refresh()
+    } catch (error) {
+        toast.add({ title: apiErrorMessage({ error }), color: 'error' })
+    } finally {
+        busyLinkId.value = null
+    }
+}
 
 /**
  * Create a link with the validated form values.
@@ -39,7 +100,7 @@ async function createLink(event: FormSubmitEvent<z.output<typeof CreateShareLink
             description: link.has_password ? 'Send the password separately from the link.' : undefined,
             color: 'success',
         })
-        Object.assign(draft, { label: '', password: '', show_next_steps: true })
+        Object.assign(draft, { label: '', password: '', show_next_steps: true, sections: ShareSections.parse({}) })
         await refresh()
     } catch (error) {
         toast.add({ title: apiErrorMessage({ error }), color: 'error' })
@@ -111,9 +172,9 @@ async function revokeLink({ link }: { link: ShareLink }) {
                     >
                         <UInput v-model="draft.password" type="password" autocomplete="new-password" class="w-full" />
                     </UFormField>
-                    <USwitch
-                        v-model="draft.show_next_steps"
-                        label="Show a short next step for each ask"
+                    <SharingSectionSwitches
+                        v-model:sections="draft.sections"
+                        v-model:show-next-steps="draft.show_next_steps"
                         class="sm:col-span-2"
                     />
                     <div class="sm:col-span-2">
@@ -149,9 +210,17 @@ async function revokeLink({ link }: { link: ShareLink }) {
                                         ? `last opened ${formatRelativeTime({ value: link.last_viewed_at })}`
                                         : 'not opened yet'
                                 }}
-                                · {{ link.show_next_steps ? 'shows next steps' : 'hides next steps' }}
+                                · {{ hiddenSummary({ link }) }}
                             </p>
                         </div>
+                        <UButton
+                            size="sm"
+                            color="neutral"
+                            variant="ghost"
+                            icon="i-lucide-sliders-horizontal"
+                            label="Sections"
+                            @click="editingLinkId === link.id ? (editingLinkId = null) : startEditingLink({ link })"
+                        />
                         <UButton
                             size="sm"
                             color="neutral"
@@ -185,6 +254,30 @@ async function revokeLink({ link }: { link: ShareLink }) {
                             :loading="busyLinkId === link.id"
                             @click="revokeLink({ link })"
                         />
+                        <div
+                            v-if="editingLinkId === link.id"
+                            class="w-full space-y-3 rounded-md border border-default p-3"
+                        >
+                            <SharingSectionSwitches
+                                v-model:sections="editingSettings.sections"
+                                v-model:show-next-steps="editingSettings.show_next_steps"
+                            />
+                            <div class="flex gap-2">
+                                <UButton
+                                    size="sm"
+                                    label="Save"
+                                    :loading="busyLinkId === link.id"
+                                    @click="saveLinkSettings({ link })"
+                                />
+                                <UButton
+                                    size="sm"
+                                    color="neutral"
+                                    variant="ghost"
+                                    label="Cancel"
+                                    @click="editingLinkId = null"
+                                />
+                            </div>
+                        </div>
                     </li>
                 </ul>
             </UCard>

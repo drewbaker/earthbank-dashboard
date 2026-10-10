@@ -11,6 +11,7 @@ import { serializeGoal } from '#server/utils/serializers/goals.ts'
 import { readStageProbabilities } from '#server/utils/settings.ts'
 import type { OpportunityStage } from '#shared/constants/pipeline.ts'
 import type { SharedAsk, SharedPipeline, ShareLink } from '#shared/schemas/index.ts'
+import { ShareSections } from '#shared/schemas/index.ts'
 import { focusCodesFromText, geoFocusLabel } from '#shared/utils/geo-focus.ts'
 
 // After the right password, the browser can view the page for this long before asking again.
@@ -45,10 +46,22 @@ export function serializeShareLink({ link }: { link: ShareLinkRow & { created_by
         has_password: link.password_hash !== null,
         password: link.password_encrypted ? decryptSecret({ encrypted: link.password_encrypted }) : null,
         show_next_steps: link.show_next_steps,
+        sections: readShareSections({ value: link.sections }),
         created_by: serializeUserSummary({ user: link.created_by }),
         last_viewed_at: toIsoDateTime({ date: link.last_viewed_at }),
         created_at: link.created_at.toISOString(),
     }
+}
+
+/**
+ * A link's stored section settings, with anything missing (or unreadable) shown.
+ *
+ * @param input.value - The stored JSON, or null.
+ * @returns Every section's on/off.
+ */
+export function readShareSections({ value }: { value: unknown }) {
+    const parsed = ShareSections.safeParse(value ?? {})
+    return parsed.success ? parsed.data : ShareSections.parse({})
 }
 
 /**
@@ -147,17 +160,21 @@ export function recordFailedShareLinkAttempt({ shareLinkId, now = Date.now() }: 
 
 /**
  * What the share page shows: every live ask, split into design grants (design grants and OpEx) and
- * lending capital, with only fields that are safe for funders to see.
+ * lending capital, with only fields that are safe for funders to see. Data for parts the link hides
+ * isn't sent at all (contacts only with the table, focus codes only with the map, and so on).
  *
- * @param input.showNextSteps - Include a short next step for each ask.
+ * @param input.showNextSteps - Include a short next step for each ask (in the table).
+ * @param input.sections - Which parts of the page the link shows.
  * @param input.now - When the summary was made.
  * @returns The page data.
  */
 export async function buildSharedPipeline({
     showNextSteps,
+    sections = ShareSections.parse({}),
     now = new Date(),
 }: {
     showNextSteps: boolean
+    sections?: ShareSections
     now?: Date
 }): Promise<SharedPipeline> {
     const [rows, goalRows, stageProbabilities] = await Promise.all([
@@ -171,19 +188,32 @@ export async function buildSharedPipeline({
         .filter(goal => goal.type !== 'opex')
     const toAsk = (row: (typeof rows)[number]): SharedAsk => ({
         organization: row.funder.name,
-        contacts: [...new Set(row.funder.contacts.map(contact => contact.name.trim()).filter(Boolean))],
-        geo_focus: geoFocusNames({ focusAreas: row.focus_areas, funderGeoFocus: row.funder.geo_focus }),
+        contacts: sections.table
+            ? [...new Set(row.funder.contacts.map(contact => contact.name.trim()).filter(Boolean))]
+            : [],
+        geo_focus: sections.table
+            ? geoFocusNames({ focusAreas: row.focus_areas, funderGeoFocus: row.funder.geo_focus })
+            : [],
         amount_cents: centsToNumber({ cents: row.amount_cents }),
         stage: row.stage as OpportunityStage,
-        next_step: showNextSteps ? shortNextStep({ text: row.next_step }) : null,
+        focus_areas: sections.map
+            ? focusCodes({ focusAreas: row.focus_areas, funderGeoFocus: row.funder.geo_focus })
+            : [],
+        next_step: sections.table && showNextSteps ? shortNextStep({ text: row.next_step }) : null,
     })
     return {
         title: 'Earth Bank funding pipeline',
         updated_at: now.toISOString(),
-        design_grants: rows.filter(row => row.goal.type !== 'lending_capital').map(toAsk),
-        lending_capital: rows.filter(row => row.goal.type === 'lending_capital').map(toAsk),
-        design_grant_goals: goals.filter(goal => goal.type === 'design_grant'),
-        lending_capital_goals: goals.filter(goal => goal.type === 'lending_capital'),
+        sections,
+        show_next_steps: showNextSteps,
+        design_grants: sections.design_grants ? rows.filter(row => row.goal.type !== 'lending_capital').map(toAsk) : [],
+        lending_capital: sections.lending_capital
+            ? rows.filter(row => row.goal.type === 'lending_capital').map(toAsk)
+            : [],
+        design_grant_goals:
+            sections.stats && sections.design_grants ? goals.filter(goal => goal.type === 'design_grant') : [],
+        lending_capital_goals:
+            sections.stats && sections.lending_capital ? goals.filter(goal => goal.type === 'lending_capital') : [],
     }
 }
 
@@ -195,8 +225,19 @@ export async function buildSharedPipeline({
  * @returns Names such as ["East Africa", "India"].
  */
 function geoFocusNames({ focusAreas, funderGeoFocus }: { focusAreas: unknown; funderGeoFocus: string | null }) {
+    return focusCodes({ focusAreas, funderGeoFocus }).map(code => geoFocusLabel({ code }))
+}
+
+/**
+ * An ask's focus codes, falling back to the funder's spreadsheet text.
+ *
+ * @param input.focusAreas - The ask's focus codes (JSON column).
+ * @param input.funderGeoFocus - The funder's free-text geo focus.
+ * @returns Codes such as ["region:eastern_africa", "IN", "global"].
+ */
+function focusCodes({ focusAreas, funderGeoFocus }: { focusAreas: unknown; funderGeoFocus: string | null }) {
     const codes = Array.isArray(focusAreas) && focusAreas.length > 0 ? (focusAreas as string[]) : null
-    return (codes ?? focusCodesFromText({ text: funderGeoFocus }).codes).map(code => geoFocusLabel({ code }))
+    return codes ?? focusCodesFromText({ text: funderGeoFocus }).codes
 }
 
 const NEXT_STEP_MAX_CHARS = 140
