@@ -109,7 +109,7 @@ function describeRunway({ end }: { end: RunwayEnd }) {
                     <UDashboardSidebarCollapse />
                 </template>
                 <template #right>
-                    <UButton to="/forecast" icon="i-lucide-chart-line" label="Open forecast" />
+                    <ColorModeToggle />
                 </template>
             </UDashboardNavbar>
         </template>
