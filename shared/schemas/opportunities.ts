@@ -14,7 +14,13 @@ import { isGeoFocusCode } from '#shared/utils/geo-focus.ts'
 
 export const Opportunity = z.object({
     id: z.string(),
-    funder: z.object({ id: z.string(), name: z.string(), tier: z.enum(FUNDER_TIERS).nullable() }),
+    funder: z.object({
+        id: z.string(),
+        name: z.string(),
+        tier: z.enum(FUNDER_TIERS).nullable(),
+        /** When anyone at Earth Bank last heard from or wrote to this funder. */
+        last_contact_at: DateOnly.nullable(),
+    }),
     goal_id: z.string(),
     goal_type: z.enum(GOAL_TYPES),
     name: z.string(),

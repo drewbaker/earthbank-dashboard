@@ -21,16 +21,30 @@ datasource db {
 }
 
 model User {
-    id              String    @id
-    google_sub      String    @unique
-    email           String    @unique
-    name            String
-    avatar_url      String?
-    role            String    @default("admin")
-    last_sign_in_at DateTime?
-    deactivated_at  DateTime?
-    created_at      DateTime  @default(now())
-    updated_at      DateTime  @updatedAt
+    id                 String    @id
+    // Null for invited guests outside the Workspace, who sign in with an emailed link instead.
+    google_sub         String?   @unique
+    email              String    @unique
+    name               String
+    // The Google profile picture (from sign-in or connecting Gmail); refreshed by Google sign-in.
+    avatar_url         String?
+    // A picture the person uploaded in Settings → Profile; shown instead of the Google one.
+    avatar_storage_key String?
+    avatar_updated_at  DateTime?
+    role               String    @default("admin")
+    // Personal preferences ({ color_mode }), validated by UserPreferences in shared/schemas/users.ts.
+    settings           Json?
+    // Set when someone invited this person by email (guests outside the Workspace).
+    invited_at         DateTime?
+    invited_by_id      String?
+    last_sign_in_at    DateTime?
+    deactivated_at     DateTime?
+    created_at         DateTime  @default(now())
+    updated_at         DateTime  @updatedAt
+
+    invited_by    User?        @relation("user_inviter", fields: [invited_by_id], references: [id], onDelete: SetNull)
+    invited_users User[]       @relation("user_inviter")
+    sign_in_links SignInLink[]
 
     sessions            Session[]
     audit_log           AuditLog[]
@@ -68,6 +82,25 @@ model Session {
     @@index([user_id])
     @@index([expires_at])
     @@map("session")
+}
+
+// A one-time sign-in link emailed to an invited guest (an invitation, or "email me a link" on the
+// login page). Only the token's hash is stored.
+model SignInLink {
+    id         String    @id
+    user_id    String
+    token_hash String    @unique
+    // invitation | sign_in
+    purpose    String
+    expires_at DateTime
+    used_at    DateTime?
+    created_at DateTime  @default(now())
+
+    user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+    @@index([user_id])
+    @@index([expires_at])
+    @@map("sign_in_link")
 }
 
 model AuditLog {

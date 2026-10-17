@@ -15,6 +15,7 @@ import { config } from '#server/utils/config.ts'
 import { addContactToFunder } from '#server/utils/contacts.ts'
 import { todayDateOnly, toDateOnly } from '#server/utils/dates.ts'
 import { createFunderWithDetails, loadFunderDetail } from '#server/utils/funders.ts'
+import { findEmailOwnerUserId } from '#server/utils/mail/attribution.ts'
 import type { IncomingEmail } from '#server/utils/mail/types.ts'
 import type { FunderDetail } from '#shared/schemas/index.ts'
 import { emailDomain, normalizeEmailAddress } from '#shared/utils/email-addresses.ts'
@@ -45,7 +46,8 @@ export type ProcessEmailResult =
  * @param input.email - The email (body held in memory only).
  * @param input.funderId - The funder it matched.
  * @param input.source - `gmail` or `forward`.
- * @param input.mailboxUserId - Whose mailbox it came from (or who forwarded it).
+ * @param input.mailboxUserId - Whose mailbox it came from (or who forwarded it). A synced email is
+ *   credited to the team member it's from or to instead, when there is one.
  * @param input.ai - The AI provider.
  * @returns What happened.
  */
@@ -65,6 +67,16 @@ export async function processFunderEmail({
     if ((await findProcessedMessageIds({ messageIdHeaders: [email.messageIdHeader] })).size > 0) {
         return { status: 'already_processed' }
     }
+    // A forward belongs to whoever forwarded it. A synced email belongs to the team member who sent it
+    // or was addressed in it, not to whichever CC'd inbox happened to sync first.
+    const ownerUserId =
+        source === 'gmail'
+            ? await findEmailOwnerUserId({
+                  from: email.from,
+                  recipients: [...email.to, ...email.cc],
+                  fallbackUserId: mailboxUserId,
+              })
+            : mailboxUserId
     const funder = await loadFunderDetail({ funderId })
     const result = await ai.completeStructured({
         instructions: CLASSIFY_EMAIL_INSTRUCTIONS,
@@ -79,7 +91,7 @@ export async function processFunderEmail({
         const ignored = await createEmailEvidence({
             source,
             messageIdHeader: email.messageIdHeader,
-            mailboxUserId,
+            mailboxUserId: ownerUserId,
             fromAddress: email.from,
             toAddresses: [],
             sentAt: email.sentAt,
@@ -96,7 +108,7 @@ export async function processFunderEmail({
     const evidence = await createEmailEvidence({
         source,
         messageIdHeader: email.messageIdHeader,
-        mailboxUserId,
+        mailboxUserId: ownerUserId,
         fromAddress: email.from,
         toAddresses: [...email.to, ...email.cc],
         sentAt: email.sentAt,

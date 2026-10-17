@@ -73,6 +73,7 @@ The database and uploaded files live on the Render disk (`/var/data`), not in th
 ## 8. Smoke test
 
 - Sign in with a personal Gmail account: it must be refused with "Use your @theearthbank.org Google account."
+- Invite a guest (Settings → Team → Invite a guest) with an address outside Earth Bank: the invitation arrives from `EMAIL_FROM`, and its **Sign in** button opens the dashboard. Their next sign-in is "Email me a sign-in link" on the login page.
 - `https://dashboard.theearthbank.org/healthz` returns `{"ok":true}`.
 - `/admin/jobs` (signed in) shows the Sidequest dashboard with `default`, `email` and `mail` queues.
 - Assign a task to someone else: they get an email.
@@ -82,5 +83,6 @@ The database and uploaded files live on the Render disk (`/var/data`), not in th
 
 - **Backups**: nightly `VACUUM INTO` snapshots of `app.db` and `jobs.db` in `/var/data/backups`, 7 kept. To restore, stop the service, copy a snapshot over `/var/data/db/app.db` from the Render shell, and restart.
 - **Logs**: Render → Logs. Server lines are prefixed by area (`[api]`, `[jobs]`, `[auth]`, `[mail]`, `[bookkeeping]`, `[backup]`).
-- **Removing someone**: remove them in Google Workspace and click **Deactivate** in Settings → Team (ends their sessions, deletes their Gmail connection, and pauses any Drive folder they connected until someone else reconnects it).
+- **Removing someone**: remove them in Google Workspace and click **Deactivate** in Settings → Team (ends their sessions, deletes their Gmail connection and sign-in links, and pauses any Drive folder they connected until someone else reconnects it). Guests only need the Deactivate step.
+- **Guests** need Resend sending to work: their invitations and sign-in links are emailed. Nothing changes in Google Cloud; the OAuth app stays Internal.
 - **Scheduled work** (UTC): mail sync every 15 minutes, Bookeeping.ai at :15 past each hour, cleanup hourly, backups 03:00, Drive knowledge sync 04:30, task digest 13:00 on weekdays.

@@ -1,4 +1,5 @@
 import { APPROVAL_TO_FUNDING_DAYS, COMMITTEE_MIN_PROBABILITY } from '#shared/constants/pipeline.ts'
+import { CONTACT_OVERDUE_AFTER_DAYS, CONTACT_STALE_AFTER_DAYS } from '#shared/utils/contact-staleness.ts'
 
 // Plain-language explanations of the dashboard's terms and assumptions, shown on hover next to the
 // term (TermHint) and in table headers. One place, so every page explains a term the same way.
@@ -14,6 +15,7 @@ export const GLOSSARY = {
     runway_weighted: 'How long cash lasts if open asks land at their weighted value.',
     committed_money_only: 'Cash plus approved and received money, minus burn.',
     out_of_cash: 'Where the cash line drops below $0.',
+    last_contact: `Last email or call with the funder. Yellow after ${CONTACT_STALE_AFTER_DAYS} days, red after ${CONTACT_OVERDUE_AFTER_DAYS}.`,
     global_focus: 'Asks focused on the whole world, so counted on their own.',
 } as const
 

@@ -21,7 +21,7 @@ const props = defineProps<{
     funderId?: string
     funderName?: string
 }>()
-const emit = defineEmits<{ saved: [opportunity: Opportunity] }>()
+const emit = defineEmits<{ saved: [opportunity: Opportunity]; draftEmail: [opportunity: Opportunity] }>()
 const open = defineModel<boolean>('open', { default: false })
 
 const api = useApi()
@@ -250,8 +250,22 @@ async function saveOpportunity() {
 
                 <UAlert v-if="errorMessage" color="error" :description="errorMessage" class="sm:col-span-2" />
 
-                <div class="flex justify-end gap-2 sm:col-span-2">
-                    <UButton color="neutral" variant="ghost" label="Cancel" @click="open = false" />
+                <div class="flex flex-wrap items-center gap-2 sm:col-span-2">
+                    <!-- Opens over this form, so nothing typed here is lost. -->
+                    <UButton
+                        v-if="opportunity"
+                        label="Draft email"
+                        icon="i-lucide-sparkles"
+                        @click="emit('draftEmail', opportunity)"
+                    />
+                    <span v-if="opportunity" class="text-xs text-muted">
+                        Last contact
+                        <PipelineLastContactDate
+                            :value="opportunity.funder.last_contact_at"
+                            :is-tracked="!['received', 'lost'].includes(opportunity.stage)"
+                        />
+                    </span>
+                    <UButton class="ml-auto" color="neutral" variant="ghost" label="Cancel" @click="open = false" />
                     <UButton
                         type="submit"
                         variant="solid"

@@ -1,6 +1,7 @@
 import { defineNitroPlugin } from 'nitropack/runtime'
 import { ensureDefaultGoals } from '#server/database/goals.ts'
 import { supersedeAllStaleSuggestions } from '#server/utils/change-events.ts'
+import { reattributeSyncedEmails } from '#server/utils/mail/attribution.ts'
 import { fillFocusAreasFromGeoFocus } from '#server/utils/pipeline-import/focus-areas.ts'
 import { configureDatabase, disconnectDatabase } from '#server/utils/db.ts'
 
@@ -16,5 +17,9 @@ export default defineNitroPlugin(async nitroApp => {
     fillFocusAreasFromGeoFocus()
         .then(count => count > 0 && console.info(`[import] filled geographic focus on ${count} opportunities`))
         .catch(error => console.error('[import] filling geographic focus failed', error))
+    // Emails read before ownership followed the sender were credited to whichever inbox synced first.
+    reattributeSyncedEmails()
+        .then(count => count > 0 && console.info(`[mail] credited ${count} emails to their sender or recipient`))
+        .catch(error => console.error('[mail] crediting emails failed', error))
     nitroApp.hooks.hook('close', () => disconnectDatabase())
 })

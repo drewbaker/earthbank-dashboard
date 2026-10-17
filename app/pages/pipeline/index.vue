@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import { computed, h, ref, resolveComponent, watch } from 'vue'
+import { computed, h, nextTick, ref, resolveComponent, watch } from 'vue'
 import { navigateTo, useAsyncData, useRoute, useRouter, useSeoMeta, useToast } from '#imports'
 import type { GoalType, OpportunityStage } from '#shared/constants/pipeline.ts'
 import { OPPORTUNITY_STAGE_DETAILS, OPPORTUNITY_STAGES, RELATIONSHIP_STATUSES } from '#shared/constants/pipeline.ts'
@@ -100,6 +100,10 @@ const trackItems = [
 const isFunderModalOpen = ref(false)
 const isOpportunityModalOpen = ref(false)
 const editingOpportunity = ref<Opportunity | null>(null)
+// The email draft needs the funder's contacts and every ask, which the pipeline list doesn't carry.
+const emailDraftFunder = ref<FunderDetail | null>(null)
+const emailDraftOpportunityId = ref<string | null>(null)
+const isEmailDraftOpen = ref(false)
 
 const UBadge = resolveComponent('UBadge')
 const NuxtLink = resolveComponent('NuxtLink')
@@ -107,6 +111,10 @@ const PipelineGoalBadge = resolveComponent('PipelineGoalBadge')
 const PipelineStageBadge = resolveComponent('PipelineStageBadge')
 const PipelineTierBadge = resolveComponent('PipelineTierBadge')
 const PipelineRelationshipBadge = resolveComponent('PipelineRelationshipBadge')
+const PipelineLastContactDate = resolveComponent('PipelineLastContactDate')
+
+// Received and declined asks need no follow-up, so their last contact isn't flagged.
+const CLOSED_STAGES: OpportunityStage[] = ['received', 'lost']
 
 // Stages and relationships sort in pipeline order, not alphabetically.
 const STAGE_ORDER = new Map(OPPORTUNITY_STAGES.map((stage, index) => [stage, index]))
@@ -166,6 +174,17 @@ const opportunityColumns: TableColumn<Opportunity>[] = sortableColumns({
             header: 'Expected',
             meta: { term: 'expected' },
             cell: ({ row }) => formatDate({ value: row.original.expected_receipt_at, unknown: 'Not set' }),
+        },
+        {
+            id: 'last_contact_at',
+            accessorFn: opportunity => opportunity.funder.last_contact_at ?? undefined,
+            header: 'Last contact',
+            meta: { term: 'last_contact' },
+            cell: ({ row }) =>
+                h(PipelineLastContactDate, {
+                    value: row.original.funder.last_contact_at,
+                    isTracked: !CLOSED_STAGES.includes(row.original.stage),
+                }),
         },
         {
             id: 'next_step',
@@ -266,7 +285,12 @@ const funderColumns: TableColumn<Funder>[] = sortableColumns({
             id: 'last_contact_at',
             accessorFn: funder => funder.last_contact_at ?? undefined,
             header: 'Last contact',
-            cell: ({ row }) => formatDate({ value: row.original.last_contact_at, unknown: 'None logged' }),
+            meta: { term: 'last_contact' },
+            cell: ({ row }) =>
+                h(PipelineLastContactDate, {
+                    value: row.original.last_contact_at,
+                    isTracked: row.original.relationship_status !== 'dead',
+                }),
         },
     ],
 })
@@ -280,6 +304,24 @@ const funderColumns: TableColumn<Funder>[] = sortableColumns({
 function editOpportunity(opportunity: Opportunity) {
     editingOpportunity.value = opportunity
     isOpportunityModalOpen.value = true
+}
+
+/**
+ * Open the AI email draft about an opportunity, over its edit form.
+ *
+ * @param opportunity - The opportunity the email is about.
+ * @returns Resolves once the draft window is open, or the error is shown.
+ */
+async function openEmailDraft(opportunity: Opportunity) {
+    try {
+        emailDraftFunder.value = await api<FunderDetail>({ path: `/funders/${opportunity.funder.id}` })
+        emailDraftOpportunityId.value = opportunity.id
+        // The draft window resets itself when it opens, so it must be mounted first.
+        await nextTick()
+        isEmailDraftOpen.value = true
+    } catch (error) {
+        toast.add({ title: apiErrorMessage({ error }), color: 'error' })
+    }
 }
 
 /**
@@ -403,6 +445,13 @@ async function openCreatedFunder(funder: FunderDetail) {
                 v-model:open="isOpportunityModalOpen"
                 :opportunity="editingOpportunity"
                 @saved="reloadPipeline"
+                @draft-email="openEmailDraft"
+            />
+            <PipelineEmailDraftModal
+                v-if="emailDraftFunder"
+                v-model:open="isEmailDraftOpen"
+                :funder="emailDraftFunder"
+                :opportunity-id="emailDraftOpportunityId"
             />
         </template>
     </UDashboardPanel>

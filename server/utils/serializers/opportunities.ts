@@ -33,6 +33,7 @@ export function serializeOpportunity({
             id: opportunity.funder.id,
             name: opportunity.funder.name,
             tier: opportunity.funder.tier as FunderTier | null,
+            last_contact_at: toDateOnly({ date: opportunity.funder.last_contact_at }),
         },
         goal_id: opportunity.goal_id,
         goal_type: opportunity.goal.type as GoalType,

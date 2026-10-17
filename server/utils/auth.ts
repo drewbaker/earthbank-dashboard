@@ -5,6 +5,7 @@ import { requestIp } from '#server/utils/api.ts'
 import { config } from '#server/utils/config.ts'
 import { hashToken, newOpaqueToken } from '#server/utils/crypto.ts'
 import { unauthorized } from '#server/utils/errors.ts'
+import { userAvatarUrl } from '#server/utils/serializers/common.ts'
 
 export const SESSION_COOKIE_NAME = 'earthbank_dashboard_session'
 
@@ -44,7 +45,13 @@ export async function resolveAuth({ event, now = new Date() }: { event: H3Event;
     }
     const { user } = session
     return {
-        user: { id: user.id, email: user.email, name: user.name, avatar_url: user.avatar_url, role: user.role },
+        user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            avatar_url: userAvatarUrl({ user }),
+            role: user.role,
+        },
         actor: { type: 'user', userId: user.id },
         sessionId: session.id,
     } satisfies AuthContext

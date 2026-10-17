@@ -78,7 +78,17 @@ import {
     UpdateCommentRequest,
     UpdateTaskRequest,
 } from '#shared/schemas/tasks.ts'
-import { CurrentUser, User, UserList } from '#shared/schemas/users.ts'
+import {
+    CurrentUser,
+    InviteUserRequest,
+    RedeemSignInLinkRequest,
+    RequestSignInLinkRequest,
+    SignInLinkRedeemed,
+    UpdatePreferencesRequest,
+    User,
+    UserList,
+    UserPreferences,
+} from '#shared/schemas/users.ts'
 
 export * from '#shared/schemas/cash.ts'
 export * from '#shared/schemas/change-events.ts'
@@ -107,6 +117,12 @@ export const openapiSchemas: Record<string, z.ZodType> = {
     User,
     UserList,
     CurrentUser,
+    UserPreferences,
+    UpdatePreferencesRequest,
+    InviteUserRequest,
+    RequestSignInLinkRequest,
+    RedeemSignInLinkRequest,
+    SignInLinkRedeemed,
     Contact,
     CreateContactRequest,
     UpdateContactRequest,

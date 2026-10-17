@@ -3,6 +3,7 @@ import type { NavigationMenuItem } from '@nuxt/ui'
 
 // Settings sections; each child page renders only its body.
 const settingsSections: NavigationMenuItem[] = [
+    { label: 'Profile', icon: 'i-lucide-circle-user', to: '/settings/profile' },
     { label: 'Team', icon: 'i-lucide-users', to: '/settings/team' },
     { label: 'Pipeline', icon: 'i-lucide-target', to: '/settings/pipeline' },
     { label: 'Cash', icon: 'i-lucide-landmark', to: '/settings/cash' },

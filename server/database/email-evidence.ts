@@ -136,3 +136,36 @@ export function countFunderEmailEvidence({ funderId }: { funderId: string }) {
 export function findEmailEvidenceByIds({ ids }: { ids: string[] }) {
     return db().emailEvidence.findMany({ where: { id: { in: ids } }, include: { mailbox_user: true } })
 }
+
+/**
+ * Every email read from Gmail, with just what's needed to work out whose it is.
+ *
+ * @returns Rows with id, sender, recipients and current owner.
+ */
+export function listSyncedEmailParties() {
+    return db().emailEvidence.findMany({
+        where: { source: 'gmail' },
+        select: { id: true, from_address: true, to_addresses: true, mailbox_user_id: true },
+    })
+}
+
+/**
+ * Credit emails to a different team member.
+ *
+ * @param input.emailEvidenceIds - The emails.
+ * @param input.mailboxUserId - Their new owner.
+ * @returns The number of rows updated.
+ */
+export async function setEmailEvidenceOwner({
+    emailEvidenceIds,
+    mailboxUserId,
+}: {
+    emailEvidenceIds: string[]
+    mailboxUserId: string
+}) {
+    const result = await db().emailEvidence.updateMany({
+        where: { id: { in: emailEvidenceIds } },
+        data: { mailbox_user_id: mailboxUserId },
+    })
+    return result.count
+}

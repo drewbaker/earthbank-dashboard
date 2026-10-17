@@ -1,6 +1,7 @@
 import { defineTask } from 'nitropack/runtime'
 import { deleteAttachmentRows, listPurgeableAttachments } from '#server/database/attachments.ts'
 import { deleteExpiredSessions } from '#server/database/sessions.ts'
+import { deleteSpentSignInLinks } from '#server/database/sign-in-links.ts'
 import { supersedeAllStaleSuggestions } from '#server/utils/change-events.ts'
 import { config } from '#server/utils/config.ts'
 import { deleteStoredFile } from '#server/utils/storage.ts'
@@ -12,7 +13,7 @@ export default defineTask({
     meta: {
         name: 'cleanup',
         description:
-            'Delete expired sessions and the files of attachments removed over 30 days ago; retire out-of-date suggestions',
+            'Delete expired sessions and sign-in links, and the files of attachments removed over 30 days ago; retire out-of-date suggestions',
     },
     async run() {
         if (!config.runBackgroundWorkers) {
@@ -20,6 +21,7 @@ export default defineTask({
         }
         const now = new Date()
         const deletedSessions = await deleteExpiredSessions({ now })
+        const deletedSignInLinks = await deleteSpentSignInLinks({ now })
         const purgeable = await listPurgeableAttachments({
             deletedBefore: new Date(now.getTime() - ATTACHMENT_RETENTION_DAYS * 24 * 60 * 60 * 1000),
         })
@@ -31,7 +33,7 @@ export default defineTask({
         })
         const supersededSuggestions = await supersedeAllStaleSuggestions()
         return {
-            result: `deleted ${deletedSessions} expired sessions, purged ${purgedAttachments} attachments, retired ${supersededSuggestions} out-of-date suggestions`,
+            result: `deleted ${deletedSessions} expired sessions and ${deletedSignInLinks} sign-in links, purged ${purgedAttachments} attachments, retired ${supersededSuggestions} out-of-date suggestions`,
         }
     },
 })

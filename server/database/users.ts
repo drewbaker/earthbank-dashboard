@@ -1,3 +1,4 @@
+import type { Prisma } from '#server/generated/prisma/client.ts'
 import { db } from '#server/utils/db.ts'
 import { newId } from '#server/utils/ids.ts'
 
@@ -113,6 +114,7 @@ export async function deactivateUser({ userId, deactivatedAt }: { userId: string
     const [user] = await db().$transaction([
         db().user.update({ where: { id: userId }, data: { deactivated_at: deactivatedAt } }),
         db().session.deleteMany({ where: { user_id: userId } }),
+        db().signInLink.deleteMany({ where: { user_id: userId } }),
         db().mailboxConnection.deleteMany({ where: { user_id: userId } }),
         db().knowledgeSource.updateMany({
             where: { connected_by_id: userId },
@@ -134,4 +136,106 @@ export async function deactivateUser({ userId, deactivatedAt }: { userId: string
  */
 export function reactivateUser({ userId }: { userId: string }) {
     return db().user.update({ where: { id: userId }, data: { deactivated_at: null } })
+}
+
+/**
+ * Find a user by email address.
+ *
+ * @param input.email - Lowercased address.
+ * @returns The user row, or null.
+ */
+export function findUserByEmail({ email }: { email: string }) {
+    return db().user.findUnique({ where: { email } })
+}
+
+/**
+ * Create a guest account for someone outside the Workspace. They sign in with emailed links.
+ *
+ * @param input.email - Their lowercased address.
+ * @param input.name - Their name, as the inviter typed it.
+ * @param input.invitedById - Who invited them.
+ * @param input.invitedAt - When.
+ * @returns The user row.
+ */
+export function createInvitedUser({
+    email,
+    name,
+    invitedById,
+    invitedAt,
+}: {
+    email: string
+    name: string
+    invitedById: string
+    invitedAt: Date
+}) {
+    return db().user.create({
+        data: {
+            id: newId({ kind: 'user' }),
+            email,
+            name,
+            role: 'admin',
+            invited_at: invitedAt,
+            invited_by_id: invitedById,
+        },
+    })
+}
+
+/**
+ * Record a sign-in that didn't go through Google (an emailed link).
+ *
+ * @param input.userId - The user.
+ * @param input.signedInAt - When.
+ * @returns The updated user row.
+ */
+export function recordUserSignIn({ userId, signedInAt }: { userId: string; signedInAt: Date }) {
+    return db().user.update({ where: { id: userId }, data: { last_sign_in_at: signedInAt } })
+}
+
+/**
+ * Save a user's personal preferences.
+ *
+ * @param input.userId - The user.
+ * @param input.settings - The full, validated preferences object.
+ * @returns The updated user row.
+ */
+export function updateUserSettings({ userId, settings }: { userId: string; settings: Record<string, unknown> }) {
+    return db().user.update({ where: { id: userId }, data: { settings: settings as Prisma.InputJsonValue } })
+}
+
+/**
+ * Point a user at a newly uploaded picture (or clear it with null).
+ *
+ * @param input.userId - The user.
+ * @param input.storageKey - Storage key of the picture, or null to go back to the Google one.
+ * @param input.updatedAt - When it changed.
+ * @returns The updated user row.
+ */
+export function setUserAvatar({
+    userId,
+    storageKey,
+    updatedAt,
+}: {
+    userId: string
+    storageKey: string | null
+    updatedAt: Date
+}) {
+    return db().user.update({
+        where: { id: userId },
+        data: { avatar_storage_key: storageKey, avatar_updated_at: updatedAt },
+    })
+}
+
+/**
+ * Keep a Google profile picture for someone who has none yet (seen when they connect Gmail).
+ *
+ * @param input.userId - The user.
+ * @param input.avatarUrl - The Google picture URL.
+ * @returns The number of rows updated (0 when they already had one).
+ */
+export async function fillGoogleAvatar({ userId, avatarUrl }: { userId: string; avatarUrl: string }) {
+    const result = await db().user.updateMany({
+        where: { id: userId, avatar_url: null },
+        data: { avatar_url: avatarUrl },
+    })
+    return result.count
 }

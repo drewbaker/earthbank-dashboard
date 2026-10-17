@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { useAsyncData, useRoute, useSeoMeta, useToast } from '#imports'
 import type { MailboxStatus } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
+import { useAuth } from '~/composables/useAuth.ts'
 import { formatRelativeTime } from '~/utils/format.ts'
 
 useSeoMeta({ title: 'Email settings · Earth Bank Dashboard' })
@@ -11,6 +12,7 @@ useSeoMeta({ title: 'Email settings · Earth Bank Dashboard' })
 const api = useApi()
 const toast = useToast()
 const route = useRoute()
+const { currentUser } = useAuth()
 
 const { data: mailbox, refresh } = await useAsyncData('settings.mailbox', () =>
     api<MailboxStatus>({ path: '/mailbox' }),
@@ -180,6 +182,10 @@ async function copyAddress({ address }: { address: string | undefined }) {
                         />
                     </div>
                 </div>
+                <p v-else-if="currentUser?.sign_in_method === 'email_link'" class="text-sm text-muted">
+                    Only @theearthbank.org accounts can connect Gmail. As a guest, you'll see emails from the team's
+                    connected inboxes.
+                </p>
                 <div v-else class="flex flex-wrap items-center justify-between gap-3">
                     <p class="text-sm text-muted">
                         Not connected. Google will ask you to allow reading your mail and saving drafts.

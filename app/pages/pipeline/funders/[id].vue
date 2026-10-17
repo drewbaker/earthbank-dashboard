@@ -65,6 +65,13 @@ function openEmailDraft({ opportunityId }: { opportunityId: string | null }) {
     isEmailDraftOpen.value = true
 }
 
+// Flag a quiet funder only while there's still an ask in play.
+const isFollowUpTracked = computed(
+    () =>
+        funder.value?.relationship_status !== 'dead' &&
+        (funder.value?.opportunities ?? []).some(opportunity => !['received', 'lost'].includes(opportunity.stage)),
+)
+
 const { busyEventId, acceptChange, rejectChange, revertChange } = useChangeEventActions({ onChanged: reloadFunder })
 
 const details = computed(() => {
@@ -77,7 +84,6 @@ const details = computed(() => {
         { label: 'Geo focus', value: current.geo_focus ?? '—' },
         { label: 'Potential size', value: current.potential_size ?? '—' },
         { label: 'Owner', value: current.owner?.name ?? 'Unassigned' },
-        { label: 'Last contact', value: formatDate({ value: current.last_contact_at, unknown: 'None logged' }) },
         { label: 'Materials sent', value: formatDate({ value: current.materials_sent_at, unknown: 'Not yet' }) },
     ]
 })
@@ -217,6 +223,10 @@ async function toggleArchived() {
                     <div class="flex flex-wrap items-center gap-2">
                         <PipelineTierBadge :tier="funder.tier" />
                         <PipelineRelationshipBadge :status="funder.relationship_status" />
+                        <span class="inline-flex items-center gap-1 text-sm">
+                            <span class="text-muted">Last contact</span>
+                            <PipelineLastContactDate :value="funder.last_contact_at" :is-tracked="isFollowUpTracked" />
+                        </span>
                         <UBadge
                             v-if="funder.awaiting_reply_since"
                             :label="`Reply needed · they wrote ${formatDate({ value: funder.awaiting_reply_since, style: 'short' })}`"
@@ -375,6 +385,15 @@ async function toggleArchived() {
                                 <dt class="text-muted">{{ detail.label }}</dt>
                                 <dd class="text-right text-highlighted">{{ detail.value }}</dd>
                             </div>
+                            <div class="flex justify-between gap-4">
+                                <dt class="text-muted">Last contact <TermHint term="last_contact" /></dt>
+                                <dd class="text-right">
+                                    <PipelineLastContactDate
+                                        :value="funder.last_contact_at"
+                                        :is-tracked="isFollowUpTracked"
+                                    />
+                                </dd>
+                            </div>
                             <div>
                                 <dt class="text-muted">Email domains</dt>
                                 <dd class="mt-1 flex flex-wrap gap-1">
@@ -468,6 +487,7 @@ async function toggleArchived() {
                     :funder-id="funder.id"
                     :funder-name="funder.name"
                     @saved="reloadFunder"
+                    @draft-email="opportunity => openEmailDraft({ opportunityId: opportunity.id })"
                 />
                 <TasksCreateModal
                     v-model:open="isTaskModalOpen"

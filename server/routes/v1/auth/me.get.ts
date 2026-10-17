@@ -3,7 +3,7 @@ import { findUser } from '#server/database/users.ts'
 import { defineApiHandler } from '#server/utils/api.ts'
 import { requireUser } from '#server/utils/auth.ts'
 import { unauthorized } from '#server/utils/errors.ts'
-import { serializeUser } from '#server/utils/serializers/users.ts'
+import { serializeUser, serializeUserPreferences } from '#server/utils/serializers/users.ts'
 
 defineRouteMeta({
     openAPI: {
@@ -28,5 +28,5 @@ export default defineApiHandler(async event => {
     if (!user) {
         throw unauthorized()
     }
-    return { user: serializeUser({ user }) }
+    return { user: serializeUser({ user }), preferences: serializeUserPreferences({ user }) }
 })

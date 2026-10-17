@@ -235,6 +235,17 @@ Status: done (requested after v1). Needs the Google Drive API enabled and people
 - [x] **Import** (Settings → Import): upload the .xlsx, preview, import; same importer as the CLI
 - [x] Tests: `knowledge-selection.test.ts`, `email-draft-compose.test.ts`, `email-drafts-and-knowledge.test.ts`
 
+## Phase 8: Follow-up contact, guests and profiles
+
+Status: done (requested Oct 16, 2026).
+
+- [x] **Last contact** on every ask in the pipeline (and on the funder page and opportunity form): yellow after 5 days, red after 10, for asks still in play (`contactStaleness`)
+- [x] **Draft email** button in the opportunity form's bottom row on the Pipeline page; the draft opens over the form so nothing typed is lost
+- [x] **Guests**: invite people without an @theearthbank.org account (Settings → Team → Invite a guest); they sign in with one-time emailed links (`sign_in_link` table, `/login/link`), same access as everyone; resend and deactivate from the Team list
+- [x] **Activity attribution**: an email is credited to the team member who sent it, else the first one in To, then Cc, not whichever CC'd inbox synced it first; older emails re-credited at boot
+- [x] **Settings → Profile**: upload a profile picture (Google picture otherwise, also picked up when connecting Gmail); light/dark/auto saved to the account
+- [x] Tests: `contact-staleness.test.ts`, `email-ownership.test.ts`, `avatar-format.test.ts`, `guest-sign-in-links.test.ts`
+
 ---
 
 ## Later (not v1)

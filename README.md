@@ -1,13 +1,13 @@
 # Earth Bank Dashboard
 
-Earth Bank leadership's internal dashboard for tracking fundraising. It shows cash, burn and runway, the grant pipeline grouped by funding goal (Design Grants, OpEx, Lending Capital), and the milestones and tasks that get money in the door. AI reads funder email to keep the pipeline current. It runs at `https://dashboard.theearthbank.org`, and only `@theearthbank.org` Google accounts can sign in.
+Earth Bank leadership's internal dashboard for tracking fundraising. It shows cash, burn and runway, the grant pipeline grouped by funding goal (Design Grants, OpEx, Lending Capital), and the milestones and tasks that get money in the door. AI reads funder email to keep the pipeline current. It runs at `https://dashboard.theearthbank.org`, and Earth Bank staff sign in with their `@theearthbank.org` Google accounts; invited guests sign in with emailed links.
 
 The product spec and house conventions are in [AGENTS.md](AGENTS.md); the delivery plan and status are in [docs/build-plan.md](docs/build-plan.md).
 
 ## Features
 
 - **Overview**: cash on hand, monthly burn, runway (committed money vs weighted pipeline), goal progress, my tasks, upcoming milestones, recent changes
-- **Pipeline**: funders, contacts and opportunities by goal (Design Grants, OpEx, Lending Capital) and stage; table, funder list and drag-and-drop board; full change history with revert
+- **Pipeline**: funders, contacts and opportunities by goal (Design Grants, OpEx, Lending Capital) and stage; table, funder list and drag-and-drop board; last contact per ask (yellow after 5 days, red after 10); **Draft email** from any ask; full change history with revert
 - **Milestones & Tasks**: milestones with tasks, assignees and deadlines; drag to reorder; "by person" view; comments and file attachments; email alerts on assignment and comments, plus a weekday digest
 - **Forecast**: 24-month cash projection with a live scenario builder (slip a funding date, change an amount or probability, add a hire or one-off cost, change burn); saved scenarios
 - **Email intelligence**: connect Gmail and the AI keeps funder stages, amounts, dates and next steps current from funder email only, with the email summary and reasoning behind every change; email or forward to dashboard@theearthbank.org with a request and the AI does it and replies; review, accept or revert on the Activity page
@@ -15,7 +15,8 @@ The product spec and house conventions are in [AGENTS.md](AGENTS.md); the delive
 - **Knowledge**: connect Earth Bank's Google Drive folder (business models, explainers) so drafts use the team's own facts; pin or exclude documents
 - **Bank data** from Bookeeping.ai (or entered by hand)
 - **Spreadsheet import** of the Master Pipeline tab, in Settings → Import or `npm run import:pipeline`
-- Google sign-in, limited to the Earth Bank Workspace; accounts are created on first sign-in
+- Google sign-in, limited to the Earth Bank Workspace; accounts are created on first sign-in. Guests from other domains are invited in Settings → Team and sign in with one-time emailed links
+- **Profile**: upload a profile picture (otherwise your Google picture is used) and choose light, dark or auto, saved to your account
 
 ## Stack
 

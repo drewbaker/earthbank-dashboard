@@ -2,7 +2,7 @@ import type { H3Event } from 'h3'
 import { defineEventHandler, getQuery, sendRedirect, setResponseHeader } from 'h3'
 import { upsertKnowledgeSource } from '#server/database/knowledge.ts'
 import { upsertMailboxConnection } from '#server/database/mailboxes.ts'
-import { findUserByGoogleSub, upsertGoogleUser } from '#server/database/users.ts'
+import { fillGoogleAvatar, findUserByGoogleSub, upsertGoogleUser } from '#server/database/users.ts'
 import { requestIp } from '#server/utils/api.ts'
 import { recordAudit } from '#server/utils/audit.ts'
 import { startSession } from '#server/utils/auth.ts'
@@ -32,7 +32,13 @@ export default defineEventHandler(async event => {
     }
 
     if (result.purpose === 'connect_gmail') {
-        return connectGmail({ event, googleSub: check.identity.googleSub, email: check.identity.email, ...result })
+        return connectGmail({
+            event,
+            googleSub: check.identity.googleSub,
+            email: check.identity.email,
+            avatarUrl: check.identity.avatarUrl,
+            ...result,
+        })
     }
     if (result.purpose === 'connect_drive') {
         return connectDriveItem({ event, googleSub: check.identity.googleSub, ...result })
@@ -76,6 +82,7 @@ function redirectToLogin({ event, error }: { event: H3Event; error: string }) {
  * @param input.event - The callback request.
  * @param input.googleSub - Google subject of the account that consented.
  * @param input.email - Its verified email.
+ * @param input.avatarUrl - Its Google profile picture, kept when the person has no picture yet.
  * @param input.refreshToken - Refresh token from Google (needed for background sync).
  * @param input.grantedScopes - Scopes Google granted.
  * @param input.redirectPath - Where to send the browser afterwards.
@@ -85,6 +92,7 @@ async function connectGmail({
     event,
     googleSub,
     email,
+    avatarUrl,
     refreshToken,
     grantedScopes,
     redirectPath,
@@ -92,6 +100,7 @@ async function connectGmail({
     event: H3Event
     googleSub: string
     email: string
+    avatarUrl: string | null
     refreshToken: string | null
     grantedScopes: string
     redirectPath: string
@@ -110,6 +119,9 @@ async function connectGmail({
         refreshTokenEncrypted: encryptSecret({ plaintext: refreshToken }),
         scopes: grantedScopes,
     })
+    if (avatarUrl) {
+        await fillGoogleAvatar({ userId: user.id, avatarUrl })
+    }
     await recordAudit({
         actor: { type: 'user', userId: user.id },
         action: 'mailbox.connected',

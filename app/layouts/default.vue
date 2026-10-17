@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useAsyncData } from '#imports'
 import type { ActivitySummary } from '#shared/schemas/index.ts'
 import { useApi } from '~/composables/useApi.ts'
+import { useColorModePreference } from '~/composables/useColorModePreference.ts'
 import { primaryNavigation, secondaryNavigation } from '~/utils/navigation.ts'
 
 const api = useApi()
@@ -10,6 +11,10 @@ const api = useApi()
 const { data: activitySummary } = useAsyncData('layout.activity-summary', () =>
     api<ActivitySummary>({ path: '/activity/summary' }).catch(() => null),
 )
+
+// Light or dark as saved on the account, so it's the same in every browser the person uses.
+const { applySavedColorMode } = useColorModePreference()
+onMounted(applySavedColorMode)
 
 const navigationItems = computed(() => {
     const waiting = (activitySummary.value?.pending_changes ?? 0) + (activitySummary.value?.draft_funders ?? 0)

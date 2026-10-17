@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useColorMode } from '#imports'
+import type { ColorMode } from '#shared/schemas/index.ts'
+import { useColorModePreference } from '~/composables/useColorModePreference.ts'
 
-const colorMode = useColorMode()
+const { colorModeChoice, chooseColorMode } = useColorModePreference()
 
 const MODES = [
     { value: 'light', label: 'Light', icon: 'i-lucide-sun' },
@@ -11,9 +12,9 @@ const MODES = [
 ] as const
 
 const preference = computed({
-    get: () => colorMode.preference,
-    set: value => {
-        colorMode.preference = value
+    get: () => colorModeChoice.value,
+    set: (mode: ColorMode) => {
+        chooseColorMode({ mode })
     },
 })
 </script>

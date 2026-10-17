@@ -3,21 +3,22 @@ import type { DropdownMenuItem } from '@nuxt/ui'
 import { computed } from 'vue'
 import { useColorMode } from '#imports'
 import { useAuth } from '~/composables/useAuth.ts'
+import { useColorModePreference } from '~/composables/useColorModePreference.ts'
 
 defineProps<{ collapsed?: boolean }>()
 
 const { currentUser, signOut } = useAuth()
 const colorMode = useColorMode()
+const { chooseColorMode } = useColorModePreference()
 
 const menuItems = computed<DropdownMenuItem[][]>(() => [
     [{ label: currentUser.value?.email ?? '', type: 'label' }],
     [
+        { label: 'Your profile', icon: 'i-lucide-circle-user', to: '/settings/profile' },
         {
             label: colorMode.value === 'dark' ? 'Light mode' : 'Dark mode',
             icon: colorMode.value === 'dark' ? 'i-lucide-sun' : 'i-lucide-moon',
-            onSelect: () => {
-                colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
-            },
+            onSelect: () => chooseColorMode({ mode: colorMode.value === 'dark' ? 'light' : 'dark' }),
         },
     ],
     [{ label: 'Sign out', icon: 'i-lucide-log-out', onSelect: () => signOut() }],
