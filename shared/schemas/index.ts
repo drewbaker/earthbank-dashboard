@@ -12,6 +12,20 @@ import { Contact, CreateContactRequest, UpdateContactRequest } from '#shared/sch
 import { CreateFunderRequest, Funder, FunderDetail, FunderList, UpdateFunderRequest } from '#shared/schemas/funders.ts'
 import { ForecastInputs } from '#shared/schemas/forecast.ts'
 import {
+    AnswerDiligenceRequest,
+    CreateFundRequest,
+    Fund,
+    FundDetail,
+    FundList,
+    FundNetwork,
+    FundResearchRunList,
+    FundResearchSettings,
+    FundResearchStatus,
+    PublicInvestmentSourceList,
+    UpdateFundRequest,
+    UpdateFundResearchSettingsRequest,
+} from '#shared/schemas/funds.ts'
+import {
     CreatePlannedExpenseRequest,
     PlannedExpense,
     PlannedExpenseList,
@@ -96,6 +110,8 @@ export * from '#shared/schemas/common.ts'
 export * from '#shared/schemas/contacts.ts'
 export * from '#shared/schemas/forecast.ts'
 export * from '#shared/schemas/funders.ts'
+export * from '#shared/schemas/fund-findings.ts'
+export * from '#shared/schemas/funds.ts'
 export * from '#shared/schemas/goals.ts'
 export * from '#shared/schemas/imports.ts'
 export * from '#shared/schemas/knowledge.ts'
@@ -194,4 +210,16 @@ export const openapiSchemas: Record<string, z.ZodType> = {
     SharedPipeline,
     ShareSections,
     UpdateShareLinkRequest,
+    Fund,
+    FundList,
+    FundDetail,
+    FundNetwork,
+    FundResearchRunList,
+    FundResearchSettings,
+    FundResearchStatus,
+    PublicInvestmentSourceList,
+    CreateFundRequest,
+    UpdateFundRequest,
+    AnswerDiligenceRequest,
+    UpdateFundResearchSettingsRequest,
 }

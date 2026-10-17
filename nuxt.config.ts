@@ -62,6 +62,10 @@ export default defineNuxtConfig({
             '30 4 * * *': ['knowledge-sync'],
             // 13:00 UTC is early morning on the US east coast (9am EDT / 8am EST), weekdays only.
             '0 13 * * 1-5': ['task-digest'],
+            // Fund research jobs lost in a deploy restart (or paused by last month's budget) are queued again.
+            '40 * * * *': ['fund-research-resume'],
+            // Public DFI and government lists change slowly; read them weekly, Sunday 05:00 UTC.
+            '0 5 * * 0': ['public-investments-sync'],
         },
         openAPI: {
             production: 'runtime',

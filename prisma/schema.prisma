@@ -50,10 +50,10 @@ model User {
     audit_log           AuditLog[]
     owned_funders       Funder[]
     owned_opportunities Opportunity[]
-    change_events       ChangeEvent[]      @relation("change_event_actor")
-    resolved_changes    ChangeEvent[]      @relation("change_event_resolver")
-    assigned_tasks      Task[]             @relation("task_assignee")
-    created_tasks       Task[]             @relation("task_creator")
+    change_events       ChangeEvent[]         @relation("change_event_actor")
+    resolved_changes    ChangeEvent[]         @relation("change_event_resolver")
+    assigned_tasks      Task[]                @relation("task_assignee")
+    created_tasks       Task[]                @relation("task_creator")
     created_milestones  Milestone[]
     comments            Comment[]
     attachments         Attachment[]
@@ -63,6 +63,9 @@ model User {
     email_evidence      EmailEvidence[]
     knowledge_sources   KnowledgeSource[]
     share_links         ShareLink[]
+    owned_fund_managers FundManager[]
+    rejected_findings   FundFinding[]
+    diligence_answers   FundDiligenceAnswer[]
 
     @@map("user")
 }
@@ -620,4 +623,312 @@ model ShareLink {
     created_by User? @relation(fields: [created_by_user_id], references: [id], onDelete: SetNull)
 
     @@map("share_link")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fund research: lenders Earth Bank might partner with. Two layers stay apart on every profile:
+// Research (FundFinding rows the AI found, each linked to the pages it came from) and Due Diligence
+// (FundDiligenceAnswer rows people enter; the AI may pre-fill one but never overwrites a person's).
+// ---------------------------------------------------------------------------------------------
+
+// A lender (debt fund, impact fund, CDFI, mission bank, fintech lender) being considered as a partner.
+model FundManager {
+    id                 String    @id
+    name               String
+    // Lowercased, punctuation-free name for de-duplication (normalizeOrganizationName).
+    name_key           String    @unique
+    website_url        String?
+    // Bare host without "www.", also used for de-duplication.
+    website_domain     String?   @unique
+    // new_addition | sourced | in_diligence | shortlisted | passed
+    stage              String    @default("new_addition")
+    // FUND_FIT_TAGS keys.
+    fit_tags           Json      @default("[]")
+    notes              String?
+    owner_id           String?
+    // seed | manual | spider_person | spider_public_record | spider_suggestion
+    origin             String    @default("manual")
+    discovered_from_id String?
+    // queued | running | done | failed | skipped
+    research_status    String    @default("queued")
+    research_queued_at DateTime?
+    researched_at      DateTime?
+    research_error     String?
+    archived_at        DateTime?
+
+    // Current research values, recomputed from active findings after every run (for sorting and filtering).
+    summary                        String?
+    aum_cents                      BigInt?
+    latest_fund_size_cents         BigInt?
+    last_fund_close_on             DateTime?
+    check_min_cents                BigInt?
+    check_max_cents                BigInt?
+    has_working_capital_loans      Boolean   @default(false)
+    max_working_capital_loan_cents BigInt?
+    year_established               Int?
+    hq_country                     String?
+    hq_city                        String?
+    employee_count                 Int?
+    sectors                        Json      @default("[]")
+    loan_types                     Json      @default("[]")
+    focus_areas                    Json      @default("[]")
+    research_completeness          Int       @default(0)
+    diligence_completeness         Int       @default(0)
+
+    created_at DateTime @default(now())
+    updated_at DateTime @updatedAt
+
+    owner             User?                    @relation(fields: [owner_id], references: [id], onDelete: SetNull)
+    discovered_from   FundManager?             @relation("fund_discovery", fields: [discovered_from_id], references: [id], onDelete: SetNull)
+    discovered        FundManager[]            @relation("fund_discovery")
+    findings          FundFinding[]
+    people            FundPerson[]
+    diligence_answers FundDiligenceAnswer[]
+    research_runs     FundResearchRun[]
+    organization      ResearchOrganization?
+    public_records    PublicInvestmentRecord[]
+
+    @@index([stage])
+    @@index([research_status])
+    @@map("fund_manager")
+}
+
+// One sourced research fact. List fields (deals, LPs, news, …) have one row per item.
+model FundFinding {
+    id                  String    @id
+    fund_manager_id     String
+    // FUND_RESEARCH_FIELDS key.
+    field               String
+    // Validated per field by FUND_FINDING_VALUE_SCHEMAS (shared/schemas/fund-findings.ts).
+    value               Json
+    // Normalized value for "same finding" checks (supersede, rejected values).
+    value_key           String
+    confidence          Float
+    // active | superseded | rejected
+    status              String    @default("active")
+    research_run_id     String?
+    rejected_by_user_id String?
+    rejected_at         DateTime?
+    created_at          DateTime  @default(now())
+
+    fund_manager FundManager         @relation(fields: [fund_manager_id], references: [id], onDelete: Cascade)
+    research_run FundResearchRun?    @relation(fields: [research_run_id], references: [id], onDelete: SetNull)
+    rejected_by  User?               @relation(fields: [rejected_by_user_id], references: [id], onDelete: SetNull)
+    sources      FundFindingSource[]
+
+    @@index([fund_manager_id, field, status])
+    @@map("fund_finding")
+}
+
+// A public page the research assistant actually retrieved.
+model FundSource {
+    id           String   @id
+    url          String   @unique
+    title        String?
+    // fund_website | linkedin | news | press_release | dfi_database | government_database | report | other
+    kind         String   @default("other")
+    retrieved_at DateTime
+    created_at   DateTime @default(now())
+
+    findings     FundFindingSource[]
+    people       FundPersonSource[]
+    affiliations FundAffiliationSource[]
+
+    @@map("fund_source")
+}
+
+model FundFindingSource {
+    finding_id String
+    source_id  String
+    // The passage that supports the finding (checked against the page text), at most 300 characters.
+    quote      String?
+
+    finding FundFinding @relation(fields: [finding_id], references: [id], onDelete: Cascade)
+    source  FundSource  @relation(fields: [source_id], references: [id], onDelete: Cascade)
+
+    @@id([finding_id, source_id])
+    @@map("fund_finding_source")
+}
+
+// A principal or team member at a fund, from public sources.
+model FundPerson {
+    id              String   @id
+    fund_manager_id String
+    name            String
+    name_key        String
+    title           String?
+    is_principal    Boolean  @default(false)
+    linkedin_url    String?
+    // Only an address the fund itself publishes; never guessed.
+    email           String?
+    bio_summary     String?
+    created_at      DateTime @default(now())
+    updated_at      DateTime @updatedAt
+
+    fund_manager FundManager        @relation(fields: [fund_manager_id], references: [id], onDelete: Cascade)
+    sources      FundPersonSource[]
+    affiliations FundAffiliation[]
+
+    @@unique([fund_manager_id, name_key])
+    @@map("fund_person")
+}
+
+model FundPersonSource {
+    person_id String
+    source_id String
+    quote     String?
+
+    person FundPerson @relation(fields: [person_id], references: [id], onDelete: Cascade)
+    source FundSource @relation(fields: [source_id], references: [id], onDelete: Cascade)
+
+    @@id([person_id, source_id])
+    @@map("fund_person_source")
+}
+
+// A node in the team network graph: a past employer, school, investor or other organization.
+model ResearchOrganization {
+    id              String    @id
+    name            String
+    name_key        String    @unique
+    // lender | investor | bank | dfi | government | school | company | other
+    kind            String    @default("other")
+    website_domain  String?
+    // Set when this organization has its own fund profile.
+    fund_manager_id String?   @unique
+    // When the spider decided whether this is a lender (so it isn't asked twice).
+    classified_at   DateTime?
+    created_at      DateTime  @default(now())
+
+    fund_manager FundManager?      @relation(fields: [fund_manager_id], references: [id], onDelete: SetNull)
+    affiliations FundAffiliation[]
+
+    @@map("research_organization")
+}
+
+// A person's employer, school or board seat.
+model FundAffiliation {
+    id              String   @id
+    person_id       String
+    organization_id String
+    // employment | education | board
+    relation        String   @default("employment")
+    title           String?
+    start_year      Int?
+    end_year        Int?
+    created_at      DateTime @default(now())
+
+    person       FundPerson              @relation(fields: [person_id], references: [id], onDelete: Cascade)
+    organization ResearchOrganization    @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+    sources      FundAffiliationSource[]
+
+    @@unique([person_id, organization_id, relation])
+    @@map("fund_affiliation")
+}
+
+model FundAffiliationSource {
+    affiliation_id String
+    source_id      String
+    quote          String?
+
+    affiliation FundAffiliation @relation(fields: [affiliation_id], references: [id], onDelete: Cascade)
+    source      FundSource      @relation(fields: [source_id], references: [id], onDelete: Cascade)
+
+    @@id([affiliation_id, source_id])
+    @@map("fund_affiliation_source")
+}
+
+// A Due Diligence answer. A person's answer (source manual) is never replaced by the AI.
+model FundDiligenceAnswer {
+    id                  String   @id
+    fund_manager_id     String
+    // FUND_DILIGENCE_QUESTIONS key.
+    question            String
+    answer              String
+    // manual | ai
+    source              String   @default("manual")
+    source_urls         Json     @default("[]")
+    answered_by_user_id String?
+    created_at          DateTime @default(now())
+    updated_at          DateTime @updatedAt
+
+    fund_manager FundManager @relation(fields: [fund_manager_id], references: [id], onDelete: Cascade)
+    answered_by  User?       @relation(fields: [answered_by_user_id], references: [id], onDelete: SetNull)
+
+    @@unique([fund_manager_id, question])
+    @@map("fund_diligence_answer")
+}
+
+// One piece of paid AI work for fund research: researching a fund, reading a public investment list,
+// or deciding whether spidered organizations are lenders. Its cost feeds the monthly budget.
+model FundResearchRun {
+    id               String    @id
+    // fund | public_list | classification
+    kind             String    @default("fund")
+    fund_manager_id  String?
+    // The public list read (kind public_list).
+    source_key       String?
+    // running | done | failed | skipped
+    status           String    @default("running")
+    model            String?
+    started_at       DateTime
+    finished_at      DateTime?
+    input_tokens     Int       @default(0)
+    output_tokens    Int       @default(0)
+    web_searches     Int       @default(0)
+    web_fetches      Int       @default(0)
+    cost_micro_usd   Int       @default(0)
+    findings_added   Int       @default(0)
+    findings_dropped Int       @default(0)
+    funds_discovered Int       @default(0)
+    error            String?
+
+    fund_manager FundManager?  @relation(fields: [fund_manager_id], references: [id], onDelete: Cascade)
+    findings     FundFinding[]
+
+    @@index([fund_manager_id])
+    @@index([started_at])
+    @@map("fund_research_run")
+}
+
+// One row from a DFI or government list of investments and grants.
+model PublicInvestmentRecord {
+    id                 String    @id
+    source_key         String
+    external_id        String
+    url                String?
+    recipient_name     String
+    recipient_name_key String
+    amount_cents       BigInt?
+    currency           String?
+    original_amount    Float?
+    committed_on       DateTime?
+    country            String?
+    instrument         String?
+    description        String?
+    // True when the recipient looks like a lender or fund (a spider candidate).
+    is_intermediary    Boolean   @default(false)
+    fund_manager_id    String?
+    created_at         DateTime  @default(now())
+    updated_at         DateTime  @updatedAt
+
+    fund_manager FundManager? @relation(fields: [fund_manager_id], references: [id], onDelete: SetNull)
+
+    @@unique([source_key, external_id])
+    @@index([recipient_name_key])
+    @@index([fund_manager_id])
+    @@map("public_investment_record")
+}
+
+// Sync state for one public investment list.
+model PublicInvestmentSource {
+    key            String    @id
+    // idle | running | error
+    status         String    @default("idle")
+    // Where the next sync resumes (a page URL or page number), so long lists are read over several runs.
+    cursor         String?
+    last_synced_at DateTime?
+    last_error     String?
+    updated_at     DateTime  @updatedAt
+
+    @@map("public_investment_source")
 }

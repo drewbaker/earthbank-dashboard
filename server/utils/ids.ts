@@ -25,6 +25,15 @@ export const ID_PREFIXES = {
     plannedExpense: 'pex',
     shareLink: 'shl',
     signInLink: 'sil',
+    fundManager: 'fmg',
+    fundFinding: 'ffd',
+    fundSource: 'fsr',
+    fundPerson: 'fpr',
+    researchOrganization: 'org',
+    fundAffiliation: 'faf',
+    fundDiligenceAnswer: 'fdd',
+    fundResearchRun: 'frr',
+    publicInvestmentRecord: 'pir',
 } as const
 
 export type IdKind = keyof typeof ID_PREFIXES

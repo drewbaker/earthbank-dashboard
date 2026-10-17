@@ -8,7 +8,7 @@ Names used throughout: **Earth Bank Dashboard** (display name), `earthbank_dashb
 
 ## 0. The product
 
-- **Problem**: Earth Bank's leaders run fundraising from a Google Sheet ("Earth Bank - Fundraising, Fund Manager, and Contacts"). Its Master Pipeline tab tracks about 60 funders with tier, status, $ amounts, last contact and free-text "NEXT:" notes. Nobody has one view of cash runway against when pipeline money will land, or of who owes what by when. Statuses go stale between email threads. The dashboard keeps the whole team focused on the funding goals and agreed on what has to happen next.
+- **Problem**: Earth Bank's leaders run fundraising from a Google Sheet ("Earth Bank - Fundraising, Fund Manager, and Contacts"). Its Master Pipeline tab tracks about 60 funders with tier, status, $ amounts, last contact and free-text "NEXT:" notes. Nobody has one view of cash runway against when pipeline money will land, or of who owes what by when. Statuses go stale between email threads. The dashboard keeps the whole team focused on the funding goals and agreed on what has to happen next. Separately, Earth Bank is choosing **fund managers to partner with** (lenders it will seed); that research lived in an Airtable base and its app.theearthbank.org board. The **Funds** page replaces it: an AI research assistant builds sourced profiles of lenders from public information so the team can rank them, and people (later, hired fund scouts) add due diligence.
 - **Users and roles**: Earth Bank leadership, all `admin`. The first users are Drew, Leslie and Steve. **Staff sign in with Google, limited to `@theearthbank.org` Workspace accounts**; an account is created the first time they sign in. (`resolvefund.org` is an alias in the same Workspace; Google always returns the primary `@theearthbank.org` address.) **People outside Earth Bank are invited as guests** (Settings → Team) and sign in with one-time links emailed to them; they have the same access as everyone, but can't connect Gmail or Drive. Everything requires sign-in. Keep a `role` column so viewer/editor roles can be added later.
 - **Funding goals**: every opportunity is tagged with one goal type.
     - `design_grant`: short-term grants to design the Earth Bank structure.
@@ -38,6 +38,15 @@ Names used throughout: **Earth Bank Dashboard** (display name), `earthbank_dashb
 | Knowledge source | `ksr` | A connected Google Drive folder or single file of Earth Bank documents (encrypted refresh token) |
 | Share link | `shl` | A secret, password-protected link that shows funders a read-only pipeline summary |
 | Knowledge document | `kdc` | One file from a knowledge folder with its extracted text; pinned or excluded for AI drafting |
+| Fund manager | `fmg` | A lender Earth Bank might partner with (Funds page): team fields (stage, fit tags, owner, notes) plus current research values for sorting |
+| Fund finding | `ffd` | One research fact the AI found about a fund (AUM, a deal, an LP, a news item…), with confidence; superseded and rejected ones kept |
+| Fund source | `fsr` | A public page the research assistant actually read; linked to findings, people and affiliations with the supporting quote |
+| Fund person | `fpr` | A principal or team member at a fund |
+| Research organization | `org` | A node in the team network: a past employer, school or other organization |
+| Fund affiliation | `faf` | A person's employer, school or board seat |
+| Fund diligence answer | `fdd` | An answer to a due diligence question (default rate, FX risk…), from a person or, from a published source, the AI |
+| Fund research run | `frr` | One paid piece of research AI work (a fund, a public list, a spider classification) and its cost |
+| Public investment record | `pir` | A row from a DFI or government list of investments and grants |
 | Change event | `chg` | Every change to a funder or opportunity field, with source (manual, import, AI), evidence and reason |
 | Audit log | `aud` | |
 
@@ -49,6 +58,7 @@ Names used throughout: **Earth Bank Dashboard** (display name), `earthbank_dashb
     5. Model runway scenarios: slip a funding date, change an amount, add a hire or a one-off cost, and see when OpEx runs out.
     6. Review AI-proposed updates from email, with evidence and reasoning, then accept, revert or override them.
     7. See which funders are waiting on a reply, and have the AI draft it (from the thread, the pipeline and Earth Bank's Drive documents) into the sender's Gmail drafts for review.
+    8. Research fund managers: browse, sort and filter lenders (AUM, fund size, recent close, check size, working-capital loans ≥ $500K, completeness), read each one's sourced research and team network, track down due diligence gaps, and move them through stages (New additions → Sourced → In diligence → Shortlisted / Passed).
 - **Public surfaces**: none, apart from `/healthz`, the Google OAuth callback, the inbound-email webhook (signature-verified), and funder share pages (`/share/{secret}`, password-protected; see §10 Sharing).
 - **Background work**:
     - Bookeeping.ai sync (hourly): accounts, balances, transactions.
@@ -56,6 +66,7 @@ Names used throughout: **Earth Bank Dashboard** (display name), `earthbank_dashb
     - AI email classification (Anthropic).
     - Drive knowledge sync (nightly, and on demand).
     - Inbound forwarded-email processing.
+    - Fund research per fund (Sidequest), spidering to new lenders; weekly reads of public DFI and government investment lists.
     - Notification emails (task assigned, comment written).
     - Nightly backups and hourly cleanup.
 - **Decisions locked with the user**:
@@ -70,9 +81,15 @@ Names used throughout: **Earth Bank Dashboard** (display name), `earthbank_dashb
     - The forecast shows two lines: committed money only, and pipeline weighted by an editable probability per stage.
     - AI runs on the Anthropic API.
     - The color scheme matches the Earth Bank loans app (`loans.theearthbank.org`).
+    - Fund research uses public sources only, keeps a link (and the quoted passage) for every fact, and records nothing the app can't verify against a page it fetched or that falls below the confidence floor. No made-up data.
+    - Each fund profile keeps **Research** (AI) and **Due Diligence** (people) apart; the AI never overwrites a person's answer.
+    - The spider stops at the fund limit (100 to start, at most 1,000) or the monthly research budget; research runs on Claude Sonnet 5.5 (`RESEARCH_AI_MODEL`).
+    - A "fund" is any lender to SMEs or projects: debt and impact funds, CDFIs, mission banks, fintech lenders. Equity-only VCs, big commercial banks, DFIs themselves, schools and companies are network nodes only.
+    - The Airtable base is replaced, not synced: nothing is imported from or written to Airtable.
 - **Out of scope for v1**:
     - Public API, API keys, MCP, marketing site, multi-tenancy.
-    - The spreadsheet's Fund Manager Pipeline, Bank & Credit Partners, NYCW Invitees and Fund Scouts tabs (`funder.kind` allows them later).
+    - The spreadsheet's Fund Manager Pipeline, Bank & Credit Partners, NYCW Invitees and Fund Scouts tabs (`funder.kind` allows them later; fund managers are researched on the Funds page instead).
+    - The Airtable Strategy Board (fund theses) and anything written back to Airtable.
     - Writing back to Bookeeping.ai; sending email from Gmail.
     - Detecting cold inbound from organizations nobody has added or forwarded (that would mean reading the whole inbox).
 
@@ -115,6 +132,7 @@ Names used throughout: **Earth Bank Dashboard** (display name), `earthbank_dashb
 | Icons | Lucide via `@iconify-json/lucide` | `i-lucide-*` |
 | Fonts | `@nuxt/fonts` (bundled with Nuxt UI), self-hosted | Configure in `nuxt.config.ts` → `fonts.families` |
 | Charts | `nuxt-charts` 3.x | Follows Nuxt UI colors and dark mode; `referenceLines` mark thresholds (the runway's $0 line) |
+| Network graph | `d3-force` | Lays out a fund's team network once, drawn as plain SVG |
 | Composables | `@vueuse/core`, `@vueuse/integrations` (`useSortable` + `sortablejs` for drag-to-reorder) | |
 | Database | SQLite (WAL, 5s busy timeout, `foreign_keys = ON`) | `better-sqlite3` driver |
 | ORM | Prisma + `@prisma/adapter-better-sqlite3`, exact-pinned together | `prisma.config.ts`, ESM client generated into `server/generated/prisma` |
@@ -240,6 +258,8 @@ services:
             sync: false
           - key: AI_MODEL
             value: claude-opus-5-5
+          - key: RESEARCH_AI_MODEL
+            value: claude-sonnet-5-5
           - key: EMAIL_FROM
             value: Earth Bank Dashboard <noreply@mail.theearthbank.org>
           - key: RESEND_API_KEY
@@ -740,6 +760,10 @@ Declared in `nitro.scheduledTasks` (cron, UTC; comment any timezone math). Each 
 | `mail-sync` | every 15 min | Enqueue one `SyncMailboxJob` per connected mailbox |
 | `knowledge-sync` | nightly 04:30 | Enqueue one `SyncKnowledgeJob` per connected Drive folder |
 | `task-digest` | weekdays 13:00 UTC (morning US time) | Optional: email each user their tasks due in the next 7 days |
+| `fund-research-resume` | hourly :40 | Re-queue fund research lost in a restart or paused by the budget (also runs at startup, after seeding) |
+| `public-investments-sync` | Sundays 05:00 UTC | Enqueue one `SyncPublicInvestmentsJob` per public DFI/government list |
+
+Fund research has two queues: `research` (seeds, funds the team added, "Research again") runs ahead of `research-spider` (spidered funds and public lists); each has concurrency 1.
 
 ---
 
@@ -811,7 +835,7 @@ Static rules go in `routeRules`. Everything except hashed assets is private, so 
 ```
 
 - Dark mode is supported from day one, using the light/dark tokens above.
-- Dashboard layout uses Nuxt UI's dashboard components (`UDashboardGroup`, `UDashboardSidebar`, `UDashboardPanel`, `UDashboardNavbar`). The sidebar nav is defined in one constant (`app/utils/navigation.ts`), so adding a page later means adding a route and one nav entry: Overview, Pipeline, Forecast, Milestones & Tasks, Activity, Settings.
+- Dashboard layout uses Nuxt UI's dashboard components (`UDashboardGroup`, `UDashboardSidebar`, `UDashboardPanel`, `UDashboardNavbar`). The sidebar nav is defined in one constant (`app/utils/navigation.ts`), so adding a page later means adding a route and one nav entry: Overview, Pipeline, Funds, Forecast, Milestones & Tasks, Activity, Settings.
 - **Dates follow the viewer's time zone.** The browser stores its zone in the `earthbank_dashboard_tz` cookie (`app/plugins/time-zone.ts`), so server-rendered pages and the server's "today" (`requestToday`) use it; `formatDate` shows moments in that zone. Calendar dates (deadlines, expected dates) are the same day everywhere. Work with no browser (emails, digests) uses `APP_TIME_ZONE`.
 - **Last contact** (`shared/utils/contact-staleness.ts`, `PipelineLastContactDate`): shown on the pipeline's Opportunities and Funders tables, the opportunity form and the funder page. For asks still in play it turns yellow after 5 days without contact and red after 10; received and declined asks (and dead funders) aren't flagged.
 - **Tables**: every `UTable` passes its columns through `sortableColumns` (`app/utils/table-sorting.ts`), so clicking a header sorts by it. Columns whose cell isn't a plain value give an `accessorFn` returning the sort value (stages and relationships in pipeline order); `enableSorting: false` opts out.
@@ -909,6 +933,20 @@ Keeps funder and opportunity status current from email, without the AI ever seei
 - **Reply needed**: a funder whose latest relevant email is from them (not an Earth Bank domain) has `awaiting_reply_since` set, shown on the pipeline and funder page.
 - **Drafting** (`server/utils/mail/draft-reply.ts`): `POST /v1/funders/{id}/reply-draft` finds the latest thread with the funder in the author's own Gmail (same funder search, last 12 months), reads up to 10 messages live, and sends them with the pipeline record, the author's guidance (default: the opportunity's next step) and the selected Drive documents to the AI (`DRAFT_REPLY_INSTRUCTIONS`, effort medium). Thread text is labelled as data, not instructions. Recipients (reply-all minus the author, their aliases and forwarding addresses) and the subject are computed in code; the AI writes the body, "before sending" notes and which documents it used. Nothing from the thread or the draft is stored; the audit log records only that a draft was made. `POST /v1/mailbox/drafts` saves the edited email to Gmail drafts in the thread (`In-Reply-To`/`References`); the person sends it from Gmail.
 
+### Fund research (Funds page)
+
+Builds sourced profiles of lenders Earth Bank might partner with, and grows the list by spidering.
+
+- **Two layers per fund**: **Research** is `fund_finding` rows (one per fact; list fields like deals, LPs, news, fund raises have one row per item), each linked to `fund_source` pages with the supporting quote, plus `fund_person` / `fund_affiliation`. **Due Diligence** is `fund_diligence_answer` rows for `FUND_DILIGENCE_QUESTIONS` (default rate, loans per year, FX risk, technology, time to close); unanswered questions are the data gaps. The team's own fields (stage, fit tags, owner, notes) live on `fund_manager`. The current research values (AUM, latest fund size, last close, check size, working-capital flags, HQ, sectors, loan types, focus, completeness) are recomputed onto `fund_manager` after every change (`refreshFundResearchValues`) so the list sorts and filters in SQL.
+- **Research run** (`researchFund` in `server/utils/funds/research.ts`, `ResearchFundJob`): Claude on `RESEARCH_AI_MODEL` with Anthropic's server-side web search and web fetch (the basic tool versions, so every fetched page's full text comes back for checking; PDFs are read with `unpdf`), capped per fund (searches, pages), plus client tools `record_finding`, `record_person`, `record_affiliation`, `suggest_lender` and `answer_diligence` (`FUND_RESEARCH_INSTRUCTIONS`). The prompt lists what is already known and what is missing, so reruns fill gaps.
+- **Verification in code** (`server/utils/funds/verify-finding.ts`): a finding is stored only if its confidence reaches the floor (Settings → Research, default 0.7), every cited page was fetched in this run, the quote (8–300 characters) appears in that page's text, and the value passes its zod schema (`FUND_FINDING_VALUE_SCHEMAS`) and range checks. Link-only fields (website, LinkedIn, social accounts) count when the link appeared in search results or on a fetched page; a person's email only when a fetched page shows it; a person or affiliation only when the quote names them. Tools tell the model at once when a claim won't be kept; everything is checked again when the run ends. Dropped counts are stored on the run.
+- **History and overrides**: a new value for a single-value field supersedes the old one; a value someone rejected (`POST /v1/fund-findings/{id}/reject`) is never recorded again; AI diligence answers never replace a person's.
+- **Spider** (`discoverLenders` in `spider.ts`): candidates are organizations from team work history, lenders the AI suggests, and intermediaries on public lists. Ones already on the list are skipped (name key without legal forms, or website domain); the rest go to a cheap classification call (`CLASSIFY_LENDERS_INSTRUCTIONS`); lenders become funds (`addFund`) with research queued on `research-spider`, others are marked classified and stay graph nodes. It stops when paused, at `max_funds` (100 to start, at most 1,000) or when the month's spend (sum of `fund_research_run.cost_micro_usd`, all kinds) reaches the budget (default $300). Seeds and team-added funds queue on `research`.
+- **Public investment lists** (`server/utils/funds/public-investment-sources.ts`, `SyncPublicInvestmentsJob`, weekly): adapters `html_pages` (pages read by the AI with `EXTRACT_PUBLIC_INVESTMENTS_INSTRUCTIONS`, following its next-page link on the same host), `spreadsheet_link` (the newest .xlsx/.csv linked from a landing page) and `usaspending` (USAspending.gov API, no AI). At most 15 pages per run; the cursor resumes next run. Rows are keyed by the institution's id; records whose recipient name matches a fund become `public_record` findings linked to the record (`matchPublicRecordsToFund`). A list that fails shows its error in Settings → Research without affecting the others.
+- **Network** (`GET /v1/funds/{id}/network`): the fund, its people, their organizations, and other funds whose people share those organizations; drawn with `d3-force` (`FundsNetworkGraph`).
+- **Seeds**: `ensureSeedFunds` adds AHL Ventures, Iungo Capital, Enduring Planet, Open Road Impact, Spring Bank, Clarmondial, Arq Capital and Prestamype on the first start (websites are left for the research to find).
+- All server-side fetches of URLs the app didn't hard-code go through `safeFetch` (`server/utils/safe-fetch.ts`).
+
 ### Sharing with funders
 
 - Settings → Sharing creates **share links**: `/share/{token}`, optionally with a password (without one, the 256-bit secret URL alone opens it). The token is 256 random bits, stored hashed (and encrypted so Settings can show the link again); the password is hashed with scrypt (`server/utils/passwords.ts`) for checking, and also kept encrypted so the team can see and copy it in Settings (it's meant to be sent to funders, not kept from the team). Turning a link off (`revoked_at`) stops it at once.
@@ -995,6 +1033,8 @@ BOOKEEPING_API_KEY=
 # AI (Anthropic). Without a key, email classification is skipped.
 AI_PROVIDER=anthropic
 AI_MODEL=claude-opus-5-5
+# Fund research (web search + reading many pages per fund) runs on a cheaper model.
+RESEARCH_AI_MODEL=claude-sonnet-5-5
 ANTHROPIC_API_KEY=
 
 # Email (Resend). Without a key, emails are logged to the console.

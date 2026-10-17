@@ -64,6 +64,8 @@ services:
             value: anthropic
           - key: AI_MODEL
             value: claude-opus-5-5
+          - key: RESEARCH_AI_MODEL
+            value: claude-sonnet-5-5
           - key: ANTHROPIC_API_KEY
             sync: false
           - key: EMAIL_FROM

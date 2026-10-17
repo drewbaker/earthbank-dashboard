@@ -1,0 +1,415 @@
+// Fixed vocabularies for fund research (the Funds page), shared by the API, the UI and the research jobs.
+// Colors are Nuxt UI semantic colors so badges follow the theme and dark mode.
+
+type BadgeColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+
+// The team's own stages, carried over from the Airtable "Fund Manager Research" board.
+export const FUND_STAGES = ['new_addition', 'sourced', 'in_diligence', 'shortlisted', 'passed'] as const
+export type FundStage = (typeof FUND_STAGES)[number]
+
+export const FUND_STAGE_DETAILS: Record<FundStage, { label: string; color: BadgeColor }> = {
+    new_addition: { label: 'New additions', color: 'info' },
+    sourced: { label: 'Sourced', color: 'neutral' },
+    in_diligence: { label: 'In diligence', color: 'warning' },
+    shortlisted: { label: 'Shortlisted', color: 'success' },
+    passed: { label: 'Passed', color: 'error' },
+}
+
+export const FUND_FIT_TAGS = [
+    'too_big_could_come_down_market',
+    'worked_example',
+    'fragmentation_connector',
+    'adjacent_market_specialist',
+] as const
+export type FundFitTag = (typeof FUND_FIT_TAGS)[number]
+
+export const FUND_FIT_TAG_LABELS: Record<FundFitTag, string> = {
+    too_big_could_come_down_market: 'Too big – could come down-market',
+    worked_example: 'Worked example',
+    fragmentation_connector: 'Fragmentation connector',
+    adjacent_market_specialist: 'Adjacent market specialist',
+}
+
+// How a fund got onto the list.
+export const FUND_ORIGINS = ['seed', 'manual', 'spider_person', 'spider_public_record', 'spider_suggestion'] as const
+export type FundOrigin = (typeof FUND_ORIGINS)[number]
+
+export const FUND_ORIGIN_LABELS: Record<FundOrigin, string> = {
+    seed: 'Seed list',
+    manual: 'Added by the team',
+    spider_person: "Found through a team member's past work",
+    spider_public_record: 'Found in a DFI or government list',
+    spider_suggestion: 'Found while researching another fund',
+}
+
+export const FUND_RESEARCH_STATUSES = ['queued', 'running', 'done', 'failed', 'skipped'] as const
+export type FundResearchStatus = (typeof FUND_RESEARCH_STATUSES)[number]
+
+export const FUND_RESEARCH_STATUS_DETAILS: Record<FundResearchStatus, { label: string; color: BadgeColor }> = {
+    queued: { label: 'Waiting', color: 'neutral' },
+    running: { label: 'Researching', color: 'info' },
+    done: { label: 'Researched', color: 'success' },
+    failed: { label: 'Failed', color: 'error' },
+    skipped: { label: 'Paused', color: 'warning' },
+}
+
+export const FUND_SECTORS = [
+    'agriculture',
+    'electrification',
+    'energy',
+    'clean_cooking',
+    'water',
+    'mobility',
+    'buildings',
+    'circular_economy',
+    'forestry_nature',
+    'blue_economy',
+    'climate_adaptation',
+    'financial_inclusion',
+    'sme',
+    'health',
+    'education',
+    'other',
+] as const
+export type FundSector = (typeof FUND_SECTORS)[number]
+
+export const FUND_SECTOR_LABELS: Record<FundSector, string> = {
+    agriculture: 'Agriculture',
+    electrification: 'Electrification',
+    energy: 'Energy',
+    clean_cooking: 'Clean cooking',
+    water: 'Water & sanitation',
+    mobility: 'Mobility',
+    buildings: 'Buildings & housing',
+    circular_economy: 'Circular economy',
+    forestry_nature: 'Forestry & nature',
+    blue_economy: 'Blue economy',
+    climate_adaptation: 'Climate adaptation',
+    financial_inclusion: 'Financial inclusion',
+    sme: 'SMEs (general)',
+    health: 'Health',
+    education: 'Education',
+    other: 'Other',
+}
+
+export const LOAN_TYPES = [
+    'working_capital',
+    'trade_finance',
+    'inventory',
+    'receivables',
+    'project_debt',
+    'term_debt',
+    'asset_finance',
+    'revenue_based',
+    'mezzanine',
+    'on_lending',
+    'guarantee',
+    'equity',
+    'grant',
+] as const
+export type LoanType = (typeof LOAN_TYPES)[number]
+
+export const LOAN_TYPE_LABELS: Record<LoanType, string> = {
+    working_capital: 'Working capital',
+    trade_finance: 'Trade finance',
+    inventory: 'Inventory finance',
+    receivables: 'Receivables / invoice finance',
+    project_debt: 'Project debt',
+    term_debt: 'Term debt',
+    asset_finance: 'Asset / equipment finance',
+    revenue_based: 'Revenue-based finance',
+    mezzanine: 'Mezzanine',
+    on_lending: 'Lending to lenders (on-lending)',
+    guarantee: 'Guarantees',
+    equity: 'Equity',
+    grant: 'Grants',
+}
+
+// Loan types that count as working-capital lending for the "made working-capital loans" filter.
+export const WORKING_CAPITAL_LOAN_TYPES: readonly LoanType[] = [
+    'working_capital',
+    'trade_finance',
+    'inventory',
+    'receivables',
+]
+
+// The size the team cares most about: working-capital loans of at least $500K.
+export const WORKING_CAPITAL_TARGET_CENTS = 500_000 * 100
+
+export const FUND_SOURCE_KINDS = [
+    'fund_website',
+    'linkedin',
+    'news',
+    'press_release',
+    'dfi_database',
+    'government_database',
+    'report',
+    'other',
+] as const
+export type FundSourceKind = (typeof FUND_SOURCE_KINDS)[number]
+
+export const FUND_SOURCE_KIND_LABELS: Record<FundSourceKind, string> = {
+    fund_website: 'Fund website',
+    linkedin: 'LinkedIn',
+    news: 'News',
+    press_release: 'Press release',
+    dfi_database: 'DFI database',
+    government_database: 'Government database',
+    report: 'Report',
+    other: 'Other',
+}
+
+export const RESEARCH_ORGANIZATION_KINDS = [
+    'lender',
+    'investor',
+    'bank',
+    'dfi',
+    'government',
+    'school',
+    'company',
+    'other',
+] as const
+export type ResearchOrganizationKind = (typeof RESEARCH_ORGANIZATION_KINDS)[number]
+
+export const AFFILIATION_RELATIONS = ['employment', 'education', 'board'] as const
+export type AffiliationRelation = (typeof AFFILIATION_RELATIONS)[number]
+
+export const FUND_RESEARCH_GROUPS = ['basics', 'lending', 'track_record', 'presence'] as const
+export type FundResearchGroup = (typeof FUND_RESEARCH_GROUPS)[number]
+
+export const FUND_RESEARCH_GROUP_LABELS: Record<FundResearchGroup, string> = {
+    basics: 'Basics',
+    lending: 'Size & lending',
+    track_record: 'Track record',
+    presence: 'News & presence',
+}
+
+// Everything the research assistant looks for. `isList` fields keep one finding per item (deals,
+// LPs, news…); the rest keep one current value. `isLinkOnly` fields are themselves a URL, so a
+// search result is enough evidence (LinkedIn and social pages can't be fetched). `weight` counts
+// toward research completeness; 0 means the field never counts (it's filled by cross-referencing).
+export const FUND_RESEARCH_FIELDS = [
+    'summary',
+    'website_url',
+    'linkedin_url',
+    'social_account',
+    'year_established',
+    'headquarters',
+    'geographic_focus',
+    'sectors',
+    'employee_count',
+    'aum',
+    'fund_raise',
+    'check_size',
+    'loan_types',
+    'deal',
+    'lp',
+    'public_record',
+    'impact_metric',
+    'success_story',
+    'news',
+    'conference',
+] as const
+export type FundResearchField = (typeof FUND_RESEARCH_FIELDS)[number]
+
+export const FUND_RESEARCH_FIELD_DETAILS: Record<
+    FundResearchField,
+    { label: string; group: FundResearchGroup; isList: boolean; isLinkOnly: boolean; weight: number; hint: string }
+> = {
+    summary: {
+        label: 'Thesis',
+        group: 'basics',
+        isList: false,
+        isLinkOnly: false,
+        weight: 1,
+        hint: 'What the fund does and who it lends to, in one or two sentences.',
+    },
+    website_url: {
+        label: 'Website',
+        group: 'basics',
+        isList: false,
+        isLinkOnly: true,
+        weight: 1,
+        hint: "The fund's own website.",
+    },
+    linkedin_url: {
+        label: 'LinkedIn',
+        group: 'basics',
+        isList: false,
+        isLinkOnly: true,
+        weight: 1,
+        hint: "The fund's LinkedIn company page.",
+    },
+    social_account: {
+        label: 'Other social accounts',
+        group: 'basics',
+        isList: true,
+        isLinkOnly: true,
+        weight: 0.5,
+        hint: 'X/Twitter, YouTube, Facebook, Instagram and similar.',
+    },
+    year_established: {
+        label: 'Year established',
+        group: 'basics',
+        isList: false,
+        isLinkOnly: false,
+        weight: 1,
+        hint: 'When the fund manager was founded.',
+    },
+    headquarters: {
+        label: 'Headquarters',
+        group: 'basics',
+        isList: false,
+        isLinkOnly: false,
+        weight: 1,
+        hint: 'City and country of the head office.',
+    },
+    geographic_focus: {
+        label: 'Geographic focus',
+        group: 'basics',
+        isList: false,
+        isLinkOnly: false,
+        weight: 1,
+        hint: 'Countries and regions it lends in.',
+    },
+    sectors: {
+        label: 'Sectors',
+        group: 'basics',
+        isList: false,
+        isLinkOnly: false,
+        weight: 1,
+        hint: 'Agriculture, electrification, energy and so on.',
+    },
+    employee_count: {
+        label: 'Team size',
+        group: 'basics',
+        isList: false,
+        isLinkOnly: false,
+        weight: 0.5,
+        hint: 'Number of employees.',
+    },
+    aum: {
+        label: 'AUM',
+        group: 'lending',
+        isList: false,
+        isLinkOnly: false,
+        weight: 2,
+        hint: 'Assets under management across all funds.',
+    },
+    fund_raise: {
+        label: 'Fund raises',
+        group: 'lending',
+        isList: true,
+        isLinkOnly: false,
+        weight: 2,
+        hint: 'Each fund it raised: name, size and when it closed.',
+    },
+    check_size: {
+        label: 'Check size',
+        group: 'lending',
+        isList: false,
+        isLinkOnly: false,
+        weight: 2,
+        hint: 'Preferred loan sizes: smallest to largest ticket.',
+    },
+    loan_types: {
+        label: 'Loan types',
+        group: 'lending',
+        isList: false,
+        isLinkOnly: false,
+        weight: 2,
+        hint: 'Working capital, project debt, term debt and so on.',
+    },
+    deal: {
+        label: 'Published deals',
+        group: 'track_record',
+        isList: true,
+        isLinkOnly: false,
+        weight: 2,
+        hint: 'Loans and investments it has announced.',
+    },
+    lp: {
+        label: 'LPs and funders',
+        group: 'track_record',
+        isList: true,
+        isLinkOnly: false,
+        weight: 1,
+        hint: 'Investors in its funds, from press releases and reports.',
+    },
+    public_record: {
+        label: 'DFI & government records',
+        group: 'track_record',
+        isList: true,
+        isLinkOnly: false,
+        weight: 0,
+        hint: 'Matches in public DFI and government lists of investments and grants.',
+    },
+    impact_metric: {
+        label: 'Impact metrics',
+        group: 'track_record',
+        isList: true,
+        isLinkOnly: false,
+        weight: 1,
+        hint: 'Published impact numbers (jobs, tCO2e, farmers reached…).',
+    },
+    success_story: {
+        label: 'Success stories',
+        group: 'track_record',
+        isList: true,
+        isLinkOnly: false,
+        weight: 0.5,
+        hint: 'Case studies of borrowers it has backed.',
+    },
+    news: {
+        label: 'News & press releases',
+        group: 'presence',
+        isList: true,
+        isLinkOnly: false,
+        weight: 1,
+        hint: 'Coverage and announcements.',
+    },
+    conference: {
+        label: 'Conferences',
+        group: 'presence',
+        isList: true,
+        isLinkOnly: false,
+        weight: 0.5,
+        hint: 'Events the team has spoken at or attended.',
+    },
+}
+
+// Team data lives in its own tables but still counts toward completeness.
+export const FUND_TEAM_COMPLETENESS = { principals: 2, work_history: 1 } as const
+
+// The Due Diligence questions people track down (the AI may pre-fill from public sources).
+export const FUND_DILIGENCE_QUESTIONS = [
+    'default_rate',
+    'loans_per_year',
+    'fx_risk',
+    'technology',
+    'time_to_close',
+] as const
+export type FundDiligenceQuestion = (typeof FUND_DILIGENCE_QUESTIONS)[number]
+
+export const FUND_DILIGENCE_QUESTION_DETAILS: Record<FundDiligenceQuestion, { label: string; hint: string }> = {
+    default_rate: {
+        label: 'Default rate',
+        hint: 'Historical default or write-off rate on their loans (and how they define default).',
+    },
+    loans_per_year: {
+        label: 'Loans per year',
+        hint: 'How many loans they make a year, and the portfolio size today.',
+    },
+    fx_risk: {
+        label: 'FX risk',
+        hint: 'How they handle currency risk: hard-currency loans, local currency, hedging (e.g. TCX).',
+    },
+    technology: {
+        label: 'Technology',
+        hint: 'Loan management, underwriting and monitoring systems they use.',
+    },
+    time_to_close: {
+        label: 'Time to close',
+        hint: 'How long from first contact to disbursing a loan.',
+    },
+}

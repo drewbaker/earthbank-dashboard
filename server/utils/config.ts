@@ -90,6 +90,10 @@ export const config = {
     get aiModel() {
         return env('AI_MODEL', 'claude-opus-5-5')
     },
+    /** Model for fund research (web search and reading): many pages per fund, so a cheaper model. */
+    get researchAiModel() {
+        return env('RESEARCH_AI_MODEL', 'claude-sonnet-5-5')
+    },
     /** Earth Bank's own mail domains (the Workspace domain plus aliases); never funder addresses. */
     get internalEmailDomains() {
         const domains = env('INTERNAL_EMAIL_DOMAINS', 'resolvefund.org')

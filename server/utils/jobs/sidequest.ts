@@ -12,6 +12,9 @@ const QUEUES = [
     { name: 'default', concurrency: 2 },
     { name: 'email', concurrency: 2 },
     { name: 'mail', concurrency: 1 },
+    // Fund research: seeds and funds the team added go ahead of funds the spider found.
+    { name: 'research', concurrency: 1, priority: 20 },
+    { name: 'research-spider', concurrency: 1, priority: 10 },
 ]
 
 let readiness: Promise<void> | undefined

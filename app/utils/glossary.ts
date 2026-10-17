@@ -17,6 +17,14 @@ export const GLOSSARY = {
     out_of_cash: 'Where the cash line drops below $0.',
     last_contact: `Last email or call with the funder. Yellow after ${CONTACT_STALE_AFTER_DAYS} days, red after ${CONTACT_OVERDUE_AFTER_DAYS}.`,
     global_focus: 'Asks focused on the whole world, so counted on their own.',
+    research_completeness: 'How much of the AI research profile is filled in, weighted toward size, lending and deals.',
+    diligence_completeness: 'How many of the due diligence questions have an answer, from a person or the AI.',
+    finding_confidence: "How sure the AI was. Findings below the confidence floor (Settings → Research) aren't kept.",
+    working_capital_loans:
+        'Largest known working-capital loan: from published deals, else the top of their check size.',
+    fund_spider: 'New lenders found from team work history, co-lenders and DFI lists are added and researched.',
+    research_sources:
+        'Every fact links to the page it was read on. The AI quotes it; the app checks the quote is there.',
 } as const
 
 export type GlossaryTerm = keyof typeof GLOSSARY

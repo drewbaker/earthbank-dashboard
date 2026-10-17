@@ -3,8 +3,12 @@ import { betaZodOutputFormat, betaZodTool } from '@anthropic-ai/sdk/helpers/beta
 import type { z } from 'zod'
 import { config } from '#server/utils/config.ts'
 
+/** Tokens a call used (for budgets); absent when the provider doesn't report it. */
+export type AiUsage = { inputTokens: number; outputTokens: number }
+
 export type StructuredResult<Output> =
-    { status: 'ok'; output: Output; model: string } | { status: 'refused' | 'unparseable'; output: null; model: string }
+    | { status: 'ok'; output: Output; model: string; usage?: AiUsage }
+    | { status: 'refused' | 'unparseable'; output: null; model: string; usage?: AiUsage }
 
 export type AiEffort = 'low' | 'medium' | 'high'
 
@@ -92,13 +96,20 @@ export class AnthropicProvider implements AiProvider {
             output_config: { effort, format: betaZodOutputFormat(schema) },
             messages: [{ role: 'user', content: prompt }],
         })
+        const usage = {
+            inputTokens:
+                response.usage.input_tokens +
+                (response.usage.cache_creation_input_tokens ?? 0) +
+                (response.usage.cache_read_input_tokens ?? 0),
+            outputTokens: response.usage.output_tokens,
+        }
         if (response.stop_reason === 'refusal') {
-            return { status: 'refused', output: null, model: response.model }
+            return { status: 'refused', output: null, model: response.model, usage }
         }
         if (!response.parsed_output) {
-            return { status: 'unparseable', output: null, model: response.model }
+            return { status: 'unparseable', output: null, model: response.model, usage }
         }
-        return { status: 'ok', output: response.parsed_output as z.infer<Schema>, model: response.model }
+        return { status: 'ok', output: response.parsed_output as z.infer<Schema>, model: response.model, usage }
     }
 
     /**
@@ -152,5 +163,17 @@ export class AnthropicProvider implements AiProvider {
 export function aiProvider(): AiProvider | null {
     return config.anthropicApiKey
         ? new AnthropicProvider({ apiKey: config.anthropicApiKey, model: config.aiModel })
+        : null
+}
+
+/**
+ * The AI provider on the research model (spider classification, reading public investment lists),
+ * or null when no API key is set.
+ *
+ * @returns The provider, or null.
+ */
+export function researchAiProvider(): AiProvider | null {
+    return config.anthropicApiKey
+        ? new AnthropicProvider({ apiKey: config.anthropicApiKey, model: config.researchAiModel })
         : null
 }

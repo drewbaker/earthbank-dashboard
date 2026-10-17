@@ -246,11 +246,38 @@ Status: done (requested Oct 16, 2026).
 - [x] **Settings → Profile**: upload a profile picture (Google picture otherwise, also picked up when connecting Gmail); light/dark/auto saved to the account
 - [x] Tests: `contact-staleness.test.ts`, `email-ownership.test.ts`, `avatar-format.test.ts`, `guest-sign-in-links.test.ts`
 
+## Phase 9: Funds and the research assistant
+
+Status: built on the `funds-research` branch (requested Oct 16, 2026). Replaces the Airtable "Fund Manager Research" base and the app.theearthbank.org board for fund managers; the Strategy Board (theses) is left out for now. Nothing is imported from or written to Airtable: the list starts from the 8 seed funds and grows by spidering.
+
+- [x] **Funds page** (`/funds`, sidebar after Pipeline): a sortable table (AUM, latest fund, last close, check size, working capital with ≥ $500K highlighted, loan types, research % and diligence %, stage) and the Airtable kanban (New additions, Sourced, In diligence, Shortlisted, Passed) with drag to change stage; header shows funds against the limit, the queue and this month's spend, with Pause spider and Add fund
+- [x] **Filters** kept in the URL: working capital (any / ≥ $500K), "lends $X" (check-size range covering it), AUM, fund size, closed a fund within N years, research completeness, stage, sector, loan type, region (matched by country, global funds included), search
+- [x] **Fund profile** (`/funds/{id}`): Overview, Team & network, Deals & LPs, News & impact, Due diligence, Sources. Research and the team's own fields are kept apart: every research value shows its source links (with the quote on hover), the AI's confidence and a Reject button; stage, fit tags, owner and notes sit in a separate "Team" card
+- [x] **Data model** (`…_funds_research` migration): `fund_manager` (team fields plus current research values for sorting), `fund_finding` (one sourced fact; superseded and rejected kept as history), `fund_source` + link tables with the supporting quote, `fund_person`, `research_organization` and `fund_affiliation` (the network graph), `fund_diligence_answer`, `fund_research_run` (cost per run feeds the budget), `public_investment_record` and `public_investment_source`
+- [x] **Research assistant** (`ResearchFundJob`, `research` queue ahead of `research-spider`): Claude (`RESEARCH_AI_MODEL`, default Sonnet 5.5) with Anthropic's web search and web fetch and recording tools (`record_finding`, `record_person`, `record_affiliation`, `suggest_lender`, `answer_diligence`). **Every claim is checked in code** (`verify-finding.ts`): the cited page must have been fetched in this run and contain the quoted passage, confidence must reach the floor (0.7), values are range-checked; LinkedIn links count only when they appeared in search results or on a fetched page; emails only when a fetched page shows them. Everything else is dropped and counted
+- [x] **Due diligence** questions (default rate, loans per year, FX risk, technology, time to close) shown as data gaps; the AI pre-fills one only from a published, quoted source, and never over a person's answer
+- [x] **Spider** (`spider.ts`): past employers from work history, lenders the AI names, and lenders on public lists are checked by a cheap model call ("lends to SMEs or projects?"); lenders become funds and are queued, others stay network nodes. Stops at the fund limit (**100 to start**, up to 1,000 in Settings → Research), when the monthly budget ($300 default) is spent, or when paused
+- [x] **Public investment lists** (`SyncPublicInvestmentsJob`, weekly, Settings → Research → Sync now): Norfund (Excel), BII, FMO, Proparco, DEG, Swedfund, Finnfund, IFU, IFC, IDB Invest, AfDB, ADB and US DFC (list pages read by the AI), CDFI Fund, SBA Microloan and USDA Intermediary Relending (USAspending API). Rows are cross-referenced to funds by name as `public_record` findings linked to the record
+- [x] `safeFetch` (private-address guard, manual redirects, size cap) for every server-side fetch of a URL the app didn't hard-code
+- [x] Seed funds at first start: AHL Ventures, Iungo Capital, Enduring Planet, Open Road Impact, Spring Bank, Clarmondial, Arq Capital, Prestamype; `fund-research-resume` (hourly) re-queues research lost in a deploy restart
+- [x] Tests: `fund-finding-verification.test.ts`, `fund-research-values.test.ts`, `fund-name-matching.test.ts`, `public-investment-parsing.test.ts`, `fund-research.test.ts`, `funds-api.test.ts`
+- [ ] Check each public list against the live site after deploy (several are JavaScript apps or block bots; they show the error in Settings → Research and don't affect the others)
+- [ ] First live research runs: watch Sources → "dropped" counts and the month's spend, then raise the fund limit
+
+Paid datasets that would help (not bought):
+
+- **LinkedIn work history at scale**: People Data Labs or Coresignal (LinkedIn pages can't be fetched, so work history now relies on team pages, bios and press)
+- **Fund sizes, closes and LPs**: PitchBook, Preqin or Crunchbase
+- **Blended-finance deals with DFI participation**: Convergence (full database is paid)
+- **Impact fund profiles**: ImpactBase (GIIN)
+- **DFI deal flow**: Inside DFIs or IJGlobal
+
 ---
 
 ## Later (not v1)
 
-- Import the Fund Manager Pipeline, Bank & Credit Partners and NYCW Invitees tabs (`funder.kind`, events with attendees)
+- Import the Bank & Credit Partners and NYCW Invitees tabs (`funder.kind`, events with attendees); fund managers now live on the Funds page
+- Strategy Board (fund theses) linked to candidate funds
 - CSV export of the pipeline
 - Viewer/editor roles
 - Public API keys and an MCP server for asking Claude about the pipeline

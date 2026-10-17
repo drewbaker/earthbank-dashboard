@@ -1,9 +1,11 @@
 import { BackfillFunderJob } from '#root/jobs/backfill-funder.job.ts'
 import { ProcessForwardedEmailJob } from '#root/jobs/process-forwarded-email.job.ts'
+import { ResearchFundJob } from '#root/jobs/research-fund.job.ts'
 import { SendEmailJob } from '#root/jobs/send-email.job.ts'
 import { SyncBookkeepingJob } from '#root/jobs/sync-bookkeeping.job.ts'
 import { SyncKnowledgeJob } from '#root/jobs/sync-knowledge.job.ts'
 import { SyncMailboxJob } from '#root/jobs/sync-mailbox.job.ts'
+import { SyncPublicInvestmentsJob } from '#root/jobs/sync-public-investments.job.ts'
 import { DuplicatedJobError } from 'sidequest'
 import { markMailboxSyncQueued } from '#server/database/mailboxes.ts'
 import { ensureJobQueue, Sidequest } from '#server/utils/jobs/sidequest.ts'
@@ -144,4 +146,50 @@ async function queueOnce({ enqueue }: { enqueue: () => Promise<unknown> }): Prom
         }
         throw error
     }
+}
+
+/**
+ * Queue research for one fund. Seeds and funds the team added use the `research` queue, which runs
+ * ahead of spidered funds on `research-spider`. Only one job per fund can be waiting.
+ *
+ * @param input.fundManagerId - The fund to research.
+ * @param input.isPriority - Whether it goes ahead of spidered funds.
+ * @returns `queued`, or `already_queued`.
+ */
+export async function enqueueFundResearch({
+    fundManagerId,
+    isPriority,
+}: {
+    fundManagerId: string
+    isPriority: boolean
+}) {
+    await ensureJobQueue()
+    return queueOnce({
+        enqueue: () =>
+            Sidequest.build(ResearchFundJob)
+                .queue(isPriority ? 'research' : 'research-spider')
+                .maxAttempts(3)
+                .timeout(30 * 60 * 1000)
+                .unique({ withArgs: true })
+                .enqueue({ fundManagerId }),
+    })
+}
+
+/**
+ * Queue a read of one public DFI or government investment list.
+ *
+ * @param input.sourceKey - The list's key (PUBLIC_INVESTMENT_SOURCES).
+ * @returns `queued`, or `already_queued`.
+ */
+export async function enqueuePublicInvestmentSync({ sourceKey }: { sourceKey: string }) {
+    await ensureJobQueue()
+    return queueOnce({
+        enqueue: () =>
+            Sidequest.build(SyncPublicInvestmentsJob)
+                .queue('research-spider')
+                .maxAttempts(2)
+                .timeout(60 * 60 * 1000)
+                .unique({ withArgs: true })
+                .enqueue({ sourceKey }),
+    })
 }
