@@ -876,6 +876,8 @@ model FundResearchRun {
     output_tokens    Int       @default(0)
     web_searches     Int       @default(0)
     web_fetches      Int       @default(0)
+    // Firecrawl credits (pages read with a full browser, web searches); their cost is in cost_micro_usd.
+    firecrawl_credits Int      @default(0)
     cost_micro_usd   Int       @default(0)
     findings_added   Int       @default(0)
     findings_dropped Int       @default(0)

@@ -39,3 +39,16 @@ describe('classifySourceKind', () => {
         expect(classifySourceKind({ url: 'https://techcabal.com/2025/01/x', fundDomain: null })).toBe('news')
     })
 })
+
+describe('canonicalLinkedinUrl', () => {
+    it('uses www.linkedin.com without query or trailing slash', async () => {
+        const { canonicalLinkedinUrl } = await import('#shared/funds/organization-names.ts')
+        expect(canonicalLinkedinUrl({ url: 'https://ug.linkedin.com/in/badi-arorwa-0417082a/?trk=x' })).toBe(
+            'https://www.linkedin.com/in/badi-arorwa-0417082a',
+        )
+        expect(canonicalLinkedinUrl({ url: 'https://linkedin.com/company/iungocapital' })).toBe(
+            'https://www.linkedin.com/company/iungocapital',
+        )
+        expect(canonicalLinkedinUrl({ url: 'https://example.com/in/x' })).toBe('https://example.com/in/x')
+    })
+})

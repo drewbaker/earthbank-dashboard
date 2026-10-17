@@ -22,6 +22,8 @@ import { discoverLenders } from '#server/utils/funds/spider.ts'
 import { partialDateStart } from '#server/utils/funds/verify-finding.ts'
 import { spreadsheetText } from '#server/utils/knowledge/extract.ts'
 import { safeFetch } from '#server/utils/safe-fetch.ts'
+import { webReaderCostMicroUsd } from '#server/utils/web/firecrawl.ts'
+import type { WebReader } from '#server/utils/web/types.ts'
 import { COUNTRY_CODES } from '#shared/constants/regions.ts'
 import { toUsdCents } from '#shared/funds/money.ts'
 import { organizationNameKey } from '#shared/funds/organization-names.ts'
@@ -65,16 +67,20 @@ type AdapterPage = { rows: PublicInvestmentRow[]; nextCursor: string | null; cos
  *
  * @param input.sourceKey - The list's key.
  * @param input.ai - Model for reading list pages and classifying lenders.
+ * @param input.reader - Firecrawl, which renders JavaScript and gets past bot blocking; null reads pages
+ *   with a plain request.
  * @param input.now - Current time.
  * @returns Counts, or a skip note.
  */
 export async function syncPublicInvestmentSource({
     sourceKey,
     ai,
+    reader = null,
     now,
 }: {
     sourceKey: string
     ai: AiProvider
+    reader?: WebReader | null
     now: Date
 }) {
     const source = findPublicInvestmentSource({ key: sourceKey })
@@ -94,7 +100,7 @@ export async function syncPublicInvestmentSource({
     let pages = 0
     try {
         do {
-            const page = await readAdapterPage({ source, cursor, ai })
+            const page = await readAdapterPage({ source, cursor, ai, reader })
             costMicroUsd += page.costMicroUsd
             created += await upsertPublicInvestmentRecords({ sourceKey, rows: page.rows, now })
             cursor = page.nextCursor
@@ -231,25 +237,28 @@ export function rowsFromExtraction({
  * @param input.source - The list definition.
  * @param input.cursor - Where to resume (null starts over).
  * @param input.ai - Model for AI extraction.
+ * @param input.reader - Firecrawl, or null for plain requests.
  * @returns Rows, the next cursor and what the page cost.
  */
 async function readAdapterPage({
     source,
     cursor,
     ai,
+    reader,
 }: {
     source: PublicInvestmentSourceDefinition
     cursor: string | null
     ai: AiProvider
+    reader: WebReader | null
 }): Promise<AdapterPage> {
     const { adapter } = source
     if (adapter.type === 'usaspending') {
         return readUsaspendingPage({ filters: adapter.filters, page: Number(cursor ?? 1) })
     }
     if (adapter.type === 'spreadsheet_link') {
-        return readSpreadsheetChunk({ source, pageUrl: adapter.pageUrl, chunk: Number(cursor ?? 0), ai })
+        return readSpreadsheetChunk({ source, pageUrl: adapter.pageUrl, chunk: Number(cursor ?? 0), ai, reader })
     }
-    return readHtmlPage({ source, pageUrl: cursor ?? adapter.startUrl, startUrl: adapter.startUrl, ai })
+    return readHtmlPage({ source, pageUrl: cursor ?? adapter.startUrl, startUrl: adapter.startUrl, ai, reader })
 }
 
 /**
@@ -259,6 +268,7 @@ async function readAdapterPage({
  * @param input.pageUrl - The page to read.
  * @param input.startUrl - The list's first page (next pages must stay on its host).
  * @param input.ai - Model.
+ * @param input.reader - Firecrawl, or null for plain requests.
  * @returns Rows, the next page URL and the cost.
  */
 async function readHtmlPage({
@@ -266,25 +276,66 @@ async function readHtmlPage({
     pageUrl,
     startUrl,
     ai,
+    reader,
 }: {
     source: PublicInvestmentSourceDefinition
     pageUrl: string
     startUrl: string
     ai: AiProvider
+    reader: WebReader | null
 }): Promise<AdapterPage> {
-    const response = await safeFetch({ url: pageUrl })
-    if (response.status >= 400) {
-        throw new Error(`${source.label} returned HTTP ${response.status}`)
-    }
-    const text = htmlToText({ html: response.body.toString('utf8'), baseUrl: response.url }).slice(0, MAX_PAGE_TEXT)
-    const extracted = await extractRows({ ai, label: source.label, text, pageUrl: response.url })
+    const page = await readListPage({ label: source.label, url: pageUrl, reader })
+    const extracted = await extractRows({
+        ai,
+        label: source.label,
+        text: page.text.slice(0, MAX_PAGE_TEXT),
+        pageUrl: page.url,
+    })
     const next = extracted.output?.next_page_url ?? null
     const isSameSite = next !== null && safeHost({ url: next }) === safeHost({ url: startUrl }) && next !== pageUrl
     return {
-        rows: rowsFromExtraction({ extracted: extracted.output?.rows ?? [], pageUrl: response.url }),
+        rows: rowsFromExtraction({ extracted: extracted.output?.rows ?? [], pageUrl: page.url }),
         nextCursor: isSameSite ? next : null,
-        costMicroUsd: extracted.costMicroUsd,
+        costMicroUsd: extracted.costMicroUsd + page.costMicroUsd,
     }
+}
+
+/**
+ * Get a list page's text and links: through Firecrawl when it's configured (it renders JavaScript and
+ * gets past most bot blocking), falling back to a plain request; a plain request otherwise.
+ *
+ * @param input.label - The institution, for error messages.
+ * @param input.url - The page.
+ * @param input.reader - Firecrawl, or null.
+ * @returns The page text (markdown or plain text, links kept), its links, final URL and cost.
+ * @throws Error when the page can't be read either way.
+ */
+async function readListPage({ label, url, reader }: { label: string; url: string; reader: WebReader | null }) {
+    let costMicroUsd = 0
+    let firecrawlError: string | null = null
+    if (reader) {
+        const { page, failure, credits } = await reader.readPage({ url, waitForMs: 3000 })
+        costMicroUsd += webReaderCostMicroUsd({ credits })
+        if (page && page.markdown.trim()) {
+            return { text: page.markdown, url: page.url, links: page.links, costMicroUsd }
+        }
+        firecrawlError = failure?.message ?? 'empty page'
+    }
+    const response = await safeFetch({ url })
+    if (response.status >= 400) {
+        throw new Error(
+            `${label} returned HTTP ${response.status}${firecrawlError ? ` (Firecrawl: ${firecrawlError})` : ''}`,
+        )
+    }
+    const html = response.body.toString('utf8')
+    const links = [...html.matchAll(/href=["']([^"']+)["']/gi)].flatMap(match => {
+        try {
+            return [new URL(match[1]!, response.url).toString()]
+        } catch {
+            return []
+        }
+    })
+    return { text: htmlToText({ html, baseUrl: response.url }), url: response.url, links, costMicroUsd }
 }
 
 /**
@@ -294,6 +345,7 @@ async function readHtmlPage({
  * @param input.pageUrl - The landing page with the download link.
  * @param input.chunk - Which chunk of rows (0-based).
  * @param input.ai - Model.
+ * @param input.reader - Firecrawl, or null for plain requests.
  * @returns Rows, the next chunk number and the cost.
  */
 async function readSpreadsheetChunk({
@@ -301,16 +353,16 @@ async function readSpreadsheetChunk({
     pageUrl,
     chunk,
     ai,
+    reader,
 }: {
     source: PublicInvestmentSourceDefinition
     pageUrl: string
     chunk: number
     ai: AiProvider
+    reader: WebReader | null
 }): Promise<AdapterPage> {
-    const landing = await safeFetch({ url: pageUrl })
-    const links = [...landing.body.toString('utf8').matchAll(/href=["']([^"']+\.(?:xlsx|csv)(?:\?[^"']*)?)["']/gi)].map(
-        match => new URL(match[1]!, landing.url).toString(),
-    )
+    const landing = await readListPage({ label: source.label, url: pageUrl, reader })
+    const links = landing.links.filter(link => /\.(xlsx|csv)(\?|$)/i.test(link))
     if (links.length === 0) {
         throw new Error(`No spreadsheet link found on ${pageUrl}`)
     }
@@ -324,7 +376,7 @@ async function readSpreadsheetChunk({
     const start = 3 + chunk * SPREADSHEET_ROWS_PER_CHUNK
     const body = lines.slice(start, start + SPREADSHEET_ROWS_PER_CHUNK)
     if (body.length === 0) {
-        return { rows: [], nextCursor: null, costMicroUsd: 0 }
+        return { rows: [], nextCursor: null, costMicroUsd: landing.costMicroUsd }
     }
     const extracted = await extractRows({
         ai,
@@ -335,7 +387,7 @@ async function readSpreadsheetChunk({
     return {
         rows: rowsFromExtraction({ extracted: extracted.output?.rows ?? [], pageUrl: source.url }),
         nextCursor: start + SPREADSHEET_ROWS_PER_CHUNK < lines.length ? String(chunk + 1) : null,
-        costMicroUsd: extracted.costMicroUsd,
+        costMicroUsd: extracted.costMicroUsd + landing.costMicroUsd,
     }
 }
 

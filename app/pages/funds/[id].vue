@@ -454,7 +454,9 @@ async function rejectFinding(finding: FundFinding) {
                                 >
                                     <span>{{ formatDateTime({ value: run.started_at }) }}</span>
                                     <span class="text-muted">
-                                        {{ run.web_searches }} searches · {{ run.web_fetches }} pages ·
+                                        {{ run.web_searches }} searches · {{ run.web_fetches }} pages ·{{
+                                            run.firecrawl_credits ? ` ${run.firecrawl_credits} Firecrawl credits ·` : ''
+                                        }}
                                         {{ run.findings_added }} kept · {{ run.findings_dropped }} dropped ·
                                         {{ run.funds_discovered }} new funds · ${{ run.cost_usd.toFixed(2) }}
                                     </span>

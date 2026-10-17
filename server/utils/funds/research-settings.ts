@@ -12,6 +12,7 @@ export const DEFAULT_FUND_RESEARCH_SETTINGS: FundResearchSettings = {
     monthly_budget_usd: 300,
     max_searches_per_fund: 20,
     max_fetches_per_fund: 25,
+    max_profiles_per_fund: 5,
     min_confidence: 0.7,
 }
 

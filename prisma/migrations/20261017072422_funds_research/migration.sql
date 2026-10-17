@@ -172,6 +172,7 @@ CREATE TABLE "fund_research_run" (
     "output_tokens" INTEGER NOT NULL DEFAULT 0,
     "web_searches" INTEGER NOT NULL DEFAULT 0,
     "web_fetches" INTEGER NOT NULL DEFAULT 0,
+    "firecrawl_credits" INTEGER NOT NULL DEFAULT 0,
     "cost_micro_usd" INTEGER NOT NULL DEFAULT 0,
     "findings_added" INTEGER NOT NULL DEFAULT 0,
     "findings_dropped" INTEGER NOT NULL DEFAULT 0,

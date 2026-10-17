@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { fakeAi, fakeWebResearcher } from '#root/tests/helpers/fake-ai.ts'
 import { createTestUser } from '#root/tests/helpers/factories.ts'
 import { setupTestDatabase } from '#root/tests/helpers/test-database.ts'
+import type { WebReader } from '#server/utils/web/types.ts'
 
 const queuedResearch = vi.hoisted(() => [] as { fundManagerId: string; isPriority: boolean }[])
 vi.mock('#server/utils/jobs/enqueue.ts', () => ({
@@ -335,6 +336,197 @@ describe('researchFund', () => {
         expect(prompts[0]).toContain('Still missing')
         expect(prompts[0]).toContain('AUM')
         expect(prompts[0]).toContain('Jane Mwangi, Managing Partner')
+    })
+})
+
+describe('Firecrawl', () => {
+    it('uses pages read with a full browser and LinkedIn search snippets as evidence', async () => {
+        const { addFund } = await import('#server/utils/funds/add-fund.ts')
+        const { researchFund } = await import('#server/utils/funds/research.ts')
+        const { loadFundDetail } = await import('#server/utils/funds/fund-detail.ts')
+        const fund = (await addFund({ name: 'Enduring Planet', websiteUrl: null, origin: 'seed', now })).fund
+        const readUrls: string[] = []
+        const lookedUp: string[] = []
+        const reader: WebReader = {
+            name: 'fake-firecrawl',
+            async readPage({ url }) {
+                readUrls.push(url)
+                if (url.includes('linkedin.com')) {
+                    return {
+                        page: null,
+                        failure: { code: 'enrichment_not_enabled', message: 'Enrichment is not enabled' },
+                        credits: 0,
+                    }
+                }
+                return {
+                    page: {
+                        url,
+                        title: 'Enduring Planet',
+                        markdown:
+                            'Enduring Planet provides revenue-based financing to climate small businesses. Founded in 2021.',
+                        links: [],
+                        statusCode: 200,
+                    },
+                    failure: null,
+                    credits: 1,
+                }
+            },
+            async lookupPerson({ linkedinUrl }) {
+                lookedUp.push(linkedinUrl)
+                return {
+                    profile: {
+                        provider: 'datalegion',
+                        matchConfidence: 'high',
+                        employment: [
+                            {
+                                organization: 'Enduring Planet',
+                                website: 'enduringplanet.com',
+                                title: 'CEO',
+                                startDate: '2021-01',
+                                endDate: null,
+                            },
+                            {
+                                organization: 'Calvert Impact Capital',
+                                website: 'calvertimpact.org',
+                                title: 'Vice President',
+                                startDate: '2015-06',
+                                endDate: '2021-01',
+                            },
+                            {
+                                organization: 'Bain & Company',
+                                website: 'bain.com',
+                                title: 'Consultant',
+                                startDate: '2011',
+                                endDate: '2015',
+                            },
+                        ],
+                        education: [
+                            {
+                                organization: 'Stanford University',
+                                website: 'stanford.edu',
+                                title: 'MBA',
+                                startDate: '2009',
+                                endDate: '2011',
+                            },
+                        ],
+                    },
+                    failure: null,
+                    credits: 10,
+                }
+            },
+            async search() {
+                return {
+                    hits: [
+                        {
+                            url: 'https://www.linkedin.com/in/jane-founder',
+                            title: 'Jane Founder - CEO at Enduring Planet - LinkedIn',
+                            snippet:
+                                'CEO Enduring Planet 2021 - Present. Previously Vice President at Calvert Impact Capital 2015 - 2021.',
+                        },
+                        {
+                            url: 'https://ke.linkedin.com/in/sam-partner',
+                            title: 'Partner Sam - Partner at Enduring Planet - LinkedIn',
+                            snippet: 'Partner at Enduring Planet.',
+                        },
+                    ],
+                    failure: null,
+                    credits: 2,
+                }
+            },
+        }
+        const { researcher, toolResults, prompts } = fakeWebResearcher({
+            scripts: [
+                {
+                    pages: [],
+                    calls: [
+                        { name: 'read_page', input: { url: 'https://www.enduringplanet.com/' } },
+                        { name: 'read_page', input: { url: 'https://www.linkedin.com/in/jane-founder' } },
+                        { name: 'search_web', input: { query: 'site:linkedin.com/in "Enduring Planet"', limit: null } },
+                        {
+                            name: 'record_finding',
+                            input: {
+                                finding: { field: 'year_established', value: { year: 2021 } },
+                                source_urls: ['https://www.enduringplanet.com/'],
+                                quote: 'Founded in 2021.',
+                                confidence: 0.9,
+                            },
+                        },
+                        {
+                            name: 'record_person',
+                            input: {
+                                name: 'Jane Founder',
+                                title: 'CEO',
+                                is_principal: true,
+                                linkedin_url: 'https://www.linkedin.com/in/jane-founder',
+                                email: null,
+                                bio_summary: null,
+                                source_urls: ['https://www.linkedin.com/in/jane-founder'],
+                                quote: 'Jane Founder - CEO at Enduring Planet',
+                            },
+                        },
+                        {
+                            name: 'record_person',
+                            input: {
+                                name: 'Sam Partner',
+                                title: 'Partner',
+                                is_principal: true,
+                                linkedin_url: 'https://www.linkedin.com/in/sam-partner',
+                                email: null,
+                                bio_summary: null,
+                                source_urls: ['https://www.linkedin.com/in/sam-partner'],
+                                quote: 'Partner Sam - Partner at Enduring Planet',
+                            },
+                        },
+                        {
+                            name: 'record_affiliation',
+                            input: {
+                                person_name: 'Jane Founder',
+                                organization_name: 'Calvert Impact Capital',
+                                organization_kind: 'lender',
+                                relation: 'employment',
+                                title: 'Vice President',
+                                start_year: 2015,
+                                end_year: 2021,
+                                source_urls: ['https://www.linkedin.com/in/jane-founder'],
+                                quote: 'Previously Vice President at Calvert Impact Capital 2015 - 2021',
+                            },
+                        },
+                    ],
+                },
+            ],
+        })
+        const outcome = await researchFund({ fundManagerId: fund.id, researcher, reader, classifier: null, now })
+        // The team's LinkedIn search runs before the model starts, and its results are in the prompt.
+        expect(prompts[0]).toContain('LinkedIn search results for this lender')
+        expect(prompts[0]).toContain('Calvert Impact Capital')
+        expect(outcome).toMatchObject({ status: 'done', findingsAdded: 1, findingsDropped: 0 })
+        expect(
+            toolResults.find(result => result.name === 'read_page' && result.result.includes('LinkedIn profiles')),
+        ).toBeTruthy()
+
+        const detail = await loadFundDetail({ fundManagerId: fund.id })
+        expect(detail.year_established).toBe(2021)
+        expect(detail.people[0]).toMatchObject({
+            name: 'Jane Founder',
+            linkedin_url: 'https://www.linkedin.com/in/jane-founder',
+        })
+        expect(detail.people[0]!.affiliations[0]).toMatchObject({
+            organization: { name: 'Calvert Impact Capital' },
+            start_year: 2015,
+        })
+        expect(detail.people[0]!.affiliations[0]!.sources[0]!.kind).toBe('linkedin')
+        // Sam's work history came from the LinkedIn profile lookup (Jane already had hers from the snippet).
+        expect(lookedUp).toEqual(['https://www.linkedin.com/in/sam-partner'])
+        const sam = detail.people.find(person => person.name === 'Sam Partner')!
+        expect(
+            sam.affiliations.map(affiliation => `${affiliation.relation}:${affiliation.organization.name}`).sort(),
+        ).toEqual(['education:Stanford University', 'employment:Bain & Company', 'employment:Calvert Impact Capital'])
+        expect(sam.affiliations.find(affiliation => affiliation.organization.name === 'Bain & Company')).toMatchObject({
+            start_year: 2011,
+            end_year: 2015,
+            sources: [{ url: 'https://www.linkedin.com/in/sam-partner', kind: 'linkedin' }],
+        })
+        expect(detail.runs[0]).toMatchObject({ firecrawl_credits: 17, web_fetches: 2, web_searches: 6 })
     })
 })
 

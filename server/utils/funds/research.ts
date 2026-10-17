@@ -17,18 +17,27 @@ import {
 import type { AiProvider, AiTool } from '#server/utils/ai/provider.ts'
 import { FUND_RESEARCH_INSTRUCTIONS } from '#server/utils/ai/instructions.ts'
 import type { WebResearcher } from '#server/utils/ai/web-research.ts'
+import { webReaderCostMicroUsd } from '#server/utils/web/firecrawl.ts'
+import type { WebReader, WebSearchHit } from '#server/utils/web/types.ts'
 import { matchPublicRecordsToFund } from '#server/utils/funds/public-records.ts'
+import { addProfileWorkHistory } from '#server/utils/funds/profiles.ts'
 import { refreshFundResearchValues } from '#server/utils/funds/refresh-values.ts'
 import { readFundResearchSettings, readMonthResearchSpend } from '#server/utils/funds/research-settings.ts'
 import type { LenderCandidate } from '#server/utils/funds/spider.ts'
 import { discoverLenders } from '#server/utils/funds/spider.ts'
-import type { ResearchEvidence, VerifiedSource } from '#server/utils/funds/verify-finding.ts'
+import type {
+    ResearchEvidence,
+    RetrievedPage,
+    SearchResult,
+    VerifiedSource,
+} from '#server/utils/funds/verify-finding.ts'
 import {
     buildResearchEvidence,
     findingValueKey,
     isEmailPublished,
     normalizeUrl,
     quoteMentions,
+    quoteNamesPerson,
     verifyFinding,
     verifyLink,
     verifyQuotedSources,
@@ -42,7 +51,7 @@ import {
     RESEARCH_ORGANIZATION_KINDS,
 } from '#shared/constants/funds.ts'
 import { FUND_FINDING_VALUE_SCHEMAS } from '#shared/schemas/fund-findings.ts'
-import { organizationNameKey, websiteDomain } from '#shared/funds/organization-names.ts'
+import { canonicalLinkedinUrl, organizationNameKey, websiteDomain } from '#shared/funds/organization-names.ts'
 
 // Domains whose pages are DFI or multilateral investment records.
 const DFI_DOMAINS = [
@@ -129,6 +138,8 @@ export type FundResearchOutcome =
  *
  * @param input.fundManagerId - The fund to research.
  * @param input.researcher - The web researcher (Claude with web search and fetch).
+ * @param input.reader - Firecrawl, for pages that block plain requests or need JavaScript, LinkedIn, and
+ *   extra search; null when FIRECRAWL_API_KEY isn't set.
  * @param input.classifier - Model used to decide whether spidered organizations are lenders; null skips the spider.
  * @param input.now - Current time.
  * @returns What the run did.
@@ -136,11 +147,13 @@ export type FundResearchOutcome =
 export async function researchFund({
     fundManagerId,
     researcher,
+    reader = null,
     classifier,
     now,
 }: {
     fundManagerId: string
     researcher: WebResearcher
+    reader?: WebReader | null
     classifier: AiProvider | null
     now: Date
 }): Promise<FundResearchOutcome> {
@@ -164,15 +177,38 @@ export async function researchFund({
     try {
         const proposals: Proposals = { findings: [], people: [], affiliations: [], lenders: [], diligence: [] }
         const evidence = buildResearchEvidence({ pages: [], searchResults: [] })
+        const browsing: BrowserReads = { pages: [], snippets: [], searchResults: [], credits: 0, reads: 0, searches: 0 }
+        const linkedInHits = reader ? await searchLinkedIn({ reader, fundName: fund.name, browsing, evidence }) : []
         const result = await researcher.researchWithWeb({
             instructions: FUND_RESEARCH_INSTRUCTIONS,
-            prompt: await buildResearchPrompt({ fundManagerId, name: fund.name, websiteUrl: fund.website_url, now }),
-            tools: buildResearchTools({ proposals, evidence, minConfidence: settings.min_confidence, now }),
+            prompt: await buildResearchPrompt({
+                fundManagerId,
+                name: fund.name,
+                websiteUrl: fund.website_url,
+                linkedInHits,
+                now,
+            }),
+            tools: [
+                ...buildResearchTools({ proposals, evidence, minConfidence: settings.min_confidence, now }),
+                ...(reader
+                    ? buildBrowserTools({
+                          reader,
+                          browsing,
+                          evidence,
+                          maxReads: settings.max_fetches_per_fund,
+                          maxSearches: settings.max_searches_per_fund,
+                      })
+                    : []),
+            ],
             maxSearches: settings.max_searches_per_fund,
             maxFetches: settings.max_fetches_per_fund,
             onRetrieved: ({ pages, searchResults }) => addEvidence({ evidence, pages, searchResults }),
         })
-        const finalEvidence = buildResearchEvidence({ pages: result.pages, searchResults: result.searchResults })
+        // Search snippets first, so a page read in full replaces its snippet.
+        const finalEvidence = buildResearchEvidence({
+            pages: [...browsing.snippets, ...result.pages, ...browsing.pages],
+            searchResults: [...result.searchResults, ...browsing.searchResults],
+        })
         const verified = verifyProposals({
             proposals,
             evidence: finalEvidence,
@@ -180,6 +216,13 @@ export async function researchFund({
             fundDomain: fund.website_domain,
             now,
         })
+        if (verified.droppedCount > 0) {
+            console.info(
+                '[research] dropped unverified proposals',
+                fundManagerId,
+                JSON.stringify(verified.droppedReasons),
+            )
+        }
         const saved = await saveResearchResults({
             fundManagerId,
             researchRunId: run.id,
@@ -189,13 +232,28 @@ export async function researchFund({
             diligence: verified.diligence,
             now,
         })
+        // Refresh first so a website found this run is on the fund before matching profiles to it.
+        const refreshed = await refreshFundResearchValues({ fundManagerId })
+        const profiles =
+            reader && settings.max_profiles_per_fund > 0
+                ? await addProfileWorkHistory({
+                      fundManagerId,
+                      fundNameKey: fund.name_key,
+                      fundDomain: refreshed.website_domain,
+                      reader,
+                      maxProfiles: settings.max_profiles_per_fund,
+                      now,
+                  })
+                : { organizationIds: [] as string[], credits: 0 }
+        browsing.credits += profiles.credits
+        const costMicroUsd = result.usage.costMicroUsd + webReaderCostMicroUsd({ credits: browsing.credits })
         await matchPublicRecordsToFund({ fundManagerId, nameKey: fund.name_key, researchRunId: run.id, now })
         await refreshFundResearchValues({ fundManagerId })
 
         const discovered = classifier
             ? await discoverLenders({
                   candidates: [
-                      ...saved.organizationIds.map(organizationId => ({
+                      ...[...saved.organizationIds, ...profiles.organizationIds].map(organizationId => ({
                           type: 'organization' as const,
                           organizationId,
                       })),
@@ -215,9 +273,10 @@ export async function researchFund({
                 model: result.model,
                 input_tokens: result.usage.inputTokens,
                 output_tokens: result.usage.outputTokens,
-                web_searches: result.usage.webSearches,
-                web_fetches: result.usage.webFetches,
-                cost_micro_usd: result.usage.costMicroUsd,
+                web_searches: result.usage.webSearches + browsing.searches,
+                web_fetches: result.usage.webFetches + browsing.reads,
+                firecrawl_credits: browsing.credits,
+                cost_micro_usd: costMicroUsd,
                 findings_added: saved.added,
                 findings_dropped: verified.droppedCount,
                 funds_discovered: discovered,
@@ -229,7 +288,7 @@ export async function researchFund({
             findingsAdded: saved.added,
             findingsDropped: verified.droppedCount,
             fundsDiscovered: discovered,
-            costUsd: result.usage.costMicroUsd / 1_000_000,
+            costUsd: costMicroUsd / 1_000_000,
         }
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
@@ -251,7 +310,8 @@ export async function researchFund({
  * @param input.minConfidence - Confidence floor for findings and diligence answers.
  * @param input.fundDomain - The fund's own domain (to label its pages).
  * @param input.now - Current time.
- * @returns Verified findings, people, affiliations, lender candidates, diligence answers, and how many proposals were dropped.
+ * @returns Verified findings, people, affiliations, lender candidates, diligence answers, and how many
+ *   proposals were dropped and why (e.g. `finding:quote_not_found`).
  */
 export function verifyProposals({
     proposals,
@@ -266,7 +326,10 @@ export function verifyProposals({
     fundDomain: string | null
     now: Date
 }) {
-    let droppedCount = 0
+    const droppedReasons: Record<string, number> = {}
+    const drop = (reason: string) => {
+        droppedReasons[reason] = (droppedReasons[reason] ?? 0) + 1
+    }
     const toSources = (sources: VerifiedSource[]): SourceToLink[] =>
         sources.map(source => ({ ...source, kind: classifySourceKind({ url: source.url, fundDomain }) }))
 
@@ -274,7 +337,7 @@ export function verifyProposals({
     for (const proposal of proposals.findings) {
         const checked = verifyFinding({ ...proposal, minConfidence, evidence, now })
         if (!checked.ok) {
-            droppedCount += 1
+            drop(`finding:${checked.reason}`)
             continue
         }
         const { field, value } = checked.value
@@ -290,18 +353,23 @@ export function verifyProposals({
 
     const people: PersonToSave[] = []
     for (const proposal of proposals.people) {
-        const sources = quoteMentions({ quote: proposal.quote, name: proposal.name })
-            ? verifyQuotedSources({ sourceUrls: proposal.sourceUrls, quote: proposal.quote, evidence })
-            : null
+        // The quote, or the title of the page it's quoted from (e.g. their own LinkedIn result), must name them.
+        const quoted = verifyQuotedSources({ sourceUrls: proposal.sourceUrls, quote: proposal.quote, evidence })
+        const sources =
+            quoted &&
+            (quoteNamesPerson({ quote: proposal.quote, name: proposal.name }) ||
+                quoted.some(source => quoteNamesPerson({ quote: source.title, name: proposal.name })))
+                ? quoted
+                : null
         if (!sources) {
-            droppedCount += 1
+            drop('person:quote_not_found')
             continue
         }
         const linkedinUrl =
             proposal.linkedinUrl &&
             /linkedin\.com\/in\//i.test(proposal.linkedinUrl) &&
             verifyLink({ url: proposal.linkedinUrl, sourceUrls: proposal.sourceUrls, evidence })
-                ? proposal.linkedinUrl
+                ? canonicalLinkedinUrl({ url: proposal.linkedinUrl })
                 : null
         people.push({
             name: proposal.name.trim(),
@@ -326,7 +394,7 @@ export function verifyProposals({
             : null
         const years = [proposal.startYear, proposal.endYear].filter((year): year is number => year !== null)
         if (!sources || years.some(year => year < 1950 || year > now.getUTCFullYear() + 1)) {
-            droppedCount += 1
+            drop('affiliation:quote_not_found')
             continue
         }
         affiliations.push({
@@ -348,7 +416,7 @@ export function verifyProposals({
     for (const proposal of proposals.lenders) {
         const isAbout = quoteMentions({ quote: proposal.quote, name: proposal.name })
         if (!isAbout || !verifyQuotedSources({ sourceUrls: proposal.sourceUrls, quote: proposal.quote, evidence })) {
-            droppedCount += 1
+            drop('lender:quote_not_found')
             continue
         }
         lenders.push({
@@ -366,7 +434,7 @@ export function verifyProposals({
                 ? verifyQuotedSources({ sourceUrls: proposal.sourceUrls, quote: proposal.quote, evidence })
                 : null
         if (!sources || !(FUND_DILIGENCE_QUESTIONS as readonly string[]).includes(proposal.question)) {
-            droppedCount += 1
+            drop('diligence:quote_not_found')
             continue
         }
         diligence.push({
@@ -375,7 +443,8 @@ export function verifyProposals({
             sourceUrls: sources.map(source => source.url),
         })
     }
-    return { findings, people, affiliations, lenders, diligence, droppedCount }
+    const droppedCount = Object.values(droppedReasons).reduce((sum, count) => sum + count, 0)
+    return { findings, people, affiliations, lenders, diligence, droppedCount, droppedReasons }
 }
 
 /**
@@ -415,6 +484,7 @@ export function classifySourceKind({ url, fundDomain }: { url: string; fundDomai
  * @param input.fundManagerId - The fund.
  * @param input.name - Its name.
  * @param input.websiteUrl - Its website, if known.
+ * @param input.linkedInHits - LinkedIn search results found before the run (quotable).
  * @param input.now - Current time.
  * @returns The prompt.
  */
@@ -422,11 +492,13 @@ async function buildResearchPrompt({
     fundManagerId,
     name,
     websiteUrl,
+    linkedInHits,
     now,
 }: {
     fundManagerId: string
     name: string
     websiteUrl: string | null
+    linkedInHits: WebSearchHit[]
     now: Date
 }) {
     const [findings, people] = await Promise.all([
@@ -448,6 +520,9 @@ async function buildResearchPrompt({
             : 'Every field has something; look for newer information, more deals, LPs, news and team work history.',
         known ? `Already recorded (don't record these again unless you find something newer):\n${known}` : '',
         team ? `People already recorded:\n${team}` : 'No people recorded yet: find the principals and team.',
+        linkedInHits.length > 0
+            ? `LinkedIn search results for this lender (the snippets are quotable sources: cite the result URL). Record each person who works there now (record_person), then record_affiliation for every past employer and school their snippet names, quoting that part (e.g. \"Investment Analyst. AAIC Investment. Jan 2021 - Aug 2023\"). Use search_web or read_page to find more work history for principals:\n${formatSearchHits({ hits: linkedInHits })}`
+            : '',
     ]
         .filter(Boolean)
         .join('\n\n')
@@ -538,10 +613,16 @@ function buildResearchTools({
                     sourceUrls: input.source_urls,
                     quote: input.quote,
                 })
+                const quoted = verifyQuotedSources({ sourceUrls: input.source_urls, quote: input.quote, evidence })
                 const isQuoted =
-                    quoteMentions({ quote: input.quote, name: input.name }) &&
-                    verifyQuotedSources({ sourceUrls: input.source_urls, quote: input.quote, evidence }) !== null
-                return isQuoted ? recorded : notKept('the quote must name the person and appear on a fetched page')
+                    quoted !== null &&
+                    (quoteNamesPerson({ quote: input.quote, name: input.name }) ||
+                        quoted.some(source => quoteNamesPerson({ quote: source.title, name: input.name })))
+                return isQuoted
+                    ? recorded
+                    : notKept(
+                          'the quote must appear on a page you read, and it or that page’s title must name the person',
+                      )
             },
         },
         {
@@ -648,6 +729,182 @@ function buildResearchTools({
             },
         },
     ]
+}
+
+/** What the run read through Firecrawl: full pages, search snippets, and the credits it used. */
+type BrowserReads = {
+    pages: RetrievedPage[]
+    snippets: RetrievedPage[]
+    searchResults: SearchResult[]
+    credits: number
+    reads: number
+    searches: number
+}
+
+// Most page text handed back to the model per read; the whole page is still kept for checking quotes.
+const MAX_PAGE_TEXT_FOR_MODEL = 30_000
+
+/**
+ * Tools that use Firecrawl: read a page with a full browser (blocked sites, JavaScript sites, LinkedIn),
+ * and search the web. Pages read and search snippets count as evidence like web_fetch pages, so
+ * findings quoted from them pass verification. A snippet is the search engine's own text for a result
+ * (for LinkedIn, often the person's title, employer and dates), so quoting it is quoting a real source.
+ *
+ * @param input.reader - Firecrawl.
+ * @param input.browsing - Where reads, snippets and credits are collected (mutated).
+ * @param input.evidence - The run's live evidence (mutated as pages are read).
+ * @param input.maxReads - Most pages read per run.
+ * @param input.maxSearches - Most searches per run.
+ * @returns The tools.
+ */
+export function buildBrowserTools({
+    reader,
+    browsing,
+    evidence,
+    maxReads,
+    maxSearches,
+}: {
+    reader: WebReader
+    browsing: BrowserReads
+    evidence: ResearchEvidence
+    maxReads: number
+    maxSearches: number
+}): AiTool[] {
+    return [
+        {
+            name: 'read_page',
+            description:
+                "Read a web page with a full browser. Use it when web_fetch fails, is blocked or returns little (pages built with JavaScript), for LinkedIn pages, or for any URL web_fetch won't open. Quote what you record from it word for word, citing this URL.",
+            inputSchema: z.object({ url: z.string().describe('The full URL, starting with https://') }),
+            run: async (input: { url: string }) => {
+                if (browsing.reads >= maxReads) {
+                    return 'Page limit for this fund reached. Record what you have.'
+                }
+                if (!/^https?:\/\//i.test(input.url)) {
+                    return 'Give a full URL starting with https://.'
+                }
+                browsing.reads += 1
+                const { page, failure, credits } = await reader.readPage({ url: input.url, waitForMs: 1500 })
+                browsing.credits += credits
+                if (!page) {
+                    return failure?.code === 'enrichment_not_enabled'
+                        ? "LinkedIn profiles can't be read yet. Use search_web with site:linkedin.com/in or site:linkedin.com/company and quote the result snippets instead."
+                        : `Couldn't read that page (${failure?.message ?? 'unknown error'}).`
+                }
+                const retrieved: RetrievedPage = { url: page.url, title: page.title, text: page.markdown }
+                browsing.pages.push(retrieved)
+                evidence.pages.set(normalizeUrl({ url: page.url }), retrieved)
+                evidence.pages.set(normalizeUrl({ url: input.url }), { ...retrieved, url: input.url })
+                const text = page.markdown.slice(0, MAX_PAGE_TEXT_FOR_MODEL)
+                return `Page: ${page.url}\nTitle: ${page.title ?? ''}\n\n<page_content>\n${text}\n</page_content>${
+                    page.markdown.length > text.length ? '\n(Page cut short.)' : ''
+                }`
+            },
+        },
+        {
+            name: 'search_web',
+            description:
+                'Search the web, with snippets for each result. Good for LinkedIn (e.g. `site:linkedin.com/in "Fund name"` lists the team with titles, employers and dates), press releases and news. You may record facts quoted word for word from a snippet, citing that result URL.',
+            inputSchema: z.object({
+                query: z.string(),
+                limit: z.number().int().nullable().describe('Up to 20; default 10.'),
+            }),
+            run: async (input: { query: string; limit: number | null }) => {
+                if (browsing.searches >= maxSearches) {
+                    return 'Search limit for this fund reached. Record what you have.'
+                }
+                browsing.searches += 1
+                const { hits, failure, credits } = await reader.search({ query: input.query, limit: input.limit ?? 10 })
+                browsing.credits += credits
+                if (failure) {
+                    return `Search failed (${failure.message}).`
+                }
+                addSearchHits({ hits, browsing, evidence })
+                if (hits.length === 0) {
+                    return 'No results.'
+                }
+                return formatSearchHits({ hits })
+            },
+        },
+    ]
+}
+
+/**
+ * Record Firecrawl search results: each result's URL counts as seen (for links), and its snippet
+ * counts as a quotable source unless that page was already read in full.
+ *
+ * @param input.hits - Search results.
+ * @param input.browsing - The run's Firecrawl reads (mutated).
+ * @param input.evidence - The run's live evidence (mutated).
+ * @returns Nothing.
+ */
+function addSearchHits({
+    hits,
+    browsing,
+    evidence,
+}: {
+    hits: WebSearchHit[]
+    browsing: BrowserReads
+    evidence: ResearchEvidence
+}) {
+    for (const hit of hits) {
+        const key = normalizeUrl({ url: hit.url })
+        browsing.searchResults.push({ url: hit.url, title: hit.title })
+        evidence.searchResults.set(key, { url: hit.url, title: hit.title })
+        if (hit.snippet && !evidence.pages.has(key)) {
+            const snippet: RetrievedPage = {
+                url: hit.url,
+                title: hit.title,
+                text: `${hit.title ?? ''}\n${hit.snippet}`,
+            }
+            browsing.snippets.push(snippet)
+            evidence.pages.set(key, snippet)
+        }
+    }
+}
+
+/**
+ * Search results as a numbered list for the model.
+ *
+ * @param input.hits - Search results.
+ * @returns The list.
+ */
+function formatSearchHits({ hits }: { hits: WebSearchHit[] }) {
+    return hits
+        .map((hit, index) => `${index + 1}. ${hit.title ?? hit.url}\n   ${hit.url}\n   ${hit.snippet ?? ''}`)
+        .join('\n')
+}
+
+/**
+ * Search LinkedIn for the fund's company page and team before the model starts, so every run covers
+ * the team and their work history (models tend to stop once the fund's own site is read).
+ *
+ * @param input.reader - Firecrawl.
+ * @param input.fundName - The fund's name.
+ * @param input.browsing - The run's Firecrawl reads (mutated).
+ * @param input.evidence - The run's live evidence (mutated).
+ * @returns The results, for the prompt.
+ */
+async function searchLinkedIn({
+    reader,
+    fundName,
+    browsing,
+    evidence,
+}: {
+    reader: WebReader
+    fundName: string
+    browsing: BrowserReads
+    evidence: ResearchEvidence
+}) {
+    const hits: WebSearchHit[] = []
+    for (const query of [`site:linkedin.com/in "${fundName}"`, `site:linkedin.com/company "${fundName}"`]) {
+        const result = await reader.search({ query, limit: query.includes('/in') ? 15 : 3 })
+        browsing.credits += result.credits
+        browsing.searches += 1
+        addSearchHits({ hits: result.hits, browsing, evidence })
+        hits.push(...result.hits)
+    }
+    return hits
 }
 
 /**

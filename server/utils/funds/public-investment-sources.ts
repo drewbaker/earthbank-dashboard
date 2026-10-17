@@ -1,6 +1,7 @@
 // The public DFI, multilateral and US government lists of investments and grants that fund research
 // cross-references and spiders from. Each has an adapter:
-// - html_pages: list pages read one at a time; the AI extracts the rows and the next page's link.
+// - html_pages: list pages read one at a time (through Firecrawl when FIRECRAWL_API_KEY is set, which
+//   renders JavaScript and gets past bot blocking); the AI extracts the rows and the next page's link.
 // - spreadsheet_link: a landing page that links a dated Excel/CSV download (the newest link is used).
 // - usaspending: US federal awards from the USAspending.gov API (no AI needed; every recipient is a lender).
 // Sites change; a list that stops working shows its error in Settings → Research without affecting the others.
@@ -34,8 +35,8 @@ export const PUBLIC_INVESTMENT_SOURCES: PublicInvestmentSourceDefinition[] = [
         key: 'bii',
         label: 'British International Investment',
         publisherKind: 'dfi',
-        url: 'https://www.bii.co.uk/en/our-impact/portfolio/',
-        adapter: { type: 'html_pages', startUrl: 'https://www.bii.co.uk/en/our-impact/portfolio/' },
+        url: 'https://www.bii.co.uk/en/our-impact/search-results/',
+        adapter: { type: 'html_pages', startUrl: 'https://www.bii.co.uk/en/our-impact/search-results/' },
     },
     {
         key: 'fmo',
@@ -48,17 +49,17 @@ export const PUBLIC_INVESTMENT_SOURCES: PublicInvestmentSourceDefinition[] = [
         key: 'proparco',
         label: 'Proparco',
         publisherKind: 'dfi',
-        url: 'https://www.proparco.fr/en/carte-des-projets',
-        adapter: { type: 'html_pages', startUrl: 'https://www.proparco.fr/en/carte-des-projets' },
+        url: 'https://www.proparco.fr/en/projects/list',
+        adapter: { type: 'html_pages', startUrl: 'https://www.proparco.fr/en/projects/list' },
     },
     {
         key: 'deg',
         label: 'DEG',
         publisherKind: 'dfi',
-        url: 'https://www.deginvest.de/International-financing/DEG/Unsere-Lösungen/Investitionen/',
+        url: 'https://www.deginvest.de/Unsere-Investitionen/Portfolio/index-2.html',
         adapter: {
             type: 'html_pages',
-            startUrl: 'https://www.deginvest.de/International-financing/DEG/Unsere-Lösungen/Investitionen/',
+            startUrl: 'https://www.deginvest.de/Unsere-Investitionen/Portfolio/index-2.html',
         },
     },
     {
@@ -72,15 +73,15 @@ export const PUBLIC_INVESTMENT_SOURCES: PublicInvestmentSourceDefinition[] = [
         key: 'finnfund',
         label: 'Finnfund',
         publisherKind: 'dfi',
-        url: 'https://www.finnfund.fi/en/investments/',
-        adapter: { type: 'html_pages', startUrl: 'https://www.finnfund.fi/en/investments/' },
+        url: 'https://www.finnfund.fi/en/current-investments/',
+        adapter: { type: 'html_pages', startUrl: 'https://www.finnfund.fi/en/current-investments/' },
     },
     {
         key: 'ifu',
         label: 'IFU',
         publisherKind: 'dfi',
-        url: 'https://www.ifu.dk/en/investments/',
-        adapter: { type: 'html_pages', startUrl: 'https://www.ifu.dk/en/investments/' },
+        url: 'https://www.ifu.dk/portfolio/',
+        adapter: { type: 'html_pages', startUrl: 'https://www.ifu.dk/portfolio/' },
     },
     {
         key: 'ifc',

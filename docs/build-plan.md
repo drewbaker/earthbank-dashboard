@@ -261,6 +261,9 @@ Status: built on the `funds-research` branch (requested Oct 16, 2026). Replaces 
 - [x] `safeFetch` (private-address guard, manual redirects, size cap) for every server-side fetch of a URL the app didn't hard-code
 - [x] Seed funds at first start: AHL Ventures, Iungo Capital, Enduring Planet, Open Road Impact, Spring Bank, Clarmondial, Arq Capital, Prestamype; `fund-research-resume` (hourly) re-queues research lost in a deploy restart
 - [x] Tests: `fund-finding-verification.test.ts`, `fund-research-values.test.ts`, `fund-name-matching.test.ts`, `public-investment-parsing.test.ts`, `fund-research.test.ts`, `funds-api.test.ts`
+- [x] **Firecrawl** (`server/utils/web/firecrawl.ts`, `FIRECRAWL_API_KEY`): research tools `read_page` (blocked and JavaScript pages, LinkedIn once enrichment is on) and `search_web` (LinkedIn team searches; quoted snippets count as evidence); public list pages read through Firecrawl with a plain-request fallback; requests spaced under the plan's per-minute limit; credits stored per run and priced into the budget. Fixed five list URLs that had moved (BII, Proparco, DEG, Finnfund, IFU)
+- [x] LinkedIn team search before every run (results in the prompt, snippets quotable) and principals' work history from Data Legion via Firecrawl Alexandria (high-confidence match that lists the fund only; up to 5 per fund); people matched by name in any word order; LinkedIn URLs stored in standard form
+- [ ] Add `FIRECRAWL_API_KEY` in the Render dashboard
 - [ ] Check each public list against the live site after deploy (several are JavaScript apps or block bots; they show the error in Settings → Research and don't affect the others)
 - [ ] First live research runs: watch Sources → "dropped" counts and the month's spend, then raise the fund limit
 

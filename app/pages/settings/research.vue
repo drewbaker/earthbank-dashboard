@@ -23,6 +23,7 @@ const formState = reactive<FundResearchSettings>({
     monthly_budget_usd: 300,
     max_searches_per_fund: 20,
     max_fetches_per_fund: 25,
+    max_profiles_per_fund: 5,
     min_confidence: 0.7,
 })
 watch(settings, value => value && Object.assign(formState, value), { immediate: true })
@@ -114,6 +115,13 @@ async function syncSource({ source }: { source: PublicInvestmentSource }) {
                 </UFormField>
                 <UFormField label="Pages read per fund" name="max_fetches_per_fund">
                     <UInputNumber v-model="formState.max_fetches_per_fund" :min="1" :max="100" class="w-full" />
+                </UFormField>
+                <UFormField
+                    label="LinkedIn profiles per fund"
+                    description="Work history lookups for the team (about $0.01 each through Firecrawl). 0 turns them off."
+                    name="max_profiles_per_fund"
+                >
+                    <UInputNumber v-model="formState.max_profiles_per_fund" :min="0" :max="20" class="w-full" />
                 </UFormField>
                 <UFormField
                     label="Confidence floor"

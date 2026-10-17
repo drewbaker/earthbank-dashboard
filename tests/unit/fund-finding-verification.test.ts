@@ -162,3 +162,21 @@ describe('helpers', () => {
         expect(partialDateStart({ text: 'June 2024' })).toBeNull()
     })
 })
+
+describe('LinkedIn URLs', () => {
+    it('treats country subdomains as the same profile', () => {
+        expect(normalizeUrl({ url: 'https://ug.linkedin.com/in/badi-arorwa/' })).toBe(
+            normalizeUrl({ url: 'https://www.linkedin.com/in/badi-arorwa' }),
+        )
+    })
+})
+
+describe('quoteNamesPerson', () => {
+    it('matches a name in any word order', async () => {
+        const { quoteNamesPerson } = await import('#server/utils/funds/verify-finding.ts')
+        expect(
+            quoteNamesPerson({ quote: 'Badi Arorwa - Senior Partner-Iungo Capital - LinkedIn', name: 'Arorwa Badi' }),
+        ).toBe(true)
+        expect(quoteNamesPerson({ quote: 'Badi Okello - Senior Partner', name: 'Arorwa Badi' })).toBe(false)
+    })
+})

@@ -65,7 +65,11 @@ export function normalizeUrl({ url }: { url: string }) {
     try {
         const parsed = new URL(url.trim())
         parsed.hash = ''
-        parsed.hostname = parsed.hostname.toLowerCase().replace(/^www\./, '')
+        // LinkedIn serves the same profile on country subdomains (ke.linkedin.com, ug.linkedin.com).
+        parsed.hostname = parsed.hostname
+            .toLowerCase()
+            .replace(/^www\./, '')
+            .replace(/^[a-z]{2}\.linkedin\.com$/, 'linkedin.com')
         for (const key of [...parsed.searchParams.keys()]) {
             if (TRACKING_PARAMS.test(key)) {
                 parsed.searchParams.delete(key)
@@ -248,6 +252,21 @@ export function quoteMentions({ quote, name }: { quote: string | null; name: str
     const haystack = ` ${normalizeForQuote({ text: quote ?? '' })} `
     const key = organizationNameKey({ name })
     return key.length > 0 && haystack.includes(` ${key} `)
+}
+
+/**
+ * Whether a quote names a person, in any word order ("Badi Arorwa" names "Arorwa Badi").
+ *
+ * @param input.quote - The supporting passage.
+ * @param input.name - The person's name.
+ * @returns True when every part of the name appears as a word in the quote.
+ */
+export function quoteNamesPerson({ quote, name }: { quote: string | null; name: string }) {
+    const words = new Set(normalizeForQuote({ text: quote ?? '' }).split(' '))
+    const parts = normalizeForQuote({ text: name })
+        .split(' ')
+        .filter(part => part.length > 1)
+    return parts.length > 0 && parts.every(part => words.has(part))
 }
 
 /**

@@ -46,6 +46,19 @@ export function organizationNameKey({ name }: { name: string }) {
 }
 
 /**
+ * A LinkedIn profile or company URL in its standard form (www.linkedin.com, no query or trailing
+ * slash). LinkedIn serves the same page on country subdomains (ug.linkedin.com), which data providers
+ * don't recognize.
+ *
+ * @param input.url - A LinkedIn URL.
+ * @returns The standard URL, or the input unchanged when it isn't a LinkedIn profile or company URL.
+ */
+export function canonicalLinkedinUrl({ url }: { url: string }) {
+    const match = /^https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/(in|company|school)\/([^/?#]+)/i.exec(url.trim())
+    return match ? `https://www.linkedin.com/${match[1]!.toLowerCase()}/${match[2]}` : url
+}
+
+/**
  * The bare host of a website address, used to tell organizations apart.
  *
  * @param input.url - A URL or host, with or without a scheme.

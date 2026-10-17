@@ -202,6 +202,7 @@ export function serializeFundResearchRun({ run }: { run: FundResearchRunRow }): 
         finished_at: toIsoDateTime({ date: run.finished_at }),
         web_searches: run.web_searches,
         web_fetches: run.web_fetches,
+        firecrawl_credits: run.firecrawl_credits,
         cost_usd: run.cost_micro_usd / 1_000_000,
         findings_added: run.findings_added,
         findings_dropped: run.findings_dropped,

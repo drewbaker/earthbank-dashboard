@@ -2,6 +2,7 @@ import { Job } from 'sidequest'
 import { researchAiProvider } from '#server/utils/ai/provider.ts'
 import { webResearcher } from '#server/utils/ai/web-research.ts'
 import { researchFund } from '#server/utils/funds/research.ts'
+import { webReader } from '#server/utils/web/firecrawl.ts'
 
 /**
  * Researches one fund from public sources, cross-references public investment lists, and queues
@@ -18,6 +19,12 @@ export class ResearchFundJob extends Job {
         if (!researcher) {
             return { skipped: 'ANTHROPIC_API_KEY is not set' }
         }
-        return researchFund({ fundManagerId, researcher, classifier: researchAiProvider(), now: new Date() })
+        return researchFund({
+            fundManagerId,
+            researcher,
+            reader: webReader(),
+            classifier: researchAiProvider(),
+            now: new Date(),
+        })
     }
 }

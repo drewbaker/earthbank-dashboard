@@ -31,6 +31,8 @@ export const FundResearchSettings = z.object({
     monthly_budget_usd: z.number().min(0).max(100_000),
     max_searches_per_fund: z.number().int().min(1).max(100),
     max_fetches_per_fund: z.number().int().min(1).max(100),
+    // LinkedIn profile lookups (work history) per fund through Firecrawl's data providers; 0 turns them off.
+    max_profiles_per_fund: z.number().int().min(0).max(20),
     // Findings the AI is less sure of are never recorded.
     min_confidence: z.number().min(0.5).max(1),
 })
@@ -109,6 +111,7 @@ export const FundResearchRun = z.object({
     finished_at: IsoDateTime.nullable(),
     web_searches: z.number().int(),
     web_fetches: z.number().int(),
+    firecrawl_credits: z.number().int(),
     cost_usd: z.number(),
     findings_added: z.number().int(),
     findings_dropped: z.number().int(),

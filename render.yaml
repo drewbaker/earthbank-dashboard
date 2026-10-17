@@ -66,6 +66,11 @@ services:
             value: claude-opus-5-5
           - key: RESEARCH_AI_MODEL
             value: claude-sonnet-5-5
+          # Firecrawl: blocked/JavaScript pages and LinkedIn search for fund research. Set in the dashboard.
+          - key: FIRECRAWL_API_KEY
+            sync: false
+          - key: FIRECRAWL_REQUESTS_PER_MINUTE
+            value: "5"
           - key: ANTHROPIC_API_KEY
             sync: false
           - key: EMAIL_FROM

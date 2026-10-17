@@ -90,6 +90,18 @@ export const config = {
     get aiModel() {
         return env('AI_MODEL', 'claude-opus-5-5')
     },
+    /** Firecrawl (firecrawl.dev): reads blocked and JavaScript pages and searches the web for fund research. */
+    get firecrawlApiKey() {
+        return env('FIRECRAWL_API_KEY')
+    },
+    /** What one Firecrawl credit costs in US dollars (depends on the plan), so research budgets include it. */
+    get firecrawlUsdPerCredit() {
+        return Number(env('FIRECRAWL_USD_PER_CREDIT', '0.001'))
+    },
+    /** Firecrawl requests per minute from each worker thread. The smallest plan allows 10 a minute and two research queues may run at once, so 5 each. */
+    get firecrawlRequestsPerMinute() {
+        return Number(env('FIRECRAWL_REQUESTS_PER_MINUTE', '5'))
+    },
     /** Model for fund research (web search and reading): many pages per fund, so a cheaper model. */
     get researchAiModel() {
         return env('RESEARCH_AI_MODEL', 'claude-sonnet-5-5')
