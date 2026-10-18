@@ -4,6 +4,7 @@ import type { NavigationMenuItem } from '@nuxt/ui'
 export const primaryNavigation: NavigationMenuItem[] = [
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: '/' },
     { label: 'Pipeline', icon: 'i-lucide-hand-coins', to: '/pipeline' },
+    { label: 'Funds', icon: 'i-lucide-landmark', to: '/funds' },
     { label: 'Forecast', icon: 'i-lucide-chart-line', to: '/forecast' },
     { label: 'Milestones & Tasks', icon: 'i-lucide-list-checks', to: '/milestones' },
     { label: 'Activity', icon: 'i-lucide-activity', to: '/activity' },

@@ -2,7 +2,9 @@
 // class name, so never rename a class while jobs of that name may be queued (alias the old name).
 export { BackfillFunderJob } from '#root/jobs/backfill-funder.job.ts'
 export { ProcessForwardedEmailJob } from '#root/jobs/process-forwarded-email.job.ts'
+export { ResearchFundJob } from '#root/jobs/research-fund.job.ts'
 export { SendEmailJob } from '#root/jobs/send-email.job.ts'
 export { SyncBookkeepingJob } from '#root/jobs/sync-bookkeeping.job.ts'
 export { SyncKnowledgeJob } from '#root/jobs/sync-knowledge.job.ts'
 export { SyncMailboxJob } from '#root/jobs/sync-mailbox.job.ts'
+export { SyncPublicInvestmentsJob } from '#root/jobs/sync-public-investments.job.ts'

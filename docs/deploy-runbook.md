@@ -6,7 +6,7 @@ How to stand up `dashboard.theearthbank.org` on Render, and what to set up outsi
 |---|---|---|
 | Google Cloud (Workspace) | Sign-in (required), Gmail connection, Drive knowledge folder | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
 | Resend | Task and comment alerts; forwarded-email address | `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `EMAIL_FROM`, `INBOUND_EMAIL_DOMAIN` |
-| Anthropic | Reading funder email; drafting emails to funders | `ANTHROPIC_API_KEY`, `AI_MODEL` |
+| Anthropic | Reading funder email; drafting emails to funders; fund research (web search and fetch) | `ANTHROPIC_API_KEY`, `AI_MODEL`, `RESEARCH_AI_MODEL` |
 | Bookeeping.ai | Cash, burn and runway from the bank | `BOOKEEPING_API_KEY`, `BOOKEEPING_API_BASE` |
 
 ## 1. Google OAuth client
@@ -49,6 +49,10 @@ In the Google Cloud console, use a project that belongs to the Earth Bank Worksp
 ## 5. Anthropic
 
 Create an API key in the Anthropic Console and set `ANTHROPIC_API_KEY`. `AI_MODEL` defaults to `claude-opus-5-5`. Volume is small (a few dozen funder emails a day), so cost is modest; to cut it further set `AI_MODEL=claude-haiku-5-5`, then run `npm run eval:classify-email` against real examples in `tests/fixtures/private/emails` to check quality holds.
+
+Fund research (the Funds page) uses `RESEARCH_AI_MODEL` (default `claude-sonnet-5-5`) with Anthropic's web search ($10 per 1,000 searches) and web fetch, so the organization's Console settings must allow both tools. Spend is capped in Settings → Research (default $300 a month and 100 funds); each fund's run cost is listed on its Sources tab. On the first start after deploy the 8 seed funds are added and their research is queued.
+
+**Firecrawl** (optional, recommended): set `FIRECRAWL_API_KEY` in the Render dashboard (it's `sync: false` in `render.yaml`). Fund research then reads pages that block plain requests or need JavaScript, searches LinkedIn for each fund's team, and reads the public DFI lists through Firecrawl; the calls go from the Render service straight to `api.firecrawl.dev`. Set `FIRECRAWL_REQUESTS_PER_MINUTE` to about half your plan's per-minute limit (two research queues can run at once; default 5 for the 10/minute plan) and `FIRECRAWL_USD_PER_CREDIT` to your plan's price per credit. Work history for each fund's principals comes from Data Legion through Firecrawl's Alexandria catalog (enable it, and accept its terms, at https://www.firecrawl.dev/app/alexandria and Settings → Data sources); each lookup costs about 10 credits, capped per fund in Settings → Research ("LinkedIn profiles per fund"). Data Legion doesn't cover everyone; LinkedIn search snippets fill in the rest.
 
 ## 6. Bookeeping.ai
 
