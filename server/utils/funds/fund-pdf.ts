@@ -34,7 +34,7 @@ type SourceIndex = { numberFor: (source: FundSourceLink) => number; sources: Fun
 /**
  * Lay out a fund's profile as a PDF for meeting prep: at a glance, the team's notes, research by
  * section (each fact numbered to its sources), the team, due diligence with open questions marked,
- * and the numbered sources with links.
+ * the numbered sources with links, and a last-page checklist of what to find out in the meeting.
  *
  * @param input.fund - The fund's full profile.
  * @param input.preparedOn - Today's date (YYYY-MM-DD) for the header.
@@ -61,6 +61,7 @@ export function buildFundPdf({ fund, preparedOn }: { fund: FundDetail; preparedO
         ...peopleSection({ fund, sourceIndex }),
         ...diligenceSection({ fund }),
         ...sourcesSection({ sources: sourceIndex.sources }),
+        ...questionsToAsk({ fund }),
     ]
     return {
         info: { title: `${fund.name} · Earth Bank Dashboard` },
@@ -313,6 +314,86 @@ function sourcesSection({ sources }: { sources: FundSourceLink[] }): Content[] {
             fontSize: 9,
         },
     ]
+}
+
+/**
+ * The last page: a checklist for a fund scout to work through in a meeting. Open due diligence
+ * questions come first, then the team if none was found, then research gaps, most important first.
+ *
+ * @param input.fund - The fund.
+ * @returns The page, or nothing when there's nothing left to find out.
+ */
+function questionsToAsk({ fund }: { fund: FundDetail }): Content[] {
+    const diligenceItems = fund.diligence
+        .filter(item => !item.answer)
+        .map(item => ({
+            label: FUND_DILIGENCE_QUESTION_DETAILS[item.question].label,
+            hint: FUND_DILIGENCE_QUESTION_DETAILS[item.question].hint,
+        }))
+    const foundFields = new Set(
+        fund.findings.filter(finding => finding.status === 'active').map(finding => finding.field),
+    )
+    // Weight 0 fields come from cross-referencing public lists, not from asking the fund.
+    const researchItems = FUND_RESEARCH_FIELDS.filter(
+        field => !foundFields.has(field) && FUND_RESEARCH_FIELD_DETAILS[field].weight > 0,
+    )
+        .sort((first, second) => FUND_RESEARCH_FIELD_DETAILS[second].weight - FUND_RESEARCH_FIELD_DETAILS[first].weight)
+        .map(field => ({
+            label: FUND_RESEARCH_FIELD_DETAILS[field].label,
+            hint: FUND_RESEARCH_FIELD_DETAILS[field].hint,
+        }))
+    if (!fund.people.length) {
+        researchItems.unshift({ label: 'Team', hint: 'Who the principals are, and where they worked before.' })
+    }
+    if (!diligenceItems.length && !researchItems.length) {
+        return []
+    }
+    return [
+        { text: 'Questions to ask', style: 'title', pageBreak: 'before' },
+        {
+            text: `What we still don't know about ${fund.name}. Tick each off as you find it out, and note the answer.`,
+            style: 'muted',
+            margin: [0, 0, 0, 6],
+        },
+        ...(diligenceItems.length
+            ? [sectionHeading({ text: 'Due diligence' }), ...diligenceItems.map(item => checklistItem(item))]
+            : []),
+        ...(researchItems.length
+            ? [sectionHeading({ text: 'Also missing' }), ...researchItems.map(item => checklistItem(item))]
+            : []),
+    ]
+}
+
+/**
+ * One checklist line: an empty box to tick, the question, what to ask, and room for a note.
+ *
+ * @param input.label - The question.
+ * @param input.hint - What to find out.
+ * @returns The line.
+ */
+function checklistItem({ label, hint }: { label: string; hint: string }): Content {
+    return {
+        columns: [
+            {
+                width: 18,
+                canvas: [{ type: 'rect', x: 0, y: 2, w: 10, h: 10, r: 1.5, lineWidth: 0.8, lineColor: COLORS.muted }],
+            },
+            {
+                width: '*',
+                stack: [
+                    { text: label, bold: true },
+                    { text: hint, style: 'muted' },
+                    {
+                        canvas: [
+                            { type: 'line', x1: 0, y1: 12, x2: 480, y2: 12, lineWidth: 0.5, lineColor: COLORS.rule },
+                        ],
+                    },
+                ],
+            },
+        ],
+        margin: [0, 2, 0, 4],
+        unbreakable: true,
+    }
 }
 
 /**

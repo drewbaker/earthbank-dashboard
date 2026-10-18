@@ -274,6 +274,7 @@ Status: built on the `funds-research` branch (requested Oct 16, 2026). Replaces 
 - [x] **Refresh data** button on the fund page; correcting the website or LinkedIn page retires research from the old address and refreshes; the team's own fields and diligence answers are never overwritten
 - [x] **Screening fields** from the consultants' proposals: a "Lending model" research group (lender archetype, loan terms, lending currency, direct vs on-lending, underwriting and origination partners, first-loss/guarantees, portfolio scale); diligence questions for recovery rate & NPLs and deployment capacity; computed fit with Earth Bank's $500K–$5M ticket as a column and filter, plus filters for lender type, channel and local-currency lending
 - [x] **Download PDF** of a fund for meeting prep (research with numbered sources, team, open diligence questions)
+- [x] PDF ends with a **Questions to ask** checklist: open due diligence first, then every other gap
 - [x] Fund page: At a glance above the tabs, the team's fields in a Tracking card on Due diligence, collapsible people, ⓘ source icons, zoom and pan on the network
 - [x] Funds list: filters behind a "…" button (active and recent ones stay visible), text columns clipped, sort order remembered
 - [ ] Add `FIRECRAWL_API_KEY` in the Render dashboard

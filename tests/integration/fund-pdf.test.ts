@@ -1,5 +1,5 @@
 // Covers downloading a fund as PDF: the summary, research with numbered sources, the team, open due
-// diligence questions and the sources list all make it into the file.
+// diligence questions, the sources list and the last-page meeting checklist all make it into the file.
 import { createApp, createRouter, eventHandler, toWebHandler } from 'h3'
 import { extractText, getDocumentProxy } from 'unpdf'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -102,5 +102,11 @@ describe('fund PDF', () => {
         expect(text).toContain('Léa Mwangi')
         expect(text).toContain('Default rate')
         expect(text).toContain('https://iungocapital.com/about')
+        // The last page is the meeting checklist: open diligence first, then other gaps.
+        const checklist = text.slice(text.lastIndexOf('Questions to ask'))
+        expect(checklist).toContain('Default rate')
+        expect(checklist.indexOf('Time to close')).toBeLessThan(checklist.indexOf('Also missing'))
+        expect(checklist).toContain('AUM')
+        expect(checklist).not.toContain('Year established')
     })
 })
