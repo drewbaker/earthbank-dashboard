@@ -34,6 +34,7 @@ import type {
     FundResearchRun,
     FundSourceLink,
 } from '#shared/schemas/index.ts'
+import { IdentityCandidate } from '#shared/schemas/index.ts'
 import { websiteDomain } from '#shared/funds/organization-names.ts'
 
 /**
@@ -48,6 +49,11 @@ export function serializeFund({ fund }: { fund: FundListRow }): Fund {
         name: fund.name,
         website_url: fund.website_url,
         linkedin_url: fund.linkedin_url,
+        identity_candidates: identityCandidates({
+            value: fund.identity_candidates,
+            hasWebsite: Boolean(fund.website_url),
+            hasLinkedin: Boolean(fund.linkedin_url),
+        }),
         stage: fund.stage as FundStage,
         fit_tags: stringArray({ value: fund.fit_tags }) as FundFitTag[],
         origin: fund.origin as FundOrigin,
@@ -101,6 +107,7 @@ export function serializeFundDetail({
     fund: FundListRow & {
         notes: string | null
         research_error: string | null
+        discovery_context: string | null
         discovered_from: { id: string; name: string } | null
     }
     findings: FundFindingRow[]
@@ -112,6 +119,7 @@ export function serializeFundDetail({
         ...serializeFund({ fund }),
         notes: fund.notes,
         research_error: fund.research_error,
+        discovery_context: fund.discovery_context,
         discovered_from: fund.discovered_from ? { id: fund.discovered_from.id, name: fund.discovered_from.name } : null,
         findings: findings.map(finding => serializeFundFinding({ finding })),
         people: people.map(person => serializeFundPerson({ person })),
@@ -247,4 +255,28 @@ function serializeSourceLink({ source, quote }: { source: FundSourceRow; quote: 
  */
 function stringArray({ value }: { value: unknown }) {
     return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+}
+
+/**
+ * Stored identity candidates still waiting for a person: ones that no longer parse are dropped, and so
+ * are a kind the fund already has (research may have found the website after the candidates were saved).
+ *
+ * @param input.value - The JSON column.
+ * @param input.hasWebsite - Whether the fund has a website.
+ * @param input.hasLinkedin - Whether the fund has a LinkedIn page.
+ * @returns The candidates.
+ */
+function identityCandidates({
+    value,
+    hasWebsite,
+    hasLinkedin,
+}: {
+    value: unknown
+    hasWebsite: boolean
+    hasLinkedin: boolean
+}) {
+    const parsed = IdentityCandidate.array().safeParse(value)
+    return (parsed.success ? parsed.data : []).filter(candidate =>
+        candidate.kind === 'website' ? !hasWebsite : !hasLinkedin,
+    )
 }

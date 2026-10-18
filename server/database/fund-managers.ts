@@ -43,6 +43,7 @@ export type FundListFilters = {
  * @param input.websiteUrl - Website, if known.
  * @param input.websiteDomain - Bare host of the website, if known.
  * @param input.linkedinUrl - LinkedIn company page, if known.
+ * @param input.discoveryContext - How the fund came up, or a region hint.
  * @param input.origin - How it got onto the list.
  * @param input.discoveredFromId - The fund whose research turned it up, if any.
  * @param input.now - Creation time (also when research was queued).
@@ -54,6 +55,7 @@ export function createFundManagerRow({
     websiteUrl,
     websiteDomain,
     linkedinUrl = null,
+    discoveryContext = null,
     origin,
     discoveredFromId,
     now,
@@ -63,6 +65,7 @@ export function createFundManagerRow({
     websiteUrl: string | null
     websiteDomain: string | null
     linkedinUrl?: string | null
+    discoveryContext?: string | null
     origin: FundOrigin
     discoveredFromId: string | null
     now: Date
@@ -75,6 +78,7 @@ export function createFundManagerRow({
             website_url: websiteUrl,
             website_domain: websiteDomain,
             linkedin_url: linkedinUrl,
+            discovery_context: discoveryContext,
             origin,
             discovered_from_id: discoveredFromId,
             research_status: 'queued',

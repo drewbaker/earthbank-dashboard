@@ -555,14 +555,24 @@ describe('groundwork', () => {
                 const text = pageText[url]
                 return text
                     ? {
-                          page: { url, title: 'Clarmondial', markdown: text, links: [], statusCode: 200 },
+                          page: {
+                              url,
+                              title: 'Clarmondial',
+                              markdown: text,
+                              // The home page links to its LinkedIn page, confirming the pair.
+                              links:
+                                  url === 'https://clarmondial.com/'
+                                      ? ['https://ch.linkedin.com/company/clarmondial/']
+                                      : [],
+                              statusCode: 200,
+                          },
                           failure: null,
                           credits: 1,
                       }
                     : { page: null, failure: { code: 'not_found', message: 'Not found' }, credits: 1 }
             },
             async search({ query }) {
-                if (query === '"Clarmondial"') {
+                if (query.startsWith('"Clarmondial" (impact')) {
                     return {
                         hits: [
                             {
@@ -754,6 +764,13 @@ describe('late groundwork', () => {
         await researchFund({ fundManagerId: fund.id, researcher, reader, classifier: classifier.provider, now })
         expect(mapped).toEqual(['https://commonnamebank.example/'])
         expect(prompts[0]).not.toContain('<page url=')
+        // The unsure pick was kept for a person to confirm, until research found the website itself.
+        const { findFundManager } = await import('#server/database/fund-managers.ts')
+        expect((await findFundManager({ fundManagerId: fund.id }))?.identity_candidates).toEqual([
+            expect.objectContaining({ kind: 'website', url: 'https://commonnamebank.example/' }),
+        ])
+        const { loadFundDetail } = await import('#server/utils/funds/fund-detail.ts')
+        expect((await loadFundDetail({ fundManagerId: fund.id })).identity_candidates).toEqual([])
         expect(prompts[1]).toContain('<page url="https://commonnamebank.example/team"')
     })
 })

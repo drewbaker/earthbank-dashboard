@@ -12,6 +12,8 @@ CREATE TABLE "fund_manager" (
     "owner_id" TEXT,
     "origin" TEXT NOT NULL DEFAULT 'manual',
     "discovered_from_id" TEXT,
+    "discovery_context" TEXT,
+    "identity_candidates" JSONB NOT NULL DEFAULT [],
     "research_status" TEXT NOT NULL DEFAULT 'queued',
     "research_queued_at" DATETIME,
     "researched_at" DATETIME,

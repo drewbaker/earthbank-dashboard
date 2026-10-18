@@ -13,6 +13,7 @@ import { canonicalLinkedinUrl, organizationNameKey, websiteDomain } from '#share
  * @param input.name - Display name.
  * @param input.websiteUrl - Website, if known.
  * @param input.linkedinUrl - LinkedIn company page, if known.
+ * @param input.discoveryContext - How the fund came up or a region hint, used to find the right website.
  * @param input.origin - How it got onto the list.
  * @param input.discoveredFromId - The fund whose research turned it up, if any.
  * @param input.now - Current time.
@@ -22,6 +23,7 @@ export async function addFund({
     name,
     websiteUrl,
     linkedinUrl = null,
+    discoveryContext = null,
     origin,
     discoveredFromId = null,
     now,
@@ -29,6 +31,7 @@ export async function addFund({
     name: string
     websiteUrl: string | null
     linkedinUrl?: string | null
+    discoveryContext?: string | null
     origin: FundOrigin
     discoveredFromId?: string | null
     now: Date
@@ -45,6 +48,7 @@ export async function addFund({
         websiteUrl: domain ? websiteUrl : null,
         websiteDomain: domain,
         linkedinUrl: linkedinUrl ? canonicalLinkedinUrl({ url: linkedinUrl }) : null,
+        discoveryContext: discoveryContext?.slice(0, 500) ?? null,
         origin,
         discoveredFromId,
         now,

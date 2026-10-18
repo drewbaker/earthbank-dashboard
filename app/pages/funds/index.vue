@@ -27,8 +27,8 @@ const toast = useToast()
 const route = useRoute()
 const router = useRouter()
 
-type FundsView = 'table' | 'board'
-const view = ref<FundsView>(route.query.view === 'board' ? 'board' : 'table')
+type FundsView = 'table' | 'board' | 'map'
+const view = ref<FundsView>(route.query.view === 'board' || route.query.view === 'map' ? route.query.view : 'table')
 const filters = ref<FundFilters>(fundFiltersFromQuery({ query: route.query }))
 // Typing in search shouldn't refetch on every keystroke.
 const debouncedFilters = ref<FundFilters>({ ...filters.value })
@@ -67,6 +67,7 @@ const isTogglingSpider = ref(false)
 const viewItems = [
     { label: 'Table', value: 'table', icon: 'i-lucide-table' },
     { label: 'Board', value: 'board', icon: 'i-lucide-columns-3' },
+    { label: 'Map', value: 'map', icon: 'i-lucide-map' },
 ]
 
 const UBadge = resolveComponent('UBadge')
@@ -87,11 +88,21 @@ const columns: TableColumn<Fund>[] = sortableColumns({
             header: 'Fund',
             cell: ({ row }) =>
                 h('div', { class: 'min-w-0 max-w-72' }, [
-                    h(
-                        NuxtLink,
-                        { to: `/funds/${row.original.id}`, class: 'font-medium text-highlighted hover:underline' },
-                        () => row.original.name,
-                    ),
+                    h('div', { class: 'flex items-center gap-2' }, [
+                        h(
+                            NuxtLink,
+                            { to: `/funds/${row.original.id}`, class: 'font-medium text-highlighted hover:underline' },
+                            () => row.original.name,
+                        ),
+                        // The research found several same-named sites; a person picks on the fund page.
+                        row.original.identity_candidates.length
+                            ? h(UBadge, {
+                                  label: row.original.website_url ? 'Confirm LinkedIn' : 'Needs website',
+                                  color: 'warning',
+                                  size: 'sm',
+                              })
+                            : null,
+                    ]),
                     row.original.summary
                         ? h('p', { class: 'truncate text-xs text-muted' }, row.original.summary)
                         : null,
@@ -381,7 +392,8 @@ async function openCreatedFund(fund: FundDetail) {
                         />
                     </template>
                 </UTable>
-                <FundsBoard v-else :funds="funds" @move="moveFund" />
+                <FundsBoard v-else-if="view === 'board'" :funds="funds" @move="moveFund" />
+                <FundsCoverageMap v-else :funds="funds" />
             </div>
 
             <FundsCreateModal v-model:open="isCreateOpen" @saved="openCreatedFund" />

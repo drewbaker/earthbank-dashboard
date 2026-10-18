@@ -111,6 +111,7 @@ export async function discoverLenders({
                 const { fund, isNew } = await addFund({
                     name: candidate.name,
                     websiteUrl: candidate.website,
+                    discoveryContext: candidate.context,
                     origin: candidate.origin,
                     discoveredFromId,
                     now,

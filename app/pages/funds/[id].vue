@@ -258,6 +258,12 @@ async function rejectFinding(finding: FundFinding) {
             />
             <div v-else-if="fund" class="grid gap-6 lg:grid-cols-3">
                 <div class="space-y-6 lg:col-span-2">
+                    <FundsIdentityCandidates
+                        v-if="fund.identity_candidates.length"
+                        :fund-id="fund.id"
+                        :candidates="fund.identity_candidates"
+                        @updated="updated => (fund = updated)"
+                    />
                     <!-- Overview: research fields grouped; each value shows its sources and confidence. -->
                     <template v-if="tab === 'overview'">
                         <UCard v-for="group in ['basics', 'lending', 'model'] as FundResearchGroup[]" :key="group">

@@ -8,7 +8,7 @@ import { conflict } from '#server/utils/errors.ts'
 import { loadFundDetail, requireFund } from '#server/utils/funds/fund-detail.ts'
 import { clearResearchFromOldAddresses, queueFundRefresh } from '#server/utils/funds/refresh.ts'
 import { assertActiveUser } from '#server/utils/users.ts'
-import { UpdateFundRequest } from '#shared/schemas/index.ts'
+import { IdentityCandidate, UpdateFundRequest } from '#shared/schemas/index.ts'
 import { canonicalLinkedinUrl, organizationNameKey, websiteDomain } from '#shared/funds/organization-names.ts'
 
 defineRouteMeta({
@@ -64,6 +64,12 @@ export default defineApiHandler(async event => {
             fit_tags: body.fit_tags,
             notes: body.notes,
             owner_id: body.owner_id,
+            identity_candidates: remainingIdentityCandidates({
+                stored: fund.identity_candidates,
+                hasWebsite: body.website_url !== undefined,
+                hasLinkedin: body.linkedin_url !== undefined,
+                isDismissed: body.dismiss_identity_candidates === true,
+            }),
         },
     })
     // A corrected website or LinkedIn page: retire research taken from the old one, then refresh.
@@ -92,3 +98,39 @@ export default defineApiHandler(async event => {
     })
     return loadFundDetail({ fundManagerId })
 })
+
+/**
+ * The identity candidates still waiting once this edit lands: setting the website or LinkedIn page
+ * answers that question, and "None of these" drops them all.
+ *
+ * Helper function: only this route uses it.
+ *
+ * @param input.stored - The stored candidates (JSON).
+ * @param input.hasWebsite - Whether this edit sets the website.
+ * @param input.hasLinkedin - Whether this edit sets the LinkedIn page.
+ * @param input.isDismissed - Whether the person chose "None of these".
+ * @returns The candidates to keep, or undefined to leave the column alone.
+ */
+function remainingIdentityCandidates({
+    stored,
+    hasWebsite,
+    hasLinkedin,
+    isDismissed,
+}: {
+    stored: unknown
+    hasWebsite: boolean
+    hasLinkedin: boolean
+    isDismissed: boolean
+}) {
+    if (isDismissed) {
+        return []
+    }
+    if (!hasWebsite && !hasLinkedin) {
+        return undefined
+    }
+    const parsed = IdentityCandidate.array().safeParse(stored)
+    const candidates = parsed.success ? parsed.data : []
+    return candidates.filter(
+        candidate => !(candidate.kind === 'website' && hasWebsite) && !(candidate.kind === 'linkedin' && hasLinkedin),
+    )
+}

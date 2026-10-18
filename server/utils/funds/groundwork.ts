@@ -1,9 +1,4 @@
-import { z } from 'zod'
-import { findFundManagerByDomain, updateFundManagerColumns } from '#server/database/fund-managers.ts'
 import type { FindingToSave } from '#server/database/fund-research.ts'
-import type { AiProvider } from '#server/utils/ai/provider.ts'
-import { IDENTIFY_FUND_INSTRUCTIONS } from '#server/utils/ai/instructions.ts'
-import { researchCostMicroUsd } from '#server/utils/ai/web-research.ts'
 import type { ResearchEvidence, RetrievedPage, SearchResult } from '#server/utils/funds/verify-finding.ts'
 import { findingValueKey, normalizeUrl, validateFindingValue } from '#server/utils/funds/verify-finding.ts'
 import type { CompanyRecord, WebReader, WebSearchHit } from '#server/utils/web/types.ts'
@@ -58,16 +53,6 @@ const SKIP_PAGES =
 
 // Most text of each crawled page put in the prompt; the whole page stays in the evidence.
 const MAX_CRAWLED_PAGE_TEXT = 6_000
-
-// The identity pick is used only when the model is this sure.
-const MIN_IDENTITY_CONFIDENCE = 0.8
-
-const IdentityChoice = z.object({
-    website_url: z.string().nullable(),
-    website_confidence: z.number(),
-    linkedin_url: z.string().nullable(),
-    linkedin_confidence: z.number(),
-})
 
 /** What the run read through Firecrawl: full pages, search snippets, and the credits it used. */
 export type BrowserReads = {
@@ -155,117 +140,6 @@ export async function searchLinkedIn({
         hits.push(...result.hits)
     }
     return hits
-}
-
-/**
- * Pin down a fund's own website and LinkedIn company page, from search results only.
- *
- * A cheap model call picks among results we actually saw (anything not in the results is ignored, so
- * it can't invent an address), and only when it is sure. The website is set on the fund unless
- * another fund already uses that domain.
- *
- * @param input.fundManagerId - The fund.
- * @param input.fundName - Its name.
- * @param input.websiteUrl - Its website, if already known.
- * @param input.linkedinUrl - Its LinkedIn page, if already known.
- * @param input.linkedInHits - LinkedIn search results already fetched for the fund.
- * @param input.reader - Firecrawl.
- * @param input.classifier - The model that picks; null skips this step.
- * @param input.browsing - The run's Firecrawl reads (mutated).
- * @param input.evidence - The run's live evidence (mutated).
- * @returns The website and LinkedIn page now known, and what the model call cost.
- */
-export async function establishIdentity({
-    fundManagerId,
-    fundName,
-    websiteUrl,
-    linkedinUrl,
-    linkedInHits,
-    reader,
-    classifier,
-    browsing,
-    evidence,
-}: {
-    fundManagerId: string
-    fundName: string
-    websiteUrl: string | null
-    linkedinUrl: string | null
-    linkedInHits: WebSearchHit[]
-    reader: WebReader
-    classifier: AiProvider | null
-    browsing: BrowserReads
-    evidence: ResearchEvidence
-}) {
-    if ((websiteUrl && linkedinUrl) || !classifier) {
-        return { websiteUrl, linkedinUrl, costMicroUsd: 0 }
-    }
-    const websiteHits: WebSearchHit[] = []
-    if (!websiteUrl) {
-        const result = await reader.search({ query: `"${fundName}"`, limit: 8 })
-        browsing.credits += result.credits
-        browsing.searches += 1
-        addSearchHits({ hits: result.hits, browsing, evidence })
-        websiteHits.push(...result.hits.filter(hit => !isNotFundSite({ url: hit.url })))
-    }
-    const companyHits = linkedInHits.filter(hit => /linkedin\.com\/company\//i.test(hit.url))
-    if (websiteHits.length === 0 && (linkedinUrl || companyHits.length === 0)) {
-        return { websiteUrl, linkedinUrl, costMicroUsd: 0 }
-    }
-    const choice = await classifier.completeStructured({
-        instructions: IDENTIFY_FUND_INSTRUCTIONS,
-        prompt: [
-            `Lender: ${fundName}`,
-            websiteUrl
-                ? `Website (known): ${websiteUrl}`
-                : `Website candidates:\n${formatSearchHits({ hits: websiteHits })}`,
-            linkedinUrl
-                ? `LinkedIn page (known): ${linkedinUrl}`
-                : `LinkedIn company page candidates:\n${formatSearchHits({ hits: companyHits })}`,
-        ].join('\n\n'),
-        schema: IdentityChoice,
-        effort: 'low',
-    })
-    const costMicroUsd = researchCostMicroUsd({
-        model: choice.model,
-        inputTokens: choice.usage?.inputTokens ?? 0,
-        outputTokens: choice.usage?.outputTokens ?? 0,
-        webSearches: 0,
-    })
-    if (choice.status !== 'ok') {
-        return { websiteUrl, linkedinUrl, costMicroUsd }
-    }
-    const seen = new Set([...websiteHits, ...companyHits].map(hit => normalizeUrl({ url: hit.url })))
-    const pickedWebsite =
-        !websiteUrl &&
-        choice.output.website_url &&
-        choice.output.website_confidence >= MIN_IDENTITY_CONFIDENCE &&
-        seen.has(normalizeUrl({ url: choice.output.website_url }))
-            ? homePage({ url: choice.output.website_url })
-            : null
-    const pickedLinkedin =
-        !linkedinUrl &&
-        choice.output.linkedin_url &&
-        choice.output.linkedin_confidence >= MIN_IDENTITY_CONFIDENCE &&
-        seen.has(normalizeUrl({ url: choice.output.linkedin_url }))
-            ? canonicalLinkedinUrl({ url: choice.output.linkedin_url })
-            : null
-    const domain = websiteDomain({ url: pickedWebsite })
-    const domainOwner = domain ? await findFundManagerByDomain({ websiteDomain: domain }) : null
-    const canUseWebsite = Boolean(pickedWebsite && domain && (!domainOwner || domainOwner.id === fundManagerId))
-    if (canUseWebsite || pickedLinkedin) {
-        await updateFundManagerColumns({
-            fundManagerId,
-            data: {
-                ...(canUseWebsite ? { website_url: pickedWebsite, website_domain: domain } : {}),
-                ...(pickedLinkedin ? { linkedin_url: pickedLinkedin } : {}),
-            },
-        })
-    }
-    return {
-        websiteUrl: canUseWebsite ? pickedWebsite : websiteUrl,
-        linkedinUrl: pickedLinkedin ?? linkedinUrl,
-        costMicroUsd,
-    }
 }
 
 /**
@@ -490,7 +364,7 @@ function isNotFundSite({ url }: { url: string }) {
  * @param input.url - Any page on the site.
  * @returns https://host/ .
  */
-function homePage({ url }: { url: string }) {
+export function homePage({ url }: { url: string }) {
     try {
         const parsed = new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`)
         return `${parsed.protocol}//${parsed.host}/`

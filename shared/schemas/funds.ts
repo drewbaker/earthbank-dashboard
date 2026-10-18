@@ -125,11 +125,23 @@ export type FundResearchRun = z.infer<typeof FundResearchRun>
 export const FundResearchRunList = listOf(FundResearchRun)
 export type FundResearchRunList = z.infer<typeof FundResearchRunList>
 
+// A possible website or LinkedIn page the research couldn't decide on, waiting for a person to confirm.
+export const IdentityCandidate = z.object({
+    kind: z.enum(['website', 'linkedin']),
+    url: z.string(),
+    title: z.string().nullable(),
+    snippet: z.string().nullable(),
+    // Why it's a candidate, e.g. "Listed on bcorporation.net", "Linked from springbankny.com".
+    signals: z.array(z.string()),
+})
+export type IdentityCandidate = z.infer<typeof IdentityCandidate>
+
 export const Fund = z.object({
     id: z.string(),
     name: z.string(),
     website_url: z.string().nullable(),
     linkedin_url: z.string().nullable(),
+    identity_candidates: z.array(IdentityCandidate),
     stage: z.enum(FUND_STAGES),
     fit_tags: z.array(z.enum(FUND_FIT_TAGS)),
     origin: z.enum(FUND_ORIGINS),
@@ -168,6 +180,8 @@ export type FundList = z.infer<typeof FundList>
 export const FundDetail = Fund.extend({
     notes: z.string().nullable(),
     research_error: z.string().nullable(),
+    // How the fund came up (spider context or the seed list's hint); helps tell funds with common names apart.
+    discovery_context: z.string().nullable(),
     discovered_from: z.object({ id: z.string(), name: z.string() }).nullable(),
     findings: z.array(FundFinding),
     people: z.array(FundPerson),
@@ -266,6 +280,8 @@ export const UpdateFundRequest = z
         fit_tags: z.array(z.enum(FUND_FIT_TAGS)),
         notes: z.string().max(20_000).nullable(),
         owner_id: z.string().nullable(),
+        // "None of these": drop the website and LinkedIn candidates waiting for confirmation.
+        dismiss_identity_candidates: z.boolean(),
     })
     .partial()
 export type UpdateFundRequest = z.infer<typeof UpdateFundRequest>

@@ -29,11 +29,11 @@ import {
     addSearchHits,
     companyRecordFindings,
     crawlFundWebsite,
-    establishIdentity,
     formatCrawledPages,
     formatSearchHits,
     searchLinkedIn,
 } from '#server/utils/funds/groundwork.ts'
+import { establishIdentity } from '#server/utils/funds/identity.ts'
 import { matchPublicRecordsToFund } from '#server/utils/funds/public-records.ts'
 import { addProfileWorkHistory } from '#server/utils/funds/profiles.ts'
 import { refreshFundResearchValues } from '#server/utils/funds/refresh-values.ts'
@@ -768,7 +768,15 @@ async function prepareGroundwork({
     researchRunId,
     now,
 }: {
-    fund: { id: string; name: string; website_url: string | null; linkedin_url: string | null }
+    fund: {
+        id: string
+        name: string
+        website_url: string | null
+        linkedin_url: string | null
+        discovery_context: string | null
+        notes: string | null
+        hq_country: string | null
+    }
     reader: WebReader
     classifier: AiProvider | null
     browsing: BrowserReads
@@ -782,12 +790,15 @@ async function prepareGroundwork({
         fundName: fund.name,
         websiteUrl: fund.website_url,
         linkedinUrl: fund.linkedin_url,
+        hints: identityHints({ fund }),
         linkedInHits,
         reader,
         classifier,
         browsing,
         evidence,
     })
+    // Unsure picks wait for a person ("Which is their website?" on the fund page); a decided run clears them.
+    await updateFundManagerColumns({ fundManagerId: fund.id, data: { identity_candidates: identity.candidates } })
     const record = await companyRecordFindings({
         websiteUrl: identity.websiteUrl,
         linkedinUrl: identity.linkedinUrl,
@@ -821,6 +832,23 @@ async function prepareGroundwork({
           })
         : []
     return { linkedInHits, crawledPages, websiteUrl, costMicroUsd: identity.costMicroUsd }
+}
+
+/**
+ * What we know about a fund that helps tell it apart from others with a similar name: how it came up,
+ * the team's notes, and its HQ country.
+ *
+ * @param input.fund - The fund's known context.
+ * @returns Short hints, most useful first.
+ */
+function identityHints({
+    fund,
+}: {
+    fund: { discovery_context: string | null; notes: string | null; hq_country: string | null }
+}) {
+    return [fund.discovery_context, fund.notes?.slice(0, 200), fund.hq_country ? `HQ country ${fund.hq_country}` : null]
+        .map(hint => hint?.trim())
+        .filter((hint): hint is string => Boolean(hint))
 }
 
 // Pages read from the fund's own website before the model starts.

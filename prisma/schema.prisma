@@ -651,6 +651,11 @@ model FundManager {
     // seed | manual | spider_person | spider_public_record | spider_suggestion
     origin             String    @default("manual")
     discovered_from_id String?
+    // How the fund came up (e.g. "co-lender on a 2024 loan in Kenya", "BII investee: SME lending, Ghana")
+    // or the team's region hint for seeds; used to find the right website for common names.
+    discovery_context  String?
+    // Website and LinkedIn candidates the research couldn't choose between, for a person to confirm.
+    identity_candidates Json     @default("[]")
     // queued | running | done | failed | skipped
     research_status    String    @default("queued")
     research_queued_at DateTime?
