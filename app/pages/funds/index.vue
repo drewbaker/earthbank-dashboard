@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
 import { computed, h, ref, resolveComponent, watch } from 'vue'
-import { watchDebounced } from '@vueuse/core'
+import type { SortingState } from '@tanstack/vue-table'
+import { useLocalStorage, watchDebounced } from '@vueuse/core'
 import { navigateTo, useAsyncData, useRoute, useRouter, useSeoMeta, useToast } from '#imports'
 import type { FundStage } from '#shared/constants/funds.ts'
 import {
@@ -78,6 +79,10 @@ const FundsCompletenessMeter = resolveComponent('FundsCompletenessMeter')
 const FundsResearchStatusBadge = resolveComponent('FundsResearchStatusBadge')
 
 const STAGE_ORDER = new Map(FUND_STAGES.map((stage, index) => [stage, index]))
+// The table's sort order is remembered in this browser, so coming back to Funds keeps it.
+// Read after mount: the server can't see local storage, and the first render must match it.
+const sorting = useLocalStorage<SortingState>('earthbank_dashboard_funds_sorting', [], { initOnMounted: true })
+
 // Best fit first when sorting descending.
 const TICKET_FIT_ORDER = new Map(TICKET_FITS.map((fit, index) => [fit, TICKET_FITS.length - index]))
 
@@ -401,6 +406,7 @@ async function openCreatedFund(fund: FundDetail) {
                 <UTable
                     v-if="view === 'table'"
                     :data="funds"
+                    v-model:sorting="sorting"
                     :columns="columns"
                     :loading="listStatus === 'pending'"
                     class="rounded-md border border-default"
