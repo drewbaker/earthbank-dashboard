@@ -6,32 +6,30 @@ defineProps<{ sources: FundSourceLink[] }>()
 </script>
 
 <template>
-    <div class="flex flex-wrap gap-1">
+    <!-- One small ⓘ per source, inline after the fact: hover says where it was found, click opens it. -->
+    <span v-if="sources.length" class="inline-flex items-center gap-0.5 align-middle">
         <UTooltip
             v-for="source in sources"
             :key="source.id"
             :content="{ side: 'top' }"
             :ui="{ content: 'max-w-[min(360px,85vw)] h-auto whitespace-normal py-2' }"
         >
-            <UButton
-                :to="source.url"
+            <a
+                :href="source.url"
                 target="_blank"
                 rel="noopener noreferrer"
-                size="xs"
-                color="neutral"
-                variant="soft"
-                icon="i-lucide-external-link"
-                :label="source.domain"
-                class="max-w-48"
-                :ui="{ label: 'truncate' }"
-            />
+                :aria-label="`Source: ${source.title ?? source.domain}`"
+                class="inline-flex size-4 items-center justify-center rounded-full text-dimmed hover:text-primary"
+            >
+                <UIcon name="i-lucide-info" class="size-3.5" />
+            </a>
             <template #content>
                 <div class="space-y-1 text-xs">
                     <p class="font-medium text-highlighted">{{ source.title ?? source.domain }}</p>
-                    <p class="text-muted">{{ FUND_SOURCE_KIND_LABELS[source.kind] }}</p>
+                    <p class="text-muted">{{ FUND_SOURCE_KIND_LABELS[source.kind] }} · {{ source.domain }}</p>
                     <p v-if="source.quote" class="italic">“{{ source.quote }}”</p>
                 </div>
             </template>
         </UTooltip>
-    </div>
+    </span>
 </template>

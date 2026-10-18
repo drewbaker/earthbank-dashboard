@@ -3,6 +3,9 @@ import { computed, ref } from 'vue'
 import type { CashSummary } from '#shared/schemas/index.ts'
 import { formatMoney } from '~/utils/format.ts'
 
+// Earth Bank's Bookeeping.ai account, where the transactions behind the burn come from.
+const BOOKKEEPING_DASHBOARD_URL = 'https://bookeeping.ai/en/account/6a5588546a0aecc4955594b5/dashboard'
+
 const props = defineProps<{ cash: CashSummary | null | undefined }>()
 
 const isOpen = ref(false)
@@ -37,17 +40,33 @@ function shareWidth({ cents }: { cents: number }) {
     <UCard :class="canExpand && 'cursor-pointer'" @click="toggleBreakdown">
         <div class="flex items-start justify-between gap-2">
             <p class="text-sm text-muted">Monthly burn<TermHint term="monthly_burn" /></p>
-            <UButton
-                v-if="canExpand"
-                :icon="isOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
-                :aria-label="isOpen ? 'Hide spending by category' : 'Show spending by category'"
-                :aria-expanded="isOpen"
-                size="xs"
-                color="neutral"
-                variant="ghost"
-                class="-my-1 -mr-1"
-                @click.stop="toggleBreakdown"
-            />
+            <div class="flex items-center gap-1">
+                <UTooltip text="Open Bookeeping.ai">
+                    <UButton
+                        :to="BOOKKEEPING_DASHBOARD_URL"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        icon="i-lucide-external-link"
+                        aria-label="Open Bookeeping.ai in a new window"
+                        size="xs"
+                        color="neutral"
+                        variant="ghost"
+                        class="-my-1"
+                        @click.stop
+                    />
+                </UTooltip>
+                <UButton
+                    v-if="canExpand"
+                    :icon="isOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                    :aria-label="isOpen ? 'Hide spending by category' : 'Show spending by category'"
+                    :aria-expanded="isOpen"
+                    size="xs"
+                    color="neutral"
+                    variant="ghost"
+                    class="-my-1 -mr-1"
+                    @click.stop="toggleBreakdown"
+                />
+            </div>
         </div>
         <p class="mt-1 text-3xl font-semibold text-highlighted">
             {{ formatMoney({ cents: cash?.monthly_burn_cents, compact: true, unknown: 'Not set' }) }}

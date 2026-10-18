@@ -394,6 +394,7 @@ async function rejectFinding(finding: FundFinding) {
                                 <li v-for="person in fund.people" :key="person.id" class="space-y-2 py-3">
                                     <div class="flex flex-wrap items-center gap-2">
                                         <span class="font-medium text-highlighted">{{ person.name }}</span>
+                                        <FundsSourceChips :sources="person.sources" />
                                         <UBadge
                                             v-if="person.is_principal"
                                             label="Principal"
@@ -447,7 +448,6 @@ async function rejectFinding(finding: FundFinding) {
                                             <FundsSourceChips :sources="affiliation.sources" />
                                         </li>
                                     </ul>
-                                    <FundsSourceChips :sources="person.sources" />
                                 </li>
                             </ul>
                             <p v-else class="text-sm text-dimmed">No team members found yet.</p>

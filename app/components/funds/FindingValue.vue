@@ -22,9 +22,9 @@ const display = computed(() => describeFinding({ finding: props.finding }))
                     >{{ display.title }}</a
                 >
                 <template v-else>{{ display.title }}</template>
+                <FundsSourceChips :sources="finding.sources" class="ml-1" />
             </p>
             <p v-if="display.detail" class="text-xs text-muted">{{ display.detail }}</p>
-            <FundsSourceChips :sources="finding.sources" />
         </div>
         <div class="flex shrink-0 items-center gap-1">
             <UTooltip text="AI confidence">

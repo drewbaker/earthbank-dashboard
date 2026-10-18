@@ -143,7 +143,7 @@ const columns: TableColumn<Fund>[] = sortableColumns({
             id: 'check_size',
             accessorFn: fund => fund.check_max_cents ?? fund.check_min_cents ?? undefined,
             header: 'Check size',
-            cell: ({ row }) => checkSizeLabel({ fund: row.original }),
+            cell: ({ row }) => clippedText({ text: checkSizeLabel({ fund: row.original }), widthClass: 'max-w-32' }),
         },
         {
             id: 'working_capital',
@@ -173,22 +173,20 @@ const columns: TableColumn<Fund>[] = sortableColumns({
             accessorFn: fund => (fund.lender_archetype ? LENDER_ARCHETYPE_LABELS[fund.lender_archetype] : undefined),
             header: 'Lender type',
             cell: ({ row }) =>
-                h(
-                    'span',
-                    { class: 'line-clamp-2 max-w-40 text-xs text-toned' },
-                    row.original.lender_archetype ? LENDER_ARCHETYPE_LABELS[row.original.lender_archetype] : '—',
-                ),
+                clippedText({
+                    text: row.original.lender_archetype ? LENDER_ARCHETYPE_LABELS[row.original.lender_archetype] : null,
+                    widthClass: 'max-w-44',
+                }),
         },
         {
             id: 'loan_types',
             accessorFn: fund => fund.loan_types.length || undefined,
             header: 'Loan types',
             cell: ({ row }) =>
-                h(
-                    'span',
-                    { class: 'line-clamp-2 max-w-48 text-xs text-toned' },
-                    row.original.loan_types.map(type => LOAN_TYPE_LABELS[type]).join(', ') || '—',
-                ),
+                clippedText({
+                    text: row.original.loan_types.map(type => LOAN_TYPE_LABELS[type]).join(', ') || null,
+                    widthClass: 'max-w-52',
+                }),
         },
         {
             id: 'research_completeness',
@@ -233,6 +231,22 @@ function checkSizeLabel({ fund }: { fund: Fund }) {
     return [fund.check_min_cents, fund.check_max_cents]
         .map(cents => formatMoney({ cents, compact: true, unknown: '?' }))
         .join('–')
+}
+
+/**
+ * A text cell clipped to one line with "…", the full text shown on hover.
+ *
+ * Table cells don't wrap, so long labels would otherwise run into the next column.
+ *
+ * @param input.text - The text, or null for a dash.
+ * @param input.widthClass - Tailwind max-width class for the column, e.g. `max-w-44`.
+ * @returns The cell's VNode.
+ */
+function clippedText({ text, widthClass }: { text: string | null; widthClass: string }) {
+    if (!text || text === '—') {
+        return h('span', { class: 'text-dimmed' }, '—')
+    }
+    return h('span', { class: ['block truncate text-xs text-toned', widthClass], title: text }, text)
 }
 
 /**
