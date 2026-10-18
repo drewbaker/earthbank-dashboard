@@ -14,6 +14,8 @@ import { ForecastInputs } from '#shared/schemas/forecast.ts'
 import {
     AnswerDiligenceRequest,
     CreateFundRequest,
+    FundNote,
+    ImportFundNoteRequest,
     Fund,
     FundDetail,
     IdentityCandidate,
@@ -223,5 +225,7 @@ export const openapiSchemas: Record<string, z.ZodType> = {
     CreateFundRequest,
     UpdateFundRequest,
     AnswerDiligenceRequest,
+    FundNote,
+    ImportFundNoteRequest,
     UpdateFundResearchSettingsRequest,
 }

@@ -1,11 +1,14 @@
 import type {
     FundDiligenceAnswer as FundDiligenceAnswerRow,
+    FundNote as FundNoteDbRow,
     FundResearchRun as FundResearchRunRow,
     FundSource as FundSourceRow,
     User as UserRow,
 } from '#server/generated/prisma/client.ts'
 import type { FundListRow } from '#server/database/fund-managers.ts'
+import type { FundNoteRow } from '#server/database/fund-notes.ts'
 import type { FundFindingRow, FundPersonRow } from '#server/database/fund-research.ts'
+import { fundNoteSourceUrl } from '#server/utils/funds/note-sources.ts'
 import { centsToNumber, toDateOnly, toIsoDateTime } from '#server/utils/dates.ts'
 import { serializeUserSummary } from '#server/utils/serializers/common.ts'
 import type {
@@ -30,12 +33,15 @@ import type {
     FundDetail,
     FundDiligenceItem,
     FundFinding,
+    FundNote,
     FundPerson,
     FundResearchRun,
     FundSourceLink,
 } from '#shared/schemas/index.ts'
 import { IdentityCandidate } from '#shared/schemas/index.ts'
 import { websiteDomain } from '#shared/funds/organization-names.ts'
+
+type DiligenceAnswerRow = FundDiligenceAnswerRow & { answered_by: UserRow | null; fund_note: FundNoteDbRow | null }
 
 /**
  * A fund as it appears in the list.
@@ -104,6 +110,7 @@ export function serializeFundDetail({
     people,
     answers,
     runs,
+    notes,
 }: {
     fund: FundListRow & {
         notes: string | null
@@ -113,8 +120,9 @@ export function serializeFundDetail({
     }
     findings: FundFindingRow[]
     people: FundPersonRow[]
-    answers: (FundDiligenceAnswerRow & { answered_by: UserRow | null })[]
+    answers: DiligenceAnswerRow[]
     runs: FundResearchRunRow[]
+    notes: FundNoteRow[]
 }): FundDetail {
     return {
         ...serializeFund({ fund }),
@@ -125,6 +133,7 @@ export function serializeFundDetail({
         findings: findings.map(finding => serializeFundFinding({ finding })),
         people: people.map(person => serializeFundPerson({ person })),
         diligence: serializeDiligence({ answers }),
+        imported_notes: notes.map(note => serializeFundNote({ note })),
         runs: runs.map(run => serializeFundResearchRun({ run })),
     }
 }
@@ -186,11 +195,7 @@ export function serializeFundPerson({ person }: { person: FundPersonRow }): Fund
  * @param input.answers - Stored answers.
  * @returns One item per question, in the fixed order.
  */
-export function serializeDiligence({
-    answers,
-}: {
-    answers: (FundDiligenceAnswerRow & { answered_by: UserRow | null })[]
-}): FundDiligenceItem[] {
+export function serializeDiligence({ answers }: { answers: DiligenceAnswerRow[] }): FundDiligenceItem[] {
     const byQuestion = new Map(answers.map(answer => [answer.question, answer]))
     return FUND_DILIGENCE_QUESTIONS.map((question: FundDiligenceQuestion) => {
         const answer = byQuestion.get(question)
@@ -200,9 +205,40 @@ export function serializeDiligence({
             source: (answer?.source as 'manual' | 'ai' | undefined) ?? null,
             source_urls: stringArray({ value: answer?.source_urls }),
             answered_by: serializeUserSummary({ user: answer?.answered_by }),
+            note: answer?.fund_note
+                ? {
+                      id: answer.fund_note.id,
+                      title: answer.fund_note.title,
+                      url: fundNoteSourceUrl({ note: answer.fund_note }),
+                  }
+                : null,
             updated_at: toIsoDateTime({ date: answer?.updated_at }),
         }
     })
+}
+
+/**
+ * An imported note and what the AI took from it (not its text).
+ *
+ * @param input.note - The note row with its author.
+ * @returns The public shape.
+ */
+export function serializeFundNote({ note }: { note: FundNoteRow }): FundNote {
+    return {
+        id: note.id,
+        title: note.title,
+        origin: note.origin as FundNote['origin'],
+        doc_url: note.doc_url,
+        author: serializeUserSummary({ user: note.author }),
+        status: note.status as FundNote['status'],
+        error: note.error,
+        findings_added: note.findings_added,
+        people_added: note.people_added,
+        diligence_answered: note.diligence_answered,
+        dropped: note.dropped,
+        kept_existing: Array.isArray(note.kept_existing) ? (note.kept_existing as FundNote['kept_existing']) : [],
+        created_at: toIsoDateTime({ date: note.created_at })!,
+    }
 }
 
 /**

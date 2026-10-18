@@ -275,8 +275,11 @@ function diligenceSection({ fund }: { fund: FundDetail }): Content[] {
         if (!item.answer) {
             return [details.label, { text: [{ text: 'Open. ', bold: true, color: '#b45309' }, details.hint] }]
         }
-        const answeredBy =
-            item.source === 'ai' ? 'From public sources (AI)' : `From ${item.answered_by?.name ?? 'the team'}`
+        const answeredBy = item.note
+            ? item.note.title
+            : item.source === 'ai'
+              ? 'From public sources (AI)'
+              : `From ${item.answered_by?.name ?? 'the team'}`
         return [
             details.label,
             {

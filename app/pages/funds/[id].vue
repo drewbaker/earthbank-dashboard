@@ -34,14 +34,20 @@ const { data: fund, error: loadError } = await useAsyncData(`fund.${fundId.value
 
 useSeoMeta({ title: () => `${fund.value?.name ?? 'Fund'} · Earth Bank Dashboard` })
 
-type ProfileTab = 'overview' | 'team' | 'track_record' | 'presence' | 'diligence' | 'sources'
-const tab = ref<ProfileTab>('overview')
+const PROFILE_TABS = ['overview', 'team', 'track_record', 'presence', 'diligence', 'import', 'sources'] as const
+type ProfileTab = (typeof PROFILE_TABS)[number]
+// ?tab=import&note=… opens a tab directly (facts from a pasted note link back to it this way).
+const tab = ref<ProfileTab>(
+    PROFILE_TABS.includes(route.query.tab as ProfileTab) ? (route.query.tab as ProfileTab) : 'overview',
+)
+const highlightedNoteId = computed(() => (typeof route.query.note === 'string' ? route.query.note : null))
 const tabItems = computed(() => [
     { label: 'Overview', value: 'overview', icon: 'i-lucide-file-text' },
     { label: `Team & network (${fund.value?.people.length ?? 0})`, value: 'team', icon: 'i-lucide-users' },
     { label: 'Deals & LPs', value: 'track_record', icon: 'i-lucide-handshake' },
     { label: 'News & impact', value: 'presence', icon: 'i-lucide-newspaper' },
     { label: `Due diligence (${diligenceGapCount.value} gaps)`, value: 'diligence', icon: 'i-lucide-clipboard-check' },
+    { label: 'Import', value: 'import', icon: 'i-lucide-file-input' },
     { label: 'Sources', value: 'sources', icon: 'i-lucide-link' },
 ])
 
@@ -143,6 +149,7 @@ watch(
 )
 const isSavingTeam = ref(false)
 const isResearching = ref(false)
+const isArchiving = ref(false)
 const busyFindingId = ref<string | null>(null)
 
 /**
@@ -242,6 +249,27 @@ async function refreshResearch() {
 }
 
 /**
+ * Archive the fund (hidden from the list, the map and the spider) or restore it.
+ *
+ * @returns Resolves once done.
+ */
+async function toggleArchived() {
+    if (!fund.value) {
+        return
+    }
+    isArchiving.value = true
+    const action = fund.value.archived_at ? 'restore' : 'archive'
+    try {
+        fund.value = await api<FundDetail>({ path: `/funds/${fundId.value}/${action}`, method: 'POST' })
+        toast.add({ title: action === 'archive' ? 'Fund archived' : 'Fund restored', color: 'success' })
+    } catch (error) {
+        toast.add({ title: apiErrorMessage({ error }), color: 'error' })
+    } finally {
+        isArchiving.value = false
+    }
+}
+
+/**
  * Reject a wrong finding; the AI won't record it again.
  *
  * @param finding - The finding.
@@ -275,6 +303,15 @@ async function rejectFinding(finding: FundFinding) {
                     />
                 </template>
                 <template #right>
+                    <UButton
+                        v-if="fund"
+                        :label="fund.archived_at ? 'Restore' : 'Archive'"
+                        :icon="fund.archived_at ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
+                        color="neutral"
+                        variant="ghost"
+                        :loading="isArchiving"
+                        @click="toggleArchived"
+                    />
                     <FundsResearchStatusBadge v-if="fund" :status="fund.research_status" :error="fund.research_error" />
                     <UTooltip v-if="fund" text="A PDF of this profile for meeting prep">
                         <UButton
@@ -309,6 +346,13 @@ async function rejectFinding(finding: FundFinding) {
                 :description="loadError.message"
             />
             <div v-else-if="fund" class="space-y-6">
+                <UAlert
+                    v-if="fund.archived_at"
+                    color="neutral"
+                    icon="i-lucide-archive"
+                    title="Archived"
+                    description="This fund is hidden from the Funds list and map, and isn't researched. Restore it to bring it back."
+                />
                 <UCard>
                     <template #header>
                         <h2 class="font-semibold text-highlighted">At a glance</h2>
@@ -690,6 +734,14 @@ async function rejectFinding(finding: FundFinding) {
                             </div>
                         </UCard>
                     </template>
+
+                    <FundsNoteImport
+                        v-if="fund && tab === 'import'"
+                        :fund-id="fund.id"
+                        :notes="fund.imported_notes"
+                        :highlighted-note-id="highlightedNoteId"
+                        @imported="updated => (fund = updated)"
+                    />
 
                     <template v-if="fund && tab === 'sources'">
                         <UCard>

@@ -103,6 +103,8 @@ export const FundDiligenceItem = z.object({
     source: z.enum(['manual', 'ai']).nullable(),
     source_urls: z.array(z.string()),
     answered_by: UserSummary.nullable(),
+    // The imported note the answer came from, shown as "Note from … on …".
+    note: z.object({ id: z.string(), title: z.string(), url: z.string().nullable() }).nullable(),
     updated_at: IsoDateTime.nullable(),
 })
 export type FundDiligenceItem = z.infer<typeof FundDiligenceItem>
@@ -180,6 +182,37 @@ export type Fund = z.infer<typeof Fund>
 export const FundList = listOf(Fund)
 export type FundList = z.infer<typeof FundList>
 
+// A call note (or document) imported on the fund's Import tab, and what the AI took from it.
+export const FundNote = z.object({
+    id: z.string(),
+    title: z.string(),
+    origin: z.enum(['pasted', 'google_doc']),
+    doc_url: z.string().nullable(),
+    author: UserSummary.nullable(),
+    status: z.enum(['running', 'done', 'failed']),
+    error: z.string().nullable(),
+    findings_added: z.number().int(),
+    people_added: z.number().int(),
+    diligence_answered: z.number().int(),
+    dropped: z.number().int(),
+    // Answers the note gave where a person had already answered; shown so someone can update them.
+    kept_existing: z.array(z.object({ question: z.enum(FUND_DILIGENCE_QUESTIONS), answer: z.string() })),
+    created_at: IsoDateTime,
+})
+export type FundNote = z.infer<typeof FundNote>
+
+// Either a Google Doc link or pasted text.
+export const ImportFundNoteRequest = z
+    .object({
+        doc_url: z.string().trim().max(2000).nullish(),
+        text: z.string().trim().max(200_000).nullish(),
+    })
+    .refine(body => Boolean(body.doc_url) !== Boolean(body.text), {
+        message: 'Give a Google Doc link or paste the text (one of them).',
+        path: ['text'],
+    })
+export type ImportFundNoteRequest = z.infer<typeof ImportFundNoteRequest>
+
 export const FundDetail = Fund.extend({
     notes: z.string().nullable(),
     research_error: z.string().nullable(),
@@ -189,6 +222,7 @@ export const FundDetail = Fund.extend({
     findings: z.array(FundFinding),
     people: z.array(FundPerson),
     diligence: z.array(FundDiligenceItem),
+    imported_notes: z.array(FundNote),
     runs: z.array(FundResearchRun),
 })
 export type FundDetail = z.infer<typeof FundDetail>

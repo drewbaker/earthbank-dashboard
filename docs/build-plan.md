@@ -277,6 +277,8 @@ Status: built on the `funds-research` branch (requested Oct 16, 2026). Replaces 
 - [x] PDF ends with a **Questions to ask** checklist: open due diligence first, then every other gap
 - [x] Fund page: At a glance above the tabs, the team's fields in a Tracking card on Due diligence, collapsible people, ⓘ source icons, zoom and pan on the network
 - [x] Funds list: filters behind a "…" button (active and recent ones stay visible), text columns clipped, sort order remembered
+- [x] **Import notes** on the fund page: paste call notes or link a Google Doc; the AI fills research fields, people and diligence from it, each quoted and credited "Note from {author} on {time}"; people's existing answers kept
+- [x] Archive / Restore button on the fund page header
 - [ ] Add `FIRECRAWL_API_KEY` in the Render dashboard
 - [ ] Check each public list against the live site after deploy (several are JavaScript apps or block bots; they show the error in Settings → Research and don't affect the others)
 - [ ] First live research runs: watch Sources → "dropped" counts and the month's spend, then raise the fund limit

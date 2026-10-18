@@ -129,10 +129,21 @@ async function saveAnswer({ item }: { item: FundDiligenceItem }) {
                             variant="soft"
                             size="sm"
                         />
-                        <span v-if="item.answered_by">{{ item.answered_by.name }}</span>
-                        <span v-if="item.updated_at">{{ formatDate({ value: item.updated_at }) }}</span>
+                        <!-- Answers read from an imported note are credited to that note. -->
                         <a
-                            v-for="url in item.source_urls"
+                            v-if="item.note"
+                            :href="item.note.url ?? undefined"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="underline hover:text-highlighted"
+                            >{{ item.note.title }}</a
+                        >
+                        <template v-else>
+                            <span v-if="item.answered_by">{{ item.answered_by.name }}</span>
+                            <span v-if="item.updated_at">{{ formatDate({ value: item.updated_at }) }}</span>
+                        </template>
+                        <a
+                            v-for="url in item.note ? [] : item.source_urls"
                             :key="url"
                             :href="url"
                             target="_blank"

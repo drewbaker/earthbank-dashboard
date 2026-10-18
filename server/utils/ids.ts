@@ -33,6 +33,7 @@ export const ID_PREFIXES = {
     fundAffiliation: 'faf',
     fundDiligenceAnswer: 'fdd',
     fundResearchRun: 'frr',
+    fundNote: 'fnt',
     publicInvestmentRecord: 'pir',
 } as const
 

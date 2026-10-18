@@ -108,7 +108,7 @@ const FindingInput = z.discriminatedUnion(
 )
 
 /** A proposal the model made during the run, checked against the evidence when the run ends. */
-type Proposals = {
+export type Proposals = {
     findings: { field: string; value: unknown; sourceUrls: string[]; quote: string | null; confidence: number }[]
     people: {
         name: string
@@ -886,7 +886,7 @@ async function adoptRecordWebsite({ fundManagerId, websiteUrl }: { fundManagerId
  * @param input.now - Current time.
  * @returns The tools.
  */
-function buildResearchTools({
+export function buildResearchTools({
     proposals,
     evidence,
     minConfidence,

@@ -145,6 +145,8 @@ export const FUND_SOURCE_KINDS = [
     'government_database',
     'report',
     'data_provider',
+    // A call note or document the team imported on the fund's Import tab.
+    'team_note',
     'other',
 ] as const
 export type FundSourceKind = (typeof FUND_SOURCE_KINDS)[number]
@@ -158,6 +160,7 @@ export const FUND_SOURCE_KIND_LABELS: Record<FundSourceKind, string> = {
     government_database: 'Government database',
     report: 'Report',
     data_provider: 'Data provider',
+    team_note: 'Team note',
     other: 'Other',
 }
 

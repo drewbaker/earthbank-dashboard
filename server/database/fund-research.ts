@@ -271,7 +271,7 @@ export async function readFundNetworkRows({ fundManagerId }: { fundManagerId: st
 export function listFundDiligenceAnswers({ fundManagerId }: { fundManagerId: string }) {
     return db().fundDiligenceAnswer.findMany({
         where: { fund_manager_id: fundManagerId },
-        include: { answered_by: true },
+        include: { answered_by: true, fund_note: true },
     })
 }
 
@@ -305,7 +305,7 @@ export function saveManualDiligenceAnswer({
             source: 'manual',
             answered_by_user_id: userId,
         },
-        update: { answer, source: 'manual', source_urls: [], answered_by_user_id: userId },
+        update: { answer, source: 'manual', source_urls: [], answered_by_user_id: userId, fund_note_id: null },
     })
 }
 

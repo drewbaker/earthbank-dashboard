@@ -1,4 +1,5 @@
 import { findFundManager } from '#server/database/fund-managers.ts'
+import { listFundNotes } from '#server/database/fund-notes.ts'
 import {
     listFundDiligenceAnswers,
     listFundFindings,
@@ -20,13 +21,14 @@ export async function loadFundDetail({ fundManagerId }: { fundManagerId: string 
     if (!fund) {
         throw notFound({ resource: 'Fund' })
     }
-    const [findings, people, answers, runs] = await Promise.all([
+    const [findings, people, answers, runs, notes] = await Promise.all([
         listFundFindings({ fundManagerId }),
         listFundPeople({ fundManagerId }),
         listFundDiligenceAnswers({ fundManagerId }),
         listFundResearchRuns({ fundManagerId, limit: 10 }),
+        listFundNotes({ fundManagerId }),
     ])
-    return serializeFundDetail({ fund, findings, people, answers, runs })
+    return serializeFundDetail({ fund, findings, people, answers, runs, notes })
 }
 
 /**

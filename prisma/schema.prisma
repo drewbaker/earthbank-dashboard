@@ -66,6 +66,7 @@ model User {
     owned_fund_managers FundManager[]
     rejected_findings   FundFinding[]
     diligence_answers   FundDiligenceAnswer[]
+    fund_notes          FundNote[]
 
     @@map("user")
 }
@@ -705,6 +706,7 @@ model FundManager {
     people            FundPerson[]
     diligence_answers FundDiligenceAnswer[]
     research_runs     FundResearchRun[]
+    imported_notes    FundNote[]
     organization      ResearchOrganization?
     public_records    PublicInvestmentRecord[]
 
@@ -868,14 +870,50 @@ model FundDiligenceAnswer {
     source              String   @default("manual")
     source_urls         Json     @default("[]")
     answered_by_user_id String?
+    // The imported call note this answer came from, if any (credited "Note from … on …").
+    fund_note_id        String?
     created_at          DateTime @default(now())
     updated_at          DateTime @updatedAt
 
     fund_manager FundManager @relation(fields: [fund_manager_id], references: [id], onDelete: Cascade)
     answered_by  User?       @relation(fields: [answered_by_user_id], references: [id], onDelete: SetNull)
+    fund_note    FundNote?   @relation(fields: [fund_note_id], references: [id], onDelete: SetNull)
 
     @@unique([fund_manager_id, question])
     @@map("fund_diligence_answer")
+}
+
+// A call note (or other document) someone imported on a fund's Import tab. The AI fills research
+// fields and diligence answers from it, quoting it; facts are credited "Note from {author} on {time}".
+// Its text is kept so the quotes can be checked and the note re-read (Earth Bank's own notes).
+model FundNote {
+    id                 String   @id
+    fund_manager_id    String
+    author_user_id     String?
+    // pasted | google_doc
+    origin             String
+    doc_url            String?
+    // "Note from Drew on Oct 18, 2026, 3:04 PM", in the author's time zone at import.
+    title              String
+    text               String
+    // running | done | failed
+    status             String   @default("running")
+    error              String?
+    findings_added     Int      @default(0)
+    people_added       Int      @default(0)
+    diligence_answered Int      @default(0)
+    dropped            Int      @default(0)
+    // Diligence answers the note gave where a person had already answered: [{ question, answer }].
+    kept_existing      Json     @default("[]")
+    created_at         DateTime @default(now())
+    updated_at         DateTime @updatedAt
+
+    fund_manager      FundManager           @relation(fields: [fund_manager_id], references: [id], onDelete: Cascade)
+    author            User?                 @relation(fields: [author_user_id], references: [id], onDelete: SetNull)
+    diligence_answers FundDiligenceAnswer[]
+
+    @@index([fund_manager_id, created_at])
+    @@map("fund_note")
 }
 
 // One piece of paid AI work for fund research: researching a fund, reading a public investment list,
