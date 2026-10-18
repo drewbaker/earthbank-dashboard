@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { FundFinding } from '#shared/schemas/index.ts'
-import { describeFinding } from '~/utils/fund-findings.ts'
+import { describeFinding } from '#shared/funds/finding-display.ts'
 
 const props = defineProps<{ finding: FundFinding; isBusy?: boolean }>()
 const emit = defineEmits<{ reject: [finding: FundFinding] }>()

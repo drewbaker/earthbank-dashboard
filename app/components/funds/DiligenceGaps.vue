@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useToast } from '#imports'
 import { FUND_DILIGENCE_QUESTION_DETAILS } from '#shared/constants/funds.ts'
 import type { FundDetail, FundDiligenceItem } from '#shared/schemas/index.ts'
+import { displayUrl } from '#shared/utils/display-url.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { formatDate } from '~/utils/format.ts'
 
@@ -137,7 +138,7 @@ async function saveAnswer({ item }: { item: FundDiligenceItem }) {
                             target="_blank"
                             rel="noopener noreferrer"
                             class="underline hover:text-highlighted"
-                            >{{ url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] }}</a
+                            >{{ displayUrl({ url }).split('/')[0] }}</a
                         >
                     </div>
                 </div>

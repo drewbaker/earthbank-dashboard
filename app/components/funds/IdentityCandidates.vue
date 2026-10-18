@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useToast } from '#imports'
 import type { FundDetail, IdentityCandidate } from '#shared/schemas/index.ts'
+import { displayUrl } from '#shared/utils/display-url.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 
 // The research couldn't tell which website or LinkedIn page is this fund's own (common names), so a
@@ -72,16 +73,6 @@ async function dismissCandidates() {
         busyUrl.value = null
     }
 }
-
-/**
- * The host of a URL, for display.
- *
- * @param url - The URL.
- * @returns Its host and path, without the protocol.
- */
-function displayUrl(url: string) {
-    return url.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')
-}
 </script>
 
 <template>
@@ -116,7 +107,7 @@ function displayUrl(url: string) {
                     >
                         <div class="min-w-0 space-y-0.5">
                             <ULink :to="candidate.url" target="_blank" class="text-primary text-sm font-medium">
-                                {{ displayUrl(candidate.url) }}
+                                {{ displayUrl({ url: candidate.url }) }}
                             </ULink>
                             <p v-if="candidate.title" class="text-sm">{{ candidate.title }}</p>
                             <p v-if="candidate.snippet" class="text-muted line-clamp-2 text-xs">

@@ -11,6 +11,7 @@ import {
 import type { FundFindingValues, ResearchMoney } from '#shared/schemas/fund-findings.ts'
 import type { FundFinding } from '#shared/schemas/index.ts'
 import { formatCurrencyAmount } from '#shared/funds/money.ts'
+import { displayUrl } from '#shared/utils/display-url.ts'
 import { geoFocusLabel } from '#shared/utils/geo-focus.ts'
 
 /** How a finding reads on the profile: a main line, an optional second line, and a link when the value is one. */
@@ -21,10 +22,17 @@ const COUNTRY_NAMES = new Intl.DisplayNames(['en'], { type: 'region' })
 /**
  * Turn a finding's stored value into readable text.
  *
- * @param input.finding - The finding.
+ * News items and success stories link to the page they were read from, since that page is the story.
+ *
+ * @param input.finding - The finding, with its sources when the display may link to one.
  * @returns Its display text.
  */
-export function describeFinding({ finding }: { finding: Pick<FundFinding, 'field' | 'value'> }): FindingDisplay {
+export function describeFinding({
+    finding,
+}: {
+    finding: Pick<FundFinding, 'field' | 'value'> & { sources?: { url: string }[] }
+}): FindingDisplay {
+    const sourceUrl = finding.sources?.[0]?.url ?? null
     const field = finding.field as FundResearchField
     const value = finding.value as never
     switch (field) {
@@ -33,13 +41,13 @@ export function describeFinding({ finding }: { finding: Pick<FundFinding, 'field
         case 'website_url':
         case 'linkedin_url': {
             const url = (value as FundFindingValues['website_url']).url
-            return { title: url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''), detail: null, href: url }
+            return { title: displayUrl({ url }), detail: null, href: url }
         }
         case 'social_account': {
             const account = value as FundFindingValues['social_account']
             return {
                 title: account.platform,
-                detail: account.url.replace(/^https?:\/\/(www\.)?/, ''),
+                detail: displayUrl({ url: account.url }),
                 href: account.url,
             }
         }
@@ -206,16 +214,17 @@ export function describeFinding({ finding }: { finding: Pick<FundFinding, 'field
         }
         case 'success_story': {
             const story = value as FundFindingValues['success_story']
-            return plain({ title: story.title, detail: story.summary })
+            return { title: story.title, detail: story.summary, href: sourceUrl }
         }
         case 'news': {
             const item = value as FundFindingValues['news']
-            return plain({
+            return {
                 title: item.title,
                 detail: [item.kind === 'press_release' ? 'Press release' : 'News', item.published_on]
                     .filter(Boolean)
                     .join(' · '),
-            })
+                href: sourceUrl,
+            }
         }
         case 'conference': {
             const conference = value as FundFindingValues['conference']

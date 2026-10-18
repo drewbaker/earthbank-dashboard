@@ -14,11 +14,12 @@ import {
     FUND_STAGE_DETAILS,
     FUND_STAGES,
 } from '#shared/constants/funds.ts'
+import { countryName } from '#shared/funds/finding-display.ts'
 import type { FundDetail, FundFinding, FundNetwork, FundSourceLink } from '#shared/schemas/index.ts'
+import { displayUrl } from '#shared/utils/display-url.ts'
 import { geoFocusOptions } from '#shared/utils/geo-focus.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { NO_OWNER, ownerIdFromSelection, usePipelineReference } from '~/composables/usePipelineReference.ts'
-import { countryName } from '~/utils/fund-findings.ts'
 import { formatDateTime, formatMoney } from '~/utils/format.ts'
 
 const route = useRoute()
@@ -275,6 +276,16 @@ async function rejectFinding(finding: FundFinding) {
                 </template>
                 <template #right>
                     <FundsResearchStatusBadge v-if="fund" :status="fund.research_status" :error="fund.research_error" />
+                    <UTooltip v-if="fund" text="A PDF of this profile for meeting prep">
+                        <UButton
+                            :to="`/v1/funds/${fund.id}/pdf`"
+                            external
+                            download
+                            icon="i-lucide-file-down"
+                            label="Download PDF"
+                            color="neutral"
+                        />
+                    </UTooltip>
                     <UTooltip text="Re-research everything public sources show. Your own fields are never changed.">
                         <UButton
                             icon="i-lucide-refresh-cw"
@@ -287,9 +298,6 @@ async function rejectFinding(finding: FundFinding) {
                     </UTooltip>
                 </template>
             </UDashboardNavbar>
-            <UDashboardToolbar>
-                <UTabs v-model="tab" :items="tabItems" :content="false" size="sm" />
-            </UDashboardToolbar>
         </template>
 
         <template #body>
@@ -300,8 +308,99 @@ async function rejectFinding(finding: FundFinding) {
                 title="Couldn't load this fund"
                 :description="loadError.message"
             />
-            <div v-else-if="fund" class="grid gap-6 lg:grid-cols-3">
-                <div class="space-y-6 lg:col-span-2">
+            <div v-else-if="fund" class="space-y-6">
+                <UCard>
+                    <template #header>
+                        <h2 class="font-semibold text-highlighted">At a glance</h2>
+                    </template>
+                    <dl class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-5">
+                        <div class="min-w-0 space-y-0.5">
+                            <dt class="text-muted">Research <TermHint term="research_completeness" /></dt>
+                            <dd><FundsCompletenessMeter :value="fund.research_completeness" /></dd>
+                        </div>
+                        <div class="min-w-0 space-y-0.5">
+                            <dt class="text-muted">Diligence <TermHint term="diligence_completeness" /></dt>
+                            <dd><FundsCompletenessMeter :value="fund.diligence_completeness" /></dd>
+                        </div>
+                        <div class="min-w-0 space-y-0.5">
+                            <dt class="text-muted">AUM</dt>
+                            <dd>{{ formatMoney({ cents: fund.aum_cents, compact: true }) }}</dd>
+                        </div>
+                        <div class="min-w-0 space-y-0.5">
+                            <dt class="text-muted">Working capital <TermHint term="working_capital_loans" /></dt>
+                            <dd>
+                                {{
+                                    fund.has_working_capital_loans
+                                        ? fund.max_working_capital_loan_cents
+                                            ? `Up to ${formatMoney({ cents: fund.max_working_capital_loan_cents, compact: true })}`
+                                            : 'Yes'
+                                        : '—'
+                                }}
+                            </dd>
+                        </div>
+                        <div class="min-w-0 space-y-0.5">
+                            <dt class="text-muted">Headquarters</dt>
+                            <dd>
+                                {{
+                                    [fund.hq_city, countryName({ code: fund.hq_country })].filter(Boolean).join(', ') ||
+                                    '—'
+                                }}
+                            </dd>
+                        </div>
+                        <div class="min-w-0 space-y-0.5">
+                            <dt class="text-muted">Website</dt>
+                            <dd class="truncate">
+                                <a
+                                    v-if="fund.website_url"
+                                    :href="fund.website_url"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="underline"
+                                    >{{ displayUrl({ url: fund.website_url }) }}</a
+                                >
+                                <span v-else>—</span>
+                            </dd>
+                        </div>
+                        <div class="min-w-0 space-y-0.5">
+                            <dt class="text-muted">LinkedIn</dt>
+                            <dd class="truncate">
+                                <a
+                                    v-if="fund.linkedin_url"
+                                    :href="fund.linkedin_url"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="underline"
+                                    >{{ displayUrl({ url: fund.linkedin_url, dropPrefix: 'linkedin.com/' }) }}</a
+                                >
+                                <span v-else>—</span>
+                            </dd>
+                        </div>
+                        <div class="min-w-0 space-y-0.5">
+                            <dt class="text-muted">Team size</dt>
+                            <dd>
+                                {{
+                                    fund.employee_count !== null && !fund.employee_range
+                                        ? fund.employee_count
+                                        : (fund.employee_range ?? '—')
+                                }}
+                            </dd>
+                        </div>
+                        <div class="min-w-0 space-y-0.5">
+                            <dt class="text-muted">Found</dt>
+                            <dd>
+                                {{ FUND_ORIGIN_LABELS[fund.origin] }}
+                                <NuxtLink
+                                    v-if="fund.discovered_from"
+                                    :to="`/funds/${fund.discovered_from.id}`"
+                                    class="block underline"
+                                    >{{ fund.discovered_from.name }}</NuxtLink
+                                >
+                            </dd>
+                        </div>
+                    </dl>
+                </UCard>
+                <UTabs v-model="tab" :items="tabItems" :content="false" size="sm" />
+                <div class="space-y-6">
                     <FundsIdentityCandidates
                         v-if="fund.identity_candidates.length"
                         :fund-id="fund.id"
@@ -391,63 +490,96 @@ async function rejectFinding(finding: FundFinding) {
                                 </p>
                             </template>
                             <ul v-if="fund.people.length" class="divide-y divide-default">
-                                <li v-for="person in fund.people" :key="person.id" class="space-y-2 py-3">
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <span class="font-medium text-highlighted">{{ person.name }}</span>
-                                        <FundsSourceChips :sources="person.sources" />
-                                        <UBadge
-                                            v-if="person.is_principal"
-                                            label="Principal"
-                                            color="primary"
-                                            variant="soft"
-                                            size="sm"
-                                        />
-                                        <span v-if="person.title" class="text-sm text-muted">{{ person.title }}</span>
-                                        <UButton
-                                            v-if="person.linkedin_url"
-                                            :to="person.linkedin_url"
-                                            target="_blank"
-                                            icon="i-lucide-linkedin"
-                                            size="xs"
-                                            color="neutral"
-                                            variant="ghost"
-                                            aria-label="LinkedIn profile"
-                                        />
-                                        <a
-                                            v-if="person.email"
-                                            :href="`mailto:${person.email}`"
-                                            class="text-sm underline"
-                                            >{{ person.email }}</a
+                                <li v-for="person in fund.people" :key="person.id" class="py-1">
+                                    <!-- Collapsed to the name line; opening it shows the bio and work history. -->
+                                    <UCollapsible
+                                        v-slot="{ open }"
+                                        :disabled="!person.bio_summary && !person.affiliations.length"
+                                    >
+                                        <div
+                                            class="flex cursor-pointer flex-wrap items-center gap-2 rounded-md py-2 hover:bg-elevated/50"
                                         >
-                                    </div>
-                                    <p v-if="person.bio_summary" class="text-sm">{{ person.bio_summary }}</p>
-                                    <ul v-if="person.affiliations.length" class="space-y-1 text-sm">
-                                        <li
-                                            v-for="affiliation in person.affiliations"
-                                            :key="affiliation.id"
-                                            class="flex flex-wrap items-center gap-2"
-                                        >
-                                            <span class="text-muted">{{ relationLabels[affiliation.relation] }}</span>
-                                            <NuxtLink
-                                                v-if="affiliation.organization.fund_id"
-                                                :to="`/funds/${affiliation.organization.fund_id}`"
-                                                class="font-medium hover:underline"
-                                                >{{ affiliation.organization.name }}</NuxtLink
-                                            >
-                                            <span v-else class="font-medium">{{ affiliation.organization.name }}</span>
-                                            <span v-if="affiliation.title" class="text-muted">{{
-                                                affiliation.title
+                                            <UIcon
+                                                name="i-lucide-chevron-down"
+                                                class="size-4 shrink-0 text-dimmed transition-transform"
+                                                :class="{
+                                                    'rotate-180': open,
+                                                    invisible: !person.bio_summary && !person.affiliations.length,
+                                                }"
+                                            />
+                                            <span class="font-medium text-highlighted">{{ person.name }}</span>
+                                            <FundsSourceChips :sources="person.sources" @click.stop />
+                                            <UBadge
+                                                v-if="person.is_principal"
+                                                label="Principal"
+                                                color="primary"
+                                                variant="soft"
+                                                size="sm"
+                                            />
+                                            <span v-if="person.title" class="text-sm text-muted">{{
+                                                person.title
                                             }}</span>
-                                            <span
-                                                v-if="affiliation.start_year || affiliation.end_year"
-                                                class="text-xs text-dimmed"
-                                                >{{ affiliation.start_year ?? '?' }}–{{
-                                                    affiliation.end_year ?? 'now'
-                                                }}</span
+                                            <UButton
+                                                v-if="person.linkedin_url"
+                                                :to="person.linkedin_url"
+                                                target="_blank"
+                                                icon="i-lucide-linkedin"
+                                                size="xs"
+                                                color="neutral"
+                                                variant="ghost"
+                                                aria-label="LinkedIn profile"
+                                                @click.stop
+                                            />
+                                            <a
+                                                v-if="person.email"
+                                                :href="`mailto:${person.email}`"
+                                                class="text-sm underline"
+                                                @click.stop
+                                                >{{ person.email }}</a
                                             >
-                                            <FundsSourceChips :sources="affiliation.sources" />
-                                        </li>
-                                    </ul>
+                                            <span v-if="person.affiliations.length && !open" class="text-xs text-dimmed"
+                                                >Work history ({{ person.affiliations.length }})</span
+                                            >
+                                        </div>
+                                        <template #content>
+                                            <div class="space-y-2 pb-3 pl-6">
+                                                <p v-if="person.bio_summary" class="text-sm">
+                                                    {{ person.bio_summary }}
+                                                </p>
+                                                <ul v-if="person.affiliations.length" class="space-y-1 text-sm">
+                                                    <li
+                                                        v-for="affiliation in person.affiliations"
+                                                        :key="affiliation.id"
+                                                        class="flex flex-wrap items-center gap-2"
+                                                    >
+                                                        <span class="text-muted">{{
+                                                            relationLabels[affiliation.relation]
+                                                        }}</span>
+                                                        <NuxtLink
+                                                            v-if="affiliation.organization.fund_id"
+                                                            :to="`/funds/${affiliation.organization.fund_id}`"
+                                                            class="font-medium hover:underline"
+                                                            >{{ affiliation.organization.name }}</NuxtLink
+                                                        >
+                                                        <span v-else class="font-medium">{{
+                                                            affiliation.organization.name
+                                                        }}</span>
+                                                        <span v-if="affiliation.title" class="text-muted">{{
+                                                            affiliation.title
+                                                        }}</span>
+                                                        <span
+                                                            v-if="affiliation.start_year || affiliation.end_year"
+                                                            class="text-xs text-dimmed"
+                                                            >{{ affiliation.start_year ?? '?' }}–{{
+                                                                affiliation.end_year ?? 'now'
+                                                            }}</span
+                                                        >
+                                                        <FundsSourceChips :sources="affiliation.sources" />
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </template>
+                                    </UCollapsible>
                                 </li>
                             </ul>
                             <p v-else class="text-sm text-dimmed">No team members found yet.</p>
@@ -467,14 +599,98 @@ async function rejectFinding(finding: FundFinding) {
                         </UCard>
                     </template>
 
-                    <FundsDiligenceGaps
-                        v-if="tab === 'diligence'"
-                        :fund-id="fund.id"
-                        :items="fund.diligence"
-                        @saved="updated => (fund = updated)"
-                    />
+                    <!-- Due diligence: the team's own fields and answers, kept apart from AI research. -->
+                    <template v-if="tab === 'diligence'">
+                        <FundsDiligenceGaps
+                            :fund-id="fund.id"
+                            :items="fund.diligence"
+                            @saved="updated => (fund = updated)"
+                        />
+                        <UCard>
+                            <template #header>
+                                <div class="flex items-center justify-between">
+                                    <h2 class="font-semibold text-highlighted">Tracking</h2>
+                                    <UBadge
+                                        label="Entered by people"
+                                        color="primary"
+                                        variant="soft"
+                                        size="sm"
+                                        icon="i-lucide-user-pen"
+                                    />
+                                </div>
+                            </template>
+                            <div class="grid gap-4 sm:grid-cols-2">
+                                <UFormField label="Website" hint="Correcting it refreshes the research">
+                                    <UInput v-model="teamForm.website_url" placeholder="https://…" class="w-full" />
+                                </UFormField>
+                                <UFormField label="LinkedIn page">
+                                    <UInput
+                                        v-model="teamForm.linkedin_url"
+                                        placeholder="https://www.linkedin.com/company/…"
+                                        class="w-full"
+                                    />
+                                </UFormField>
+                                <UFormField
+                                    label="Regional focus"
+                                    :hint="fund?.is_focus_set_by_team ? 'Set by the team' : 'From research'"
+                                >
+                                    <USelectMenu
+                                        v-model="teamForm.focus_areas"
+                                        :items="focusItems"
+                                        value-key="value"
+                                        multiple
+                                        placeholder="Add regions or countries"
+                                        class="w-full"
+                                    >
+                                        <FundsFocusTags
+                                            v-if="teamForm.focus_areas.length"
+                                            :codes="teamForm.focus_areas"
+                                            :max="8"
+                                        />
+                                        <span v-else class="text-dimmed">Add regions or countries</span>
+                                    </USelectMenu>
+                                    <UButton
+                                        v-if="fund?.is_focus_set_by_team"
+                                        label="Use research's focus instead"
+                                        size="xs"
+                                        color="neutral"
+                                        variant="link"
+                                        class="mt-1 px-0"
+                                        :loading="isSavingTeam"
+                                        @click="useResearchFocus"
+                                    />
+                                </UFormField>
+                                <UFormField label="Stage">
+                                    <USelect v-model="teamForm.stage" :items="stageItems" class="w-full" />
+                                </UFormField>
+                                <UFormField label="Fit">
+                                    <USelectMenu
+                                        v-model="teamForm.fit_tags"
+                                        :items="fitTagItems"
+                                        value-key="value"
+                                        multiple
+                                        class="w-full"
+                                        placeholder="Add a tag"
+                                    />
+                                </UFormField>
+                                <UFormField label="Owner">
+                                    <USelect v-model="teamForm.owner_id" :items="ownerItems" class="w-full" />
+                                </UFormField>
+                                <UFormField label="Notes / flags" class="sm:col-span-2">
+                                    <UTextarea v-model="teamForm.notes" :rows="4" autoresize class="w-full" />
+                                </UFormField>
+                                <UButton
+                                    label="Save"
+                                    variant="solid"
+                                    class="justify-self-start sm:col-span-2"
+                                    :loading="isSavingTeam"
+                                    @click="saveTeamFields"
+                                />
+                            </div>
+                        </UCard>
+                    </template>
 
-                    <template v-if="tab === 'sources'">
+                    <template v-if="fund && tab === 'sources'">
                         <UCard>
                             <template #header>
                                 <h2 class="font-semibold text-highlighted">
@@ -550,183 +766,6 @@ async function rejectFinding(finding: FundFinding) {
                             <p v-else class="text-sm text-dimmed">Not researched yet.</p>
                         </UCard>
                     </template>
-                </div>
-
-                <!-- Right column: the team's own fields, kept apart from AI research. -->
-                <div class="space-y-6">
-                    <UCard>
-                        <template #header>
-                            <div class="flex items-center justify-between">
-                                <h2 class="font-semibold text-highlighted">Team</h2>
-                                <UBadge
-                                    label="Entered by people"
-                                    color="primary"
-                                    variant="soft"
-                                    size="sm"
-                                    icon="i-lucide-user-pen"
-                                />
-                            </div>
-                        </template>
-                        <div class="space-y-4">
-                            <UFormField label="Website" hint="Correcting it refreshes the research">
-                                <UInput v-model="teamForm.website_url" placeholder="https://…" class="w-full" />
-                            </UFormField>
-                            <UFormField label="LinkedIn page">
-                                <UInput
-                                    v-model="teamForm.linkedin_url"
-                                    placeholder="https://www.linkedin.com/company/…"
-                                    class="w-full"
-                                />
-                            </UFormField>
-                            <UFormField
-                                label="Regional focus"
-                                :hint="fund?.is_focus_set_by_team ? 'Set by the team' : 'From research'"
-                            >
-                                <USelectMenu
-                                    v-model="teamForm.focus_areas"
-                                    :items="focusItems"
-                                    value-key="value"
-                                    multiple
-                                    placeholder="Add regions or countries"
-                                    class="w-full"
-                                >
-                                    <FundsFocusTags
-                                        v-if="teamForm.focus_areas.length"
-                                        :codes="teamForm.focus_areas"
-                                        :max="8"
-                                    />
-                                    <span v-else class="text-dimmed">Add regions or countries</span>
-                                </USelectMenu>
-                                <UButton
-                                    v-if="fund?.is_focus_set_by_team"
-                                    label="Use research's focus instead"
-                                    size="xs"
-                                    color="neutral"
-                                    variant="link"
-                                    class="mt-1 px-0"
-                                    :loading="isSavingTeam"
-                                    @click="useResearchFocus"
-                                />
-                            </UFormField>
-                            <UFormField label="Stage">
-                                <USelect v-model="teamForm.stage" :items="stageItems" class="w-full" />
-                            </UFormField>
-                            <UFormField label="Fit">
-                                <USelectMenu
-                                    v-model="teamForm.fit_tags"
-                                    :items="fitTagItems"
-                                    value-key="value"
-                                    multiple
-                                    class="w-full"
-                                    placeholder="Add a tag"
-                                />
-                            </UFormField>
-                            <UFormField label="Owner">
-                                <USelect v-model="teamForm.owner_id" :items="ownerItems" class="w-full" />
-                            </UFormField>
-                            <UFormField label="Notes / flags">
-                                <UTextarea v-model="teamForm.notes" :rows="4" autoresize class="w-full" />
-                            </UFormField>
-                            <UButton
-                                label="Save"
-                                variant="solid"
-                                block
-                                :loading="isSavingTeam"
-                                @click="saveTeamFields"
-                            />
-                        </div>
-                    </UCard>
-                    <UCard v-if="fund">
-                        <template #header>
-                            <h2 class="font-semibold text-highlighted">At a glance</h2>
-                        </template>
-                        <dl class="space-y-2 text-sm">
-                            <div class="flex justify-between gap-2">
-                                <dt class="text-muted">Research <TermHint term="research_completeness" /></dt>
-                                <dd><FundsCompletenessMeter :value="fund.research_completeness" /></dd>
-                            </div>
-                            <div class="flex justify-between gap-2">
-                                <dt class="text-muted">Diligence <TermHint term="diligence_completeness" /></dt>
-                                <dd><FundsCompletenessMeter :value="fund.diligence_completeness" /></dd>
-                            </div>
-                            <div class="flex justify-between gap-2">
-                                <dt class="text-muted">AUM</dt>
-                                <dd>{{ formatMoney({ cents: fund.aum_cents, compact: true }) }}</dd>
-                            </div>
-                            <div class="flex justify-between gap-2">
-                                <dt class="text-muted">Working capital <TermHint term="working_capital_loans" /></dt>
-                                <dd>
-                                    {{
-                                        fund.has_working_capital_loans
-                                            ? fund.max_working_capital_loan_cents
-                                                ? `Up to ${formatMoney({ cents: fund.max_working_capital_loan_cents, compact: true })}`
-                                                : 'Yes'
-                                            : '—'
-                                    }}
-                                </dd>
-                            </div>
-                            <div class="flex justify-between gap-2">
-                                <dt class="text-muted">Headquarters</dt>
-                                <dd>
-                                    {{
-                                        [fund.hq_city, countryName({ code: fund.hq_country })]
-                                            .filter(Boolean)
-                                            .join(', ') || '—'
-                                    }}
-                                </dd>
-                            </div>
-                            <div class="flex justify-between gap-2">
-                                <dt class="text-muted">Website</dt>
-                                <dd class="truncate">
-                                    <a
-                                        v-if="fund.website_url"
-                                        :href="fund.website_url"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        class="underline"
-                                        >{{ fund.website_url.replace(/^https?:\/\/(www\.)?/, '') }}</a
-                                    >
-                                    <span v-else>—</span>
-                                </dd>
-                            </div>
-                            <div class="flex justify-between gap-2">
-                                <dt class="text-muted">LinkedIn</dt>
-                                <dd class="truncate">
-                                    <a
-                                        v-if="fund.linkedin_url"
-                                        :href="fund.linkedin_url"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        class="underline"
-                                        >{{ fund.linkedin_url.replace(/^https?:\/\/(www\.)?linkedin\.com\//, '') }}</a
-                                    >
-                                    <span v-else>—</span>
-                                </dd>
-                            </div>
-                            <div class="flex justify-between gap-2">
-                                <dt class="text-muted">Team size</dt>
-                                <dd>
-                                    {{
-                                        fund.employee_count !== null && !fund.employee_range
-                                            ? fund.employee_count
-                                            : (fund.employee_range ?? '—')
-                                    }}
-                                </dd>
-                            </div>
-                            <div class="flex justify-between gap-2">
-                                <dt class="text-muted">Found</dt>
-                                <dd class="text-right">
-                                    {{ FUND_ORIGIN_LABELS[fund.origin] }}
-                                    <NuxtLink
-                                        v-if="fund.discovered_from"
-                                        :to="`/funds/${fund.discovered_from.id}`"
-                                        class="block underline"
-                                        >{{ fund.discovered_from.name }}</NuxtLink
-                                    >
-                                </dd>
-                            </div>
-                        </dl>
-                    </UCard>
                 </div>
             </div>
         </template>
