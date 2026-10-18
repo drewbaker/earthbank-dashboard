@@ -492,55 +492,56 @@ async function rejectFinding(finding: FundFinding) {
                             <ul v-if="fund.people.length" class="divide-y divide-default">
                                 <li v-for="person in fund.people" :key="person.id" class="py-1">
                                     <!-- Collapsed to the name line; opening it shows the bio and work history. -->
-                                    <UCollapsible
-                                        v-slot="{ open }"
-                                        :disabled="!person.bio_summary && !person.affiliations.length"
-                                    >
-                                        <div
-                                            class="flex cursor-pointer flex-wrap items-center gap-2 rounded-md py-2 hover:bg-elevated/50"
-                                        >
-                                            <UIcon
-                                                name="i-lucide-chevron-down"
-                                                class="size-4 shrink-0 text-dimmed transition-transform"
-                                                :class="{
-                                                    'rotate-180': open,
-                                                    invisible: !person.bio_summary && !person.affiliations.length,
-                                                }"
-                                            />
-                                            <span class="font-medium text-highlighted">{{ person.name }}</span>
-                                            <FundsSourceChips :sources="person.sources" @click.stop />
-                                            <UBadge
-                                                v-if="person.is_principal"
-                                                label="Principal"
-                                                color="primary"
-                                                variant="soft"
-                                                size="sm"
-                                            />
-                                            <span v-if="person.title" class="text-sm text-muted">{{
-                                                person.title
-                                            }}</span>
-                                            <UButton
-                                                v-if="person.linkedin_url"
-                                                :to="person.linkedin_url"
-                                                target="_blank"
-                                                icon="i-lucide-linkedin"
-                                                size="xs"
-                                                color="neutral"
-                                                variant="ghost"
-                                                aria-label="LinkedIn profile"
-                                                @click.stop
-                                            />
-                                            <a
-                                                v-if="person.email"
-                                                :href="`mailto:${person.email}`"
-                                                class="text-sm underline"
-                                                @click.stop
-                                                >{{ person.email }}</a
+                                    <UCollapsible :disabled="!person.bio_summary && !person.affiliations.length">
+                                        <template #default="{ open }">
+                                            <div
+                                                class="flex cursor-pointer flex-wrap items-center gap-2 rounded-md py-2 hover:bg-elevated/50"
                                             >
-                                            <span v-if="person.affiliations.length && !open" class="text-xs text-dimmed"
-                                                >Work history ({{ person.affiliations.length }})</span
-                                            >
-                                        </div>
+                                                <UIcon
+                                                    name="i-lucide-chevron-down"
+                                                    class="size-4 shrink-0 text-dimmed transition-transform"
+                                                    :class="{
+                                                        'rotate-180': open,
+                                                        invisible: !person.bio_summary && !person.affiliations.length,
+                                                    }"
+                                                />
+                                                <span class="font-medium text-highlighted">{{ person.name }}</span>
+                                                <FundsSourceChips :sources="person.sources" @click.stop />
+                                                <UBadge
+                                                    v-if="person.is_principal"
+                                                    label="Principal"
+                                                    color="primary"
+                                                    variant="soft"
+                                                    size="sm"
+                                                />
+                                                <span v-if="person.title" class="text-sm text-muted">{{
+                                                    person.title
+                                                }}</span>
+                                                <UButton
+                                                    v-if="person.linkedin_url"
+                                                    :to="person.linkedin_url"
+                                                    target="_blank"
+                                                    icon="i-lucide-linkedin"
+                                                    size="xs"
+                                                    color="neutral"
+                                                    variant="ghost"
+                                                    aria-label="LinkedIn profile"
+                                                    @click.stop
+                                                />
+                                                <a
+                                                    v-if="person.email"
+                                                    :href="`mailto:${person.email}`"
+                                                    class="text-sm underline"
+                                                    @click.stop
+                                                    >{{ person.email }}</a
+                                                >
+                                                <span
+                                                    v-if="person.affiliations.length && !open"
+                                                    class="text-xs text-dimmed"
+                                                    >Work history ({{ person.affiliations.length }})</span
+                                                >
+                                            </div>
+                                        </template>
                                         <template #content>
                                             <div class="space-y-2 pb-3 pl-6">
                                                 <p v-if="person.bio_summary" class="text-sm">
