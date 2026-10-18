@@ -269,6 +269,7 @@ Status: built on the `funds-research` branch (requested Oct 16, 2026). Replaces 
 - [ ] Directory checks against the CDFI Fund certified list (a spreadsheet of names without websites: useful for confirming US CDFIs, not for finding sites)
 - [x] **Gap-filling pass**: a second, shorter research pass for important fields still empty after the first
 - [x] Public DFI and government lists are queued on the first start after deploy
+- [x] Funds list: long names cut with "…"; Regional focus tags replace the HQ column; the map charts regional focus only (several regions per fund); the team can set a fund's regional focus as tags, which research never overwrites
 - [x] **Funds by email**: "research this fund" (with a forwarded email or just a name) adds the fund, or refreshes it if it's on the list; missing website or LinkedIn page are found by the research
 - [x] **Refresh data** button on the fund page; correcting the website or LinkedIn page retires research from the old address and refreshes; the team's own fields and diligence answers are never overwritten
 - [x] **Screening fields** from the consultants' proposals: a "Lending model" research group (lender archetype, loan terms, lending currency, direct vs on-lending, underwriting and origination partners, first-loss/guarantees, portfolio scale); diligence questions for recovery rate & NPLs and deployment capacity; computed fit with Earth Bank's $500K–$5M ticket as a column and filter, plus filters for lender type, channel and local-currency lending

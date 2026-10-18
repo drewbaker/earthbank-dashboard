@@ -9,9 +9,10 @@ import type { Fund } from '#shared/schemas/index.ts'
 import { countriesInFocus, geoFocusLabel } from '#shared/utils/geo-focus.ts'
 import { useChartPalette } from '~/composables/useChartPalette.ts'
 
-// Where the funds on the list lend, so gaps in regional coverage stand out. A fund counts in each
-// country its focus covers; with no focus found yet, its HQ country stands in. Global funds are kept
-// apart (like the pipeline map), since painting every country with them would hide the gaps.
+// Where the funds on the list lend, so gaps in regional coverage stand out. A fund counts in every
+// country its regional focus covers (a fund can focus on several regions and countries); where it is
+// based doesn't count. Global funds are kept apart (like the pipeline map), since painting every
+// country with them would hide the gaps.
 
 const props = defineProps<{ funds: Fund[] }>()
 const palette = useChartPalette()
@@ -87,21 +88,11 @@ const measuredFunds = computed(() =>
 
 const globalFunds = computed(() => measuredFunds.value.filter(fund => fund.focus_areas.includes(GLOBAL_FOCUS)))
 
-// Each fund's countries: its focus, else its HQ; global funds are counted on their own.
+// Each fund's countries from its regional focus; global funds are counted on their own.
 const fundCountries = computed(() =>
     measuredFunds.value
         .filter(fund => !fund.focus_areas.includes(GLOBAL_FOCUS))
-        .map(fund => ({
-            fund,
-            countries: new Set(
-                fund.focus_areas.length > 0
-                    ? countriesInFocus({ codes: fund.focus_areas })
-                    : fund.hq_country
-                      ? [fund.hq_country]
-                      : [],
-            ),
-            isFromHeadquarters: fund.focus_areas.length === 0,
-        })),
+        .map(fund => ({ fund, countries: countriesInFocus({ codes: fund.focus_areas }) })),
 )
 const unplacedCount = computed(() => fundCountries.value.filter(entry => entry.countries.size === 0).length)
 
@@ -188,8 +179,8 @@ function nameList({ names }: { names: string[] }) {
                     <div>
                         <h2 class="font-medium text-highlighted">Geographic coverage</h2>
                         <p class="text-xs text-muted">
-                            Countries shaded by how many funds lend there (their focus, else their HQ). Global funds are
-                            shown on their own.
+                            Countries shaded by how many funds focus on them (a fund counts in every region it covers).
+                            Global funds are shown on their own.
                         </p>
                     </div>
                     <UTabs v-model="measure" :items="measureItems" :content="false" size="xs" />
@@ -264,7 +255,8 @@ function nameList({ names }: { names: string[] }) {
                 <template #fallback><USkeleton class="h-95 w-full" /></template>
             </ClientOnly>
             <p v-if="unplacedCount" class="mt-4 text-sm text-muted">
-                {{ fundCount({ count: unplacedCount }) }} with no focus or HQ found yet.
+                {{ fundCount({ count: unplacedCount }) }} with no regional focus yet (set it on the fund page, or
+                refresh the research).
             </p>
         </UCard>
 

@@ -680,7 +680,11 @@ model FundManager {
     employee_range                 String?
     sectors                        Json      @default("[]")
     loan_types                     Json      @default("[]")
+    // Effective regional focus (codes) used for the list, filters and map: the team's choice when they
+    // set one, else what research found.
     focus_areas                    Json      @default("[]")
+    // Regional focus the team set by hand (overrides research; null means "use research").
+    team_focus_areas               Json?
     // LENDER_ARCHETYPES key.
     lender_archetype               String?
     // direct | on_lending | both

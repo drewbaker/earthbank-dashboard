@@ -15,6 +15,7 @@ import { canonicalLinkedinUrl, websiteDomain } from '#shared/funds/organization-
  *
  * Runs after research, after a finding is rejected or restored, and after a diligence answer changes.
  * A fund added without a website takes the one research verified (unless another fund has that domain).
+ * When the team set the regional focus by hand, theirs is kept over what research found.
  *
  * @param input.fundManagerId - The fund.
  * @returns The stored fund row.
@@ -42,6 +43,11 @@ export async function refreshFundResearchValues({ fundManagerId }: { fundManager
         fundManagerId,
         websiteUrl: findings.find(finding => finding.field === 'website_url')?.value as { url?: string } | undefined,
     })
+    const fund = await findFundManager({ fundManagerId })
+    const teamFocus = Array.isArray(fund?.team_focus_areas) ? (fund.team_focus_areas as string[]) : null
+    if (teamFocus) {
+        values.focus_areas = teamFocus
+    }
     return storeFundResearchValues({
         fundManagerId,
         values,

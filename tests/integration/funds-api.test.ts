@@ -337,3 +337,59 @@ describe('research settings and status', () => {
         })
     })
 })
+
+describe('regional focus', () => {
+    it("keeps the team's regional focus over research's, and can go back to research's", async () => {
+        const { refreshFundResearchValues } = await import('#server/utils/funds/refresh-values.ts')
+        const { saveResearchResults } = await import('#server/database/fund-research.ts')
+        await saveResearchResults({
+            fundManagerId: ids.small,
+            researchRunId: null,
+            findings: [
+                {
+                    field: 'geographic_focus',
+                    value: { codes: ['BR'], text: 'Brazil' },
+                    valueKey: 'brazil',
+                    isList: false,
+                    confidence: 0.9,
+                    sources: [
+                        {
+                            url: 'https://smallticket.example/where',
+                            title: 'Where',
+                            kind: 'fund_website',
+                            quote: 'Brazil',
+                        },
+                    ],
+                },
+            ],
+            people: [],
+            affiliations: [],
+            diligence: [],
+            now: new Date(),
+        })
+        const set = await request({
+            method: 'PATCH',
+            path: `/v1/funds/${ids.small}`,
+            body: { focus_areas: ['region:eastern_africa', 'IN', 'IN'] },
+        })
+        expect(set.json).toMatchObject({ focus_areas: ['region:eastern_africa', 'IN'], is_focus_set_by_team: true })
+        // A research refresh doesn't overwrite it.
+        await refreshFundResearchValues({ fundManagerId: ids.small })
+        expect((await request({ path: `/v1/funds/${ids.small}` })).json.focus_areas).toEqual([
+            'region:eastern_africa',
+            'IN',
+        ])
+        expect(await listNames({ query: 'focus_area=region:eastern_africa' })).toContain('Small Ticket Lender')
+        expect(
+            (await request({ method: 'PATCH', path: `/v1/funds/${ids.small}`, body: { focus_areas: ['atlantis'] } }))
+                .status,
+        ).toBe(422)
+        // Back to research's focus.
+        const cleared = await request({
+            method: 'PATCH',
+            path: `/v1/funds/${ids.small}`,
+            body: { focus_areas: null },
+        })
+        expect(cleared.json).toMatchObject({ focus_areas: ['BR'], is_focus_set_by_team: false })
+    })
+})

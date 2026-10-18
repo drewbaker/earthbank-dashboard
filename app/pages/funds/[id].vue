@@ -15,6 +15,7 @@ import {
     FUND_STAGES,
 } from '#shared/constants/funds.ts'
 import type { FundDetail, FundFinding, FundNetwork, FundSourceLink } from '#shared/schemas/index.ts'
+import { geoFocusOptions } from '#shared/utils/geo-focus.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { NO_OWNER, ownerIdFromSelection, usePipelineReference } from '~/composables/usePipelineReference.ts'
 import { countryName } from '~/utils/fund-findings.ts'
@@ -114,7 +115,16 @@ const teamForm = reactive({
     notes: '',
     website_url: '',
     linkedin_url: '',
+    focus_areas: [] as string[],
 })
+// Regions and countries for the focus picker, grouped: Global, regions, then countries by name.
+const focusItems = (['Global', 'Regions', 'Countries'] as const).map(group => [
+    // Group headings aren't selectable; the value only satisfies the item type.
+    { type: 'label' as const, label: group, value: `group:${group}` },
+    ...geoFocusOptions()
+        .filter(option => option.group === group)
+        .map(option => ({ label: option.label, value: option.code })),
+])
 watch(
     fund,
     value => {
@@ -125,6 +135,7 @@ watch(
             teamForm.notes = value.notes ?? ''
             teamForm.website_url = value.website_url ?? ''
             teamForm.linkedin_url = value.linkedin_url ?? ''
+            teamForm.focus_areas = [...value.focus_areas]
         }
     },
     { immediate: true },
@@ -153,6 +164,8 @@ async function saveTeamFields() {
                 fit_tags: teamForm.fit_tags,
                 owner_id: ownerIdFromSelection({ ownerId: teamForm.owner_id }),
                 notes: teamForm.notes.trim() || null,
+                // Only sent when changed, so saving other fields doesn't pin research's focus as the team's.
+                ...(isFocusChanged() ? { focus_areas: teamForm.focus_areas } : {}),
             },
         })
         const isNewAddress =
@@ -167,6 +180,37 @@ async function saveTeamFields() {
                   }
                 : { title: 'Saved', color: 'success' },
         )
+    } catch (error) {
+        toast.add({ title: 'Not saved', description: apiErrorMessage({ error }), color: 'error' })
+    } finally {
+        isSavingTeam.value = false
+    }
+}
+
+/**
+ * Whether the focus in the form differs from the fund's (order ignored).
+ *
+ * @returns True when the team changed it.
+ */
+function isFocusChanged() {
+    const saved = [...(fund.value?.focus_areas ?? [])].sort().join(',')
+    return [...teamForm.focus_areas].sort().join(',') !== saved
+}
+
+/**
+ * Drop the team's regional focus and go back to what research found.
+ *
+ * @returns Resolves once saved.
+ */
+async function useResearchFocus() {
+    isSavingTeam.value = true
+    try {
+        fund.value = await api<FundDetail>({
+            path: `/funds/${fundId.value}`,
+            method: 'PATCH',
+            body: { focus_areas: null },
+        })
+        toast.add({ title: "Using research's regional focus", color: 'success' })
     } catch (error) {
         toast.add({ title: 'Not saved', description: apiErrorMessage({ error }), color: 'error' })
     } finally {
@@ -532,6 +576,36 @@ async function rejectFinding(finding: FundFinding) {
                                     v-model="teamForm.linkedin_url"
                                     placeholder="https://www.linkedin.com/company/…"
                                     class="w-full"
+                                />
+                            </UFormField>
+                            <UFormField
+                                label="Regional focus"
+                                :hint="fund?.is_focus_set_by_team ? 'Set by the team' : 'From research'"
+                            >
+                                <USelectMenu
+                                    v-model="teamForm.focus_areas"
+                                    :items="focusItems"
+                                    value-key="value"
+                                    multiple
+                                    placeholder="Add regions or countries"
+                                    class="w-full"
+                                >
+                                    <FundsFocusTags
+                                        v-if="teamForm.focus_areas.length"
+                                        :codes="teamForm.focus_areas"
+                                        :max="8"
+                                    />
+                                    <span v-else class="text-dimmed">Add regions or countries</span>
+                                </USelectMenu>
+                                <UButton
+                                    v-if="fund?.is_focus_set_by_team"
+                                    label="Use research's focus instead"
+                                    size="xs"
+                                    color="neutral"
+                                    variant="link"
+                                    class="mt-1 px-0"
+                                    :loading="isSavingTeam"
+                                    @click="useResearchFocus"
                                 />
                             </UFormField>
                             <UFormField label="Stage">

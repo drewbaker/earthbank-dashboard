@@ -3,7 +3,6 @@ import { computed, ref } from 'vue'
 import type { FundStage } from '#shared/constants/funds.ts'
 import { FUND_FIT_TAG_LABELS, FUND_STAGES } from '#shared/constants/funds.ts'
 import type { Fund } from '#shared/schemas/index.ts'
-import { countryName } from '~/utils/fund-findings.ts'
 import { formatMoney } from '~/utils/format.ts'
 
 const props = defineProps<{ funds: Fund[] }>()
@@ -72,10 +71,8 @@ function checkSizeLabel({ fund }: { fund: Fund }) {
                     @dragstart="draggedFundId = card.id"
                     @dragend="draggedFundId = null"
                 >
-                    <p class="font-medium text-highlighted">{{ card.name }}</p>
-                    <p v-if="card.hq_country || card.hq_city" class="text-xs text-muted">
-                        {{ [card.hq_city, countryName({ code: card.hq_country })].filter(Boolean).join(', ') }}
-                    </p>
+                    <p class="truncate font-medium text-highlighted" :title="card.name">{{ card.name }}</p>
+                    <FundsFocusTags :codes="card.focus_areas" :max="2" />
                     <div v-if="card.fit_tags.length" class="flex flex-wrap gap-1">
                         <UBadge
                             v-for="tag in card.fit_tags"

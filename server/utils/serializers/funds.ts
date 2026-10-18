@@ -76,6 +76,7 @@ export function serializeFund({ fund }: { fund: FundListRow }): Fund {
         sectors: stringArray({ value: fund.sectors }) as FundSector[],
         loan_types: stringArray({ value: fund.loan_types }) as LoanType[],
         focus_areas: stringArray({ value: fund.focus_areas }),
+        is_focus_set_by_team: Array.isArray(fund.team_focus_areas),
         lender_archetype: fund.lender_archetype as LenderArchetype | null,
         lending_channel: fund.lending_channel as LendingChannel | null,
         lends_local_currency: fund.lends_local_currency,

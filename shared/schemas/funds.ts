@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isGeoFocusCode } from '#shared/utils/geo-focus.ts'
 import {
     AFFILIATION_RELATIONS,
     FUND_DILIGENCE_QUESTIONS,
@@ -164,6 +165,8 @@ export const Fund = z.object({
     sectors: z.array(z.enum(FUND_SECTORS)),
     loan_types: z.array(z.enum(LOAN_TYPES)),
     focus_areas: z.array(z.string()),
+    // Whether the regional focus was set by the team (else it's what research found).
+    is_focus_set_by_team: z.boolean(),
     lender_archetype: z.enum(LENDER_ARCHETYPES).nullable(),
     lending_channel: z.enum(LENDING_CHANNELS).nullable(),
     lends_local_currency: z.boolean(),
@@ -280,6 +283,11 @@ export const UpdateFundRequest = z
         fit_tags: z.array(z.enum(FUND_FIT_TAGS)),
         notes: z.string().max(20_000).nullable(),
         owner_id: z.string().nullable(),
+        // The team's regional focus (country codes, region codes, "global"); null goes back to research's.
+        focus_areas: z
+            .array(z.string().refine(code => isGeoFocusCode({ code }), { message: 'Unknown region or country.' }))
+            .max(60)
+            .nullable(),
         // "None of these": drop the website and LinkedIn candidates waiting for confirmation.
         dismiss_identity_candidates: z.boolean(),
     })

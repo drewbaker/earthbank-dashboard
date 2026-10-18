@@ -12,9 +12,9 @@ import {
     TICKET_FIT_DETAILS,
     WORKING_CAPITAL_TARGET_CENTS,
 } from '#shared/constants/funds.ts'
+import { geoFocusLabel } from '#shared/utils/geo-focus.ts'
 import type { Fund, FundDetail, FundList, FundResearchSettings, FundResearchStatus } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
-import { countryName } from '~/utils/fund-findings.ts'
 import type { FundFilters } from '~/utils/fund-filters.ts'
 import { fundFiltersFromQuery, fundFiltersToApiQuery, fundFiltersToQuery } from '~/utils/fund-filters.ts'
 import { formatDate, formatMoney, localToday } from '~/utils/format.ts'
@@ -73,6 +73,7 @@ const viewItems = [
 const UBadge = resolveComponent('UBadge')
 const NuxtLink = resolveComponent('NuxtLink')
 const FundsStageBadge = resolveComponent('FundsStageBadge')
+const FundsFocusTags = resolveComponent('FundsFocusTags')
 const FundsCompletenessMeter = resolveComponent('FundsCompletenessMeter')
 const FundsResearchStatusBadge = resolveComponent('FundsResearchStatusBadge')
 
@@ -87,11 +88,16 @@ const columns: TableColumn<Fund>[] = sortableColumns({
             accessorFn: fund => fund.name.toLowerCase(),
             header: 'Fund',
             cell: ({ row }) =>
-                h('div', { class: 'min-w-0 max-w-72' }, [
-                    h('div', { class: 'flex items-center gap-2' }, [
+                // Long names are cut with "…" (the full name shows on hover) so they stay in their column.
+                h('div', { class: 'w-72 max-w-72 min-w-0' }, [
+                    h('div', { class: 'flex min-w-0 items-center gap-2' }, [
                         h(
                             NuxtLink,
-                            { to: `/funds/${row.original.id}`, class: 'font-medium text-highlighted hover:underline' },
+                            {
+                                to: `/funds/${row.original.id}`,
+                                title: row.original.name,
+                                class: 'min-w-0 truncate font-medium text-highlighted hover:underline',
+                            },
                             () => row.original.name,
                         ),
                         // The research found several same-named sites; a person picks on the fund page.
@@ -100,6 +106,7 @@ const columns: TableColumn<Fund>[] = sortableColumns({
                                   label: row.original.website_url ? 'Confirm LinkedIn' : 'Needs website',
                                   color: 'warning',
                                   size: 'sm',
+                                  class: 'shrink-0',
                               })
                             : null,
                     ]),
@@ -109,10 +116,10 @@ const columns: TableColumn<Fund>[] = sortableColumns({
                 ]),
         },
         {
-            id: 'headquarters',
-            accessorFn: fund => countryName({ code: fund.hq_country }) || undefined,
-            header: 'HQ',
-            cell: ({ row }) => h('span', { class: 'text-sm' }, countryName({ code: row.original.hq_country }) || '—'),
+            id: 'focus',
+            accessorFn: fund => (fund.focus_areas.length ? geoFocusLabel({ code: fund.focus_areas[0]! }) : undefined),
+            header: 'Regional focus',
+            cell: ({ row }) => h(FundsFocusTags, { codes: row.original.focus_areas }),
         },
         {
             id: 'aum',

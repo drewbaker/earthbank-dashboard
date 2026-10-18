@@ -7,6 +7,8 @@ import { requireUser } from '#server/utils/auth.ts'
 import { conflict } from '#server/utils/errors.ts'
 import { loadFundDetail, requireFund } from '#server/utils/funds/fund-detail.ts'
 import { clearResearchFromOldAddresses, queueFundRefresh } from '#server/utils/funds/refresh.ts'
+import { refreshFundResearchValues } from '#server/utils/funds/refresh-values.ts'
+import { Prisma } from '#server/generated/prisma/client.ts'
 import { assertActiveUser } from '#server/utils/users.ts'
 import { IdentityCandidate, UpdateFundRequest } from '#shared/schemas/index.ts'
 import { canonicalLinkedinUrl, organizationNameKey, websiteDomain } from '#shared/funds/organization-names.ts'
@@ -16,7 +18,7 @@ defineRouteMeta({
         tags: ['Funds'],
         summary: 'Update a fund',
         description:
-            "Edits the team's own fields: name, website, LinkedIn page, stage, fit tags, notes and owner. Correcting the website or LinkedIn page retires research taken from the old one and refreshes the fund. Research findings aren't edited here.",
+            "Edits the team's own fields: name, website, LinkedIn page, regional focus, stage, fit tags, notes and owner. Correcting the website or LinkedIn page retires research taken from the old one and refreshes the fund. Research findings aren't edited here.",
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: {
             required: true,
@@ -62,6 +64,11 @@ export default defineApiHandler(async event => {
                     : body.linkedin_url && canonicalLinkedinUrl({ url: body.linkedin_url }),
             stage: body.stage,
             fit_tags: body.fit_tags,
+            ...(body.focus_areas === undefined
+                ? {}
+                : body.focus_areas === null
+                  ? { team_focus_areas: Prisma.DbNull }
+                  : { team_focus_areas: [...new Set(body.focus_areas)], focus_areas: [...new Set(body.focus_areas)] }),
             notes: body.notes,
             owner_id: body.owner_id,
             identity_candidates: remainingIdentityCandidates({
@@ -87,6 +94,10 @@ export default defineApiHandler(async event => {
         if (!fund.archived_at) {
             await queueFundRefresh({ fundManagerId, now: new Date() })
         }
+    }
+    // Back to research's regional focus once the team clears theirs.
+    if (body.focus_areas === null) {
+        await refreshFundResearchValues({ fundManagerId })
     }
     await recordAudit({
         actor: ctx.actor,
