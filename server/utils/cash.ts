@@ -78,6 +78,7 @@ export async function loadCashSummary({ today }: { today: string }): Promise<Cas
             name: category.name,
             monthly_cents: category.monthlyCents,
         })),
+        expense_groups: burn.expenseGroups.map(group => ({ name: group.name, monthly_cents: group.monthlyCents })),
         cash_history: await loadCashHistory({ today }),
         accounts: accounts.map(account => ({
             id: account.id,

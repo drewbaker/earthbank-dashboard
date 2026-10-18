@@ -69,6 +69,34 @@ describe('computeMonthlyBurn', () => {
         ])
     })
 
+    it('groups spending into broad expense groups, averaged per month', () => {
+        const result = computeMonthlyBurn({
+            today: '2026-10-09',
+            lookbackMonths: 2,
+            excludedCategories: [],
+            transactions: [
+                transaction({ bookedOn: '2026-08-05', amountCents: -6_000_000, categoryName: 'Payroll' }),
+                transaction({ bookedOn: '2026-09-05', amountCents: -6_000_000, categoryName: 'Salaries' }),
+                transaction({ bookedOn: '2026-09-07', amountCents: -40_000, categoryName: 'SOFTWARE_SUBSCRIPTIONS' }),
+                transaction({ bookedOn: '2026-09-08', amountCents: -60_000, categoryName: 'TAXI' }),
+                transaction({
+                    bookedOn: '2026-09-09',
+                    amountCents: -200_000,
+                    parentCategory: 'TAX',
+                    categoryName: 'State',
+                }),
+                transaction({ bookedOn: '2026-09-10', amountCents: -100_000, categoryName: 'Something new' }),
+            ],
+        })
+        expect(result.expenseGroups).toEqual([
+            { name: 'Wages & benefits', monthlyCents: 6_000_000 },
+            { name: 'Taxes', monthlyCents: 100_000 },
+            { name: 'Other', monthlyCents: 50_000 },
+            { name: 'Travel', monthlyCents: 30_000 },
+            { name: 'Software & internet', monthlyCents: 20_000 },
+        ])
+    })
+
     it('has no burn when there is no history', () => {
         expect(
             computeMonthlyBurn({ today: '2026-10-09', lookbackMonths: 3, excludedCategories: [], transactions: [] })

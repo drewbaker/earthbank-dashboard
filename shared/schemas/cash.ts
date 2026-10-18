@@ -42,6 +42,8 @@ export const CashSummary = z.object({
     computed_burn_cents: Cents.nullable(),
     burn_by_month: z.array(z.object({ month: z.string(), outflow_cents: z.number().int() })),
     top_categories: z.array(z.object({ name: z.string(), monthly_cents: z.number().int() })),
+    /** Burn by broad group (wages, software, travel…), averaged per month over the same months as the burn. */
+    expense_groups: z.array(z.object({ name: z.string(), monthly_cents: z.number().int() })),
     cash_history: z.array(z.object({ date: DateOnly, balance_cents: z.number().int() })),
     accounts: z.array(BankAccount),
     sync: z.object({

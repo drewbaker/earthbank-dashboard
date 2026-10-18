@@ -138,7 +138,7 @@ function describeRunway({ end }: { end: RunwayEnd }) {
                     :actions="[{ label: 'Cash settings', to: '/settings/cash', color: 'warning', variant: 'solid' }]"
                 />
 
-                <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div class="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <UCard>
                         <p class="text-sm text-muted">Cash on hand<TermHint term="cash_on_hand" /></p>
                         <p class="mt-1 text-3xl font-semibold text-highlighted">
@@ -154,21 +154,7 @@ function describeRunway({ end }: { end: RunwayEnd }) {
                             <template v-else>No balance yet</template>
                         </p>
                     </UCard>
-                    <UCard>
-                        <p class="text-sm text-muted">Monthly burn<TermHint term="monthly_burn" /></p>
-                        <p class="mt-1 text-3xl font-semibold text-highlighted">
-                            {{ formatMoney({ cents: cash?.monthly_burn_cents, compact: true, unknown: 'Not set' }) }}
-                        </p>
-                        <p class="mt-1 text-xs text-muted">
-                            {{
-                                cash?.burn_source === 'override'
-                                    ? 'Set by hand'
-                                    : cash?.burn_source === 'computed'
-                                      ? 'Average of recent months'
-                                      : 'No spending history yet'
-                            }}
-                        </p>
-                    </UCard>
+                    <ForecastBurnCard :cash="cash" />
                     <UCard v-for="tile in runwayTiles" :key="tile.label">
                         <p class="text-sm text-muted">{{ tile.label }}<TermHint :term="tile.term" /></p>
                         <p class="mt-1 text-3xl font-semibold" :class="tile.color">

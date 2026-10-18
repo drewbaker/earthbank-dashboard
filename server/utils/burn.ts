@@ -1,3 +1,4 @@
+import { expenseGroupName } from '#server/utils/expense-groups.ts'
 import { addMonths, firstOfMonth } from '#shared/utils/calendar-dates.ts'
 
 // Bookkeeping parent categories that are operating spend. Transfers between our own accounts,
@@ -23,6 +24,7 @@ export type BurnResult = {
     monthlyBurnCents: number | null
     months: { month: string; outflowCents: number }[]
     topCategories: { name: string; monthlyCents: number }[]
+    expenseGroups: { name: string; monthlyCents: number }[]
 }
 
 /**
@@ -35,7 +37,7 @@ export type BurnResult = {
  * @param input.today - Today's date (YYYY-MM-DD).
  * @param input.lookbackMonths - How many full months to average.
  * @param input.excludedCategories - Category names a person has left out.
- * @returns The average, the per-month totals and the biggest categories.
+ * @returns The average, the per-month totals, the biggest categories and every broad expense group.
  */
 export function computeMonthlyBurn({
     transactions,
@@ -55,6 +57,7 @@ export function computeMonthlyBurn({
     const excluded = new Set(excludedCategories.map(name => name.toLowerCase()))
     const outflowByMonth = new Map(months.map(month => [month, 0]))
     const outflowByCategory = new Map<string, number>()
+    const outflowByGroup = new Map<string, number>()
 
     for (const transaction of transactions) {
         const month = transaction.bookedOn.slice(0, 7)
@@ -64,6 +67,11 @@ export function computeMonthlyBurn({
         outflowByMonth.set(month, outflowByMonth.get(month)! - transaction.amountCents)
         const category = transaction.categoryName ?? 'Uncategorized'
         outflowByCategory.set(category, (outflowByCategory.get(category) ?? 0) - transaction.amountCents)
+        const group = expenseGroupName({
+            categoryName: transaction.categoryName,
+            parentCategory: transaction.parentCategory,
+        })
+        outflowByGroup.set(group, (outflowByGroup.get(group) ?? 0) - transaction.amountCents)
     }
 
     const monthsWithData = new Set(transactions.map(transaction => transaction.bookedOn.slice(0, 7)))
@@ -72,12 +80,26 @@ export function computeMonthlyBurn({
     return {
         monthlyBurnCents: countedMonths.length > 0 ? Math.max(0, Math.round(total / countedMonths.length)) : null,
         months: months.map(month => ({ month, outflowCents: Math.round(outflowByMonth.get(month)!) })),
-        topCategories: [...outflowByCategory.entries()]
-            .map(([name, cents]) => ({ name, monthlyCents: Math.round(cents / Math.max(1, countedMonths.length)) }))
-            .filter(category => category.monthlyCents > 0)
-            .sort((first, second) => second.monthlyCents - first.monthlyCents)
-            .slice(0, 8),
+        topCategories: monthlyAverages({ outflowByName: outflowByCategory, monthCount: countedMonths.length }).slice(
+            0,
+            8,
+        ),
+        expenseGroups: monthlyAverages({ outflowByName: outflowByGroup, monthCount: countedMonths.length }),
     }
+}
+
+/**
+ * Turn outflow totals into monthly averages, biggest first, leaving out names that netted to nothing.
+ *
+ * @param input.outflowByName - Category or group name → total outflow in cents.
+ * @param input.monthCount - Months the totals cover.
+ * @returns `{ name, monthlyCents }` for each name with spending.
+ */
+function monthlyAverages({ outflowByName, monthCount }: { outflowByName: Map<string, number>; monthCount: number }) {
+    return [...outflowByName.entries()]
+        .map(([name, cents]) => ({ name, monthlyCents: Math.round(cents / Math.max(1, monthCount)) }))
+        .filter(entry => entry.monthlyCents > 0)
+        .sort((first, second) => second.monthlyCents - first.monthlyCents)
 }
 
 /**
