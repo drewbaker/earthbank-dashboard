@@ -676,6 +676,13 @@ model FundManager {
     sectors                        Json      @default("[]")
     loan_types                     Json      @default("[]")
     focus_areas                    Json      @default("[]")
+    // LENDER_ARCHETYPES key.
+    lender_archetype               String?
+    // direct | on_lending | both
+    lending_channel                String?
+    lends_local_currency           Boolean   @default(false)
+    // How the check-size range compares with Earth Bank's $500K–$5M ticket: fits | partly | outside.
+    ticket_fit                     String?
     research_completeness          Int       @default(0)
     diligence_completeness         Int       @default(0)
 

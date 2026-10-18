@@ -112,6 +112,8 @@ const teamForm = reactive({
     fit_tags: [] as FundFitTag[],
     owner_id: NO_OWNER,
     notes: '',
+    website_url: '',
+    linkedin_url: '',
 })
 watch(
     fund,
@@ -121,6 +123,8 @@ watch(
             teamForm.fit_tags = [...value.fit_tags]
             teamForm.owner_id = value.owner?.id ?? NO_OWNER
             teamForm.notes = value.notes ?? ''
+            teamForm.website_url = value.website_url ?? ''
+            teamForm.linkedin_url = value.linkedin_url ?? ''
         }
     },
     { immediate: true },
@@ -130,24 +134,39 @@ const isResearching = ref(false)
 const busyFindingId = ref<string | null>(null)
 
 /**
- * Save the team's own fields (stage, fit tags, owner, notes).
+ * Save the team's own fields (website, LinkedIn page, stage, fit tags, owner, notes). A corrected
+ * website or LinkedIn page also refreshes the research (the server retires what came from the old one).
  *
  * @returns Resolves once saved.
  */
 async function saveTeamFields() {
     isSavingTeam.value = true
+    const before = { website: fund.value?.website_url ?? '', linkedin: fund.value?.linkedin_url ?? '' }
     try {
         fund.value = await api<FundDetail>({
             path: `/funds/${fundId.value}`,
             method: 'PATCH',
             body: {
+                website_url: teamForm.website_url.trim() || null,
+                linkedin_url: teamForm.linkedin_url.trim() || null,
                 stage: teamForm.stage,
                 fit_tags: teamForm.fit_tags,
                 owner_id: ownerIdFromSelection({ ownerId: teamForm.owner_id }),
                 notes: teamForm.notes.trim() || null,
             },
         })
-        toast.add({ title: 'Saved', color: 'success' })
+        const isNewAddress =
+            (fund.value?.website_url ?? '') !== before.website || (fund.value?.linkedin_url ?? '') !== before.linkedin
+        toast.add(
+            isNewAddress
+                ? {
+                      title: 'Saved. Refreshing the research',
+                      description:
+                          'Research from the old address was retired; new findings appear as they are verified.',
+                      color: 'info',
+                  }
+                : { title: 'Saved', color: 'success' },
+        )
     } catch (error) {
         toast.add({ title: 'Not saved', description: apiErrorMessage({ error }), color: 'error' })
     } finally {
@@ -156,21 +175,22 @@ async function saveTeamFields() {
 }
 
 /**
- * Queue a new research run for this fund.
+ * Refresh this fund's research (fills gaps and updates what public sources show; never changes the
+ * team's own fields or people's diligence answers).
  *
  * @returns Resolves once queued.
  */
-async function researchAgain() {
+async function refreshResearch() {
     isResearching.value = true
     try {
         fund.value = await api<FundDetail>({ path: `/funds/${fundId.value}/research`, method: 'POST' })
         toast.add({
-            title: 'Research queued',
-            description: 'New findings appear here as they are verified.',
+            title: 'Refresh queued',
+            description: 'New findings appear here as they are verified. Your own fields are never changed.',
             color: 'info',
         })
     } catch (error) {
-        toast.add({ title: 'Research not queued', description: apiErrorMessage({ error }), color: 'error' })
+        toast.add({ title: 'Refresh not queued', description: apiErrorMessage({ error }), color: 'error' })
     } finally {
         isResearching.value = false
     }
@@ -211,14 +231,16 @@ async function rejectFinding(finding: FundFinding) {
                 </template>
                 <template #right>
                     <FundsResearchStatusBadge v-if="fund" :status="fund.research_status" :error="fund.research_error" />
-                    <UButton
-                        icon="i-lucide-refresh-cw"
-                        label="Research again"
-                        color="neutral"
-                        :loading="isResearching"
-                        :disabled="fund?.research_status === 'running' || fund?.research_status === 'queued'"
-                        @click="researchAgain"
-                    />
+                    <UTooltip text="Re-research everything public sources show. Your own fields are never changed.">
+                        <UButton
+                            icon="i-lucide-refresh-cw"
+                            label="Refresh data"
+                            color="neutral"
+                            :loading="isResearching"
+                            :disabled="fund?.research_status === 'running' || fund?.research_status === 'queued'"
+                            @click="refreshResearch"
+                        />
+                    </UTooltip>
                 </template>
             </UDashboardNavbar>
             <UDashboardToolbar>
@@ -238,7 +260,7 @@ async function rejectFinding(finding: FundFinding) {
                 <div class="space-y-6 lg:col-span-2">
                     <!-- Overview: research fields grouped; each value shows its sources and confidence. -->
                     <template v-if="tab === 'overview'">
-                        <UCard v-for="group in ['basics', 'lending'] as FundResearchGroup[]" :key="group">
+                        <UCard v-for="group in ['basics', 'lending', 'model'] as FundResearchGroup[]" :key="group">
                             <template #header>
                                 <div class="flex items-center justify-between">
                                     <h2 class="font-semibold text-highlighted">
@@ -496,6 +518,16 @@ async function rejectFinding(finding: FundFinding) {
                             </div>
                         </template>
                         <div class="space-y-4">
+                            <UFormField label="Website" hint="Correcting it refreshes the research">
+                                <UInput v-model="teamForm.website_url" placeholder="https://…" class="w-full" />
+                            </UFormField>
+                            <UFormField label="LinkedIn page">
+                                <UInput
+                                    v-model="teamForm.linkedin_url"
+                                    placeholder="https://www.linkedin.com/company/…"
+                                    class="w-full"
+                                />
+                            </UFormField>
                             <UFormField label="Stage">
                                 <USelect v-model="teamForm.stage" :items="stageItems" class="w-full" />
                             </UFormField>
@@ -524,7 +556,7 @@ async function rejectFinding(finding: FundFinding) {
                             />
                         </div>
                     </UCard>
-                    <UCard>
+                    <UCard v-if="fund">
                         <template #header>
                             <h2 class="font-semibold text-highlighted">At a glance</h2>
                         </template>

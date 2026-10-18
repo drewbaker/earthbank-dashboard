@@ -256,7 +256,7 @@ describe('researchFund', () => {
             source_urls: [ABOUT_PAGE.url],
         })
         expect(byQuestion.time_to_close).toMatchObject({ answer: null })
-        expect(fund.diligence_completeness).toBe(40)
+        expect(fund.diligence_completeness).toBe(29)
     })
 
     it('spiders to lenders from work history, skipping schools', async () => {

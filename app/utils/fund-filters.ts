@@ -14,6 +14,10 @@ export type FundFilters = {
     check_size_usd: string
     working_capital: 'all' | 'any' | 'min_500k'
     min_completeness: string
+    ticket_fit: string
+    lender_archetype: string
+    lending_channel: string
+    local_currency: string
 }
 
 // Select options can't be empty strings; "no filter" is this sentinel.
@@ -31,6 +35,10 @@ export const EMPTY_FUND_FILTERS: FundFilters = {
     check_size_usd: ANY_FILTER,
     working_capital: 'all',
     min_completeness: ANY_FILTER,
+    ticket_fit: ANY_FILTER,
+    lender_archetype: ANY_FILTER,
+    lending_channel: ANY_FILTER,
+    local_currency: ANY_FILTER,
 }
 
 /**
@@ -91,6 +99,10 @@ export function fundFiltersToApiQuery({ filters, today }: { filters: FundFilters
         check_size_max_usd: set(filters.check_size_usd),
         working_capital: set(filters.working_capital),
         min_completeness: set(filters.min_completeness),
+        ticket_fit: set(filters.ticket_fit),
+        lender_archetype: set(filters.lender_archetype),
+        lending_channel: set(filters.lending_channel),
+        local_currency: filters.local_currency === 'yes' ? true : undefined,
     }
 }
 

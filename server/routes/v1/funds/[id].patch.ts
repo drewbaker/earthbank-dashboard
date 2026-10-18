@@ -6,6 +6,7 @@ import { recordAudit } from '#server/utils/audit.ts'
 import { requireUser } from '#server/utils/auth.ts'
 import { conflict } from '#server/utils/errors.ts'
 import { loadFundDetail, requireFund } from '#server/utils/funds/fund-detail.ts'
+import { clearResearchFromOldAddresses, queueFundRefresh } from '#server/utils/funds/refresh.ts'
 import { assertActiveUser } from '#server/utils/users.ts'
 import { UpdateFundRequest } from '#shared/schemas/index.ts'
 import { canonicalLinkedinUrl, organizationNameKey, websiteDomain } from '#shared/funds/organization-names.ts'
@@ -15,7 +16,7 @@ defineRouteMeta({
         tags: ['Funds'],
         summary: 'Update a fund',
         description:
-            "Edits the team's own fields: name, website, LinkedIn page, stage, fit tags, notes and owner. Research findings aren't edited here.",
+            "Edits the team's own fields: name, website, LinkedIn page, stage, fit tags, notes and owner. Correcting the website or LinkedIn page retires research taken from the old one and refreshes the fund. Research findings aren't edited here.",
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: {
             required: true,
@@ -65,12 +66,28 @@ export default defineApiHandler(async event => {
             owner_id: body.owner_id,
         },
     })
+    // A corrected website or LinkedIn page: retire research taken from the old one, then refresh.
+    const isNewWebsite =
+        body.website_url !== undefined && websiteDomain({ url: body.website_url }) !== fund.website_domain
+    const isNewLinkedin =
+        body.linkedin_url !== undefined &&
+        (body.linkedin_url ? canonicalLinkedinUrl({ url: body.linkedin_url }) : null) !== fund.linkedin_url
+    if (isNewWebsite || isNewLinkedin) {
+        await clearResearchFromOldAddresses({
+            fundManagerId,
+            oldWebsiteUrl: isNewWebsite ? fund.website_url : null,
+            oldLinkedinUrl: isNewLinkedin ? fund.linkedin_url : null,
+        })
+        if (!fund.archived_at) {
+            await queueFundRefresh({ fundManagerId, now: new Date() })
+        }
+    }
     await recordAudit({
         actor: ctx.actor,
         action: 'fund.updated',
         entityType: 'fund',
         entityId: fundManagerId,
-        changes: { fields: Object.keys(body) },
+        changes: { fields: Object.keys(body), refreshed: isNewWebsite || isNewLinkedin },
         ip: requestIp({ event }),
     })
     return loadFundDetail({ fundManagerId })

@@ -266,6 +266,9 @@ Status: built on the `funds-research` branch (requested Oct 16, 2026). Replaces 
 - [x] **Groundwork before the model**: website and LinkedIn page pinned down from search results (or given when a fund is added: name and website now required, LinkedIn optional); company record (headcount band, founding year, HQ, profiles) from Data Legion; the fund's key pages crawled first (team, about, lending, portfolio, news, impact, contact). New `contact` research field (published emails, phones, offices, contact page)
 - [x] **Gap-filling pass**: a second, shorter research pass for important fields still empty after the first
 - [x] Public DFI and government lists are queued on the first start after deploy
+- [x] **Funds by email**: "research this fund" (with a forwarded email or just a name) adds the fund, or refreshes it if it's on the list; missing website or LinkedIn page are found by the research
+- [x] **Refresh data** button on the fund page; correcting the website or LinkedIn page retires research from the old address and refreshes; the team's own fields and diligence answers are never overwritten
+- [x] **Screening fields** from the consultants' proposals: a "Lending model" research group (lender archetype, loan terms, lending currency, direct vs on-lending, underwriting and origination partners, first-loss/guarantees, portfolio scale); diligence questions for recovery rate & NPLs and deployment capacity; computed fit with Earth Bank's $500K–$5M ticket as a column and filter, plus filters for lender type, channel and local-currency lending
 - [ ] Add `FIRECRAWL_API_KEY` in the Render dashboard
 - [ ] Check each public list against the live site after deploy (several are JavaScript apps or block bots; they show the error in Settings → Research and don't affect the others)
 - [ ] First live research runs: watch Sources → "dropped" counts and the month's spend, then raise the fund limit
@@ -274,7 +277,6 @@ Free sources from the consultants' proposals (Bridgespan, Open Capital, BCG, Dal
 
 - **Lender and deal lists**: GOGLA Investment Database (off-grid solar deals and lenders, partly members-only), Aceli Africa, Triple Jump and Oikocredit reports (loan performance and losses), the CSAF lender benchmarks, Collaborative for Frontier Finance surveys of small-business capital providers, the BII/BCG "Scaling Blended Finance" study (65+ funds), GIIN regional landscapes.
 - **Market sizing and context**: IFC MSME Finance Gap, IFC MSME Indicators, World Bank Enterprise Surveys, IMF Financial Access Survey, CPI Global and Africa Climate Finance Landscapes, UNEP State of Finance for Nature, BloombergNEF Climatescope, GEMs default and recovery statistics, Damodaran country risk premiums.
-- **Fields the proposals screen on that we could add later**: lender archetype; pricing, tenor and collateral; local or hard currency; direct or on-lending; underwriting model; first-loss or guarantees in use; recovery rate and NPLs; deployment pace and borrower count; fit with Earth Bank's $500K–$5M ticket.
 
 Paid datasets that would help (not bought):
 

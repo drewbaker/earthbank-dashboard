@@ -180,3 +180,49 @@ describe('quoteNamesPerson', () => {
         expect(quoteNamesPerson({ quote: 'Badi Okello - Senior Partner', name: 'Arorwa Badi' })).toBe(false)
     })
 })
+
+describe('screening fields', () => {
+    const terms = 'Loans of 12 to 36 months at 14-18% in USD, secured by equipment.'
+    const termsEvidence = buildResearchEvidence({
+        pages: [{ url: 'https://lender.example/loans', title: 'Loans', text: terms }],
+        searchResults: [],
+    })
+    const run = (field: string, value: unknown) =>
+        verifyFinding({
+            field,
+            value,
+            sourceUrls: ['https://lender.example/loans'],
+            quote: terms,
+            confidence: 0.9,
+            minConfidence: 0.7,
+            evidence: termsEvidence,
+            now,
+        })
+
+    it('keeps sane loan terms and rejects impossible tenors', () => {
+        expect(
+            run('loan_terms', {
+                pricing: '14–18% in USD',
+                tenor_months_min: 12,
+                tenor_months_max: 36,
+                collateral: 'Equipment',
+            }).ok,
+        ).toBe(true)
+        expect(
+            run('loan_terms', { pricing: null, tenor_months_min: 48, tenor_months_max: 12, collateral: null }),
+        ).toEqual({
+            ok: false,
+            reason: 'out_of_range',
+        })
+    })
+
+    it('uppercases currencies and needs something in portfolio scale', () => {
+        const currency = run('lending_currency', { basis: 'both', currencies: ['kes', 'usd', 'nonsense'] })
+        expect(currency.ok && currency.value.value).toEqual({ basis: 'both', currencies: ['KES', 'USD'] })
+        expect(run('portfolio_scale', { borrowers: null, loans: null, outstanding: null, as_of: null })).toEqual({
+            ok: false,
+            reason: 'out_of_range',
+        })
+        expect(run('risk_sharing', { kind: 'first_loss', provider: 'IFC', facility: null }).ok).toBe(true)
+    })
+})

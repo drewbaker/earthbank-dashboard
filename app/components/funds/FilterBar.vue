@@ -5,8 +5,14 @@ import {
     FUND_SECTORS,
     FUND_STAGE_DETAILS,
     FUND_STAGES,
+    LENDER_ARCHETYPE_LABELS,
+    LENDER_ARCHETYPES,
+    LENDING_CHANNEL_LABELS,
+    LENDING_CHANNELS,
     LOAN_TYPE_LABELS,
     LOAN_TYPES,
+    TICKET_FIT_DETAILS,
+    TICKET_FITS,
 } from '#shared/constants/funds.ts'
 import { GEO_REGIONS, GLOBAL_FOCUS } from '#shared/constants/regions.ts'
 import type { FundFilters } from '~/utils/fund-filters.ts'
@@ -74,6 +80,20 @@ const completenessItems = [
     ...[25, 50, 75].map(percent => ({ label: `Research ${percent}%+`, value: String(percent) })),
 ]
 
+const ticketFitItems = [
+    anyItem('Any ticket fit'),
+    ...TICKET_FITS.map(fit => ({ label: TICKET_FIT_DETAILS[fit].label, value: fit })),
+]
+const archetypeItems = [
+    anyItem('Any lender type'),
+    ...LENDER_ARCHETYPES.map(archetype => ({ label: LENDER_ARCHETYPE_LABELS[archetype], value: archetype })),
+]
+const channelItems = [
+    anyItem('Direct or on-lending'),
+    ...LENDING_CHANNELS.map(channel => ({ label: LENDING_CHANNEL_LABELS[channel], value: channel })),
+]
+const currencyItems = [anyItem('Any currency'), { label: 'Lends in local currency', value: 'yes' }]
+
 const activeCount = computed(() => activeFundFilterCount({ filters: filters.value }))
 </script>
 
@@ -81,6 +101,7 @@ const activeCount = computed(() => activeFundFilterCount({ filters: filters.valu
     <div class="flex flex-wrap items-center gap-2">
         <UInput v-model="filters.q" icon="i-lucide-search" placeholder="Search funds" class="w-56" />
         <USelect v-model="filters.working_capital" :items="workingCapitalItems" class="w-52" />
+        <USelect v-model="filters.ticket_fit" :items="ticketFitItems" class="w-44" />
         <USelect v-model="filters.check_size_usd" :items="checkSizeItems" class="w-40" />
         <USelect v-model="filters.min_aum_usd" :items="aumItems" class="w-36" />
         <USelect v-model="filters.min_fund_size_usd" :items="fundSizeItems" class="w-40" />
@@ -90,6 +111,9 @@ const activeCount = computed(() => activeFundFilterCount({ filters: filters.valu
         <USelect v-model="filters.sector" :items="sectorItems" class="w-44" />
         <USelect v-model="filters.loan_type" :items="loanTypeItems" class="w-48" />
         <USelect v-model="filters.focus_area" :items="regionItems" class="w-48" />
+        <USelect v-model="filters.lender_archetype" :items="archetypeItems" class="w-56" />
+        <USelect v-model="filters.lending_channel" :items="channelItems" class="w-52" />
+        <USelect v-model="filters.local_currency" :items="currencyItems" class="w-52" />
         <UButton
             v-if="activeCount > 0"
             :label="`Clear ${activeCount} filter${activeCount > 1 ? 's' : ''}`"

@@ -1,5 +1,6 @@
 import type { FundResearchField } from '#shared/constants/funds.ts'
-import { WORKING_CAPITAL_LOAN_TYPES } from '#shared/constants/funds.ts'
+import type { TicketFit } from '#shared/constants/funds.ts'
+import { EARTH_BANK_TICKET, WORKING_CAPITAL_LOAN_TYPES } from '#shared/constants/funds.ts'
 import type { FundFindingValues, ResearchMoney } from '#shared/schemas/fund-findings.ts'
 import { researchCompleteness } from '#shared/funds/completeness.ts'
 import { toUsdCents } from '#shared/funds/money.ts'
@@ -26,6 +27,10 @@ export type FundResearchValues = {
     sectors: string[]
     loan_types: string[]
     focus_areas: string[]
+    lender_archetype: string | null
+    lending_channel: string | null
+    lends_local_currency: boolean
+    ticket_fit: TicketFit | null
     research_completeness: number
 }
 
@@ -100,6 +105,13 @@ export function deriveFundResearchValues({
         sectors: latest('sectors')?.sectors ?? [],
         loan_types: loanTypes,
         focus_areas: latest('geographic_focus')?.codes ?? [],
+        lender_archetype: latest('lender_archetype')?.archetype ?? null,
+        lending_channel: latest('lending_channel')?.channel ?? null,
+        lends_local_currency: ['local', 'both'].includes(latest('lending_currency')?.basis ?? ''),
+        ticket_fit: ticketFit({
+            minCents: checkSize?.min ? toUsdCents({ amount: checkSize.min, currency: checkSize.currency }) : null,
+            maxCents: checkMaxCents,
+        }),
         research_completeness: researchCompleteness({ filledFields, hasPrincipals, hasWorkHistory }),
     }
 }
@@ -115,6 +127,41 @@ function maxCents({ amounts }: { amounts: (ResearchMoney | null)[] }) {
         .map(amount => (amount ? toUsdCents(amount) : null))
         .filter((value): value is number => value !== null)
     return cents.length > 0 ? Math.max(...cents) : null
+}
+
+/**
+ * How a fund's check-size range compares with Earth Bank's $500K–$5M ticket.
+ *
+ * Measured on a log scale (a range from $500K to $1.6M covers as much as one from $1.6M to $5M):
+ * `fits` when the fund's range covers at least half of ours (or a single ticket size falls inside it),
+ * `partly` when it overlaps, `outside` when it doesn't.
+ *
+ * @param input.minCents - Smallest ticket in US cents, or null.
+ * @param input.maxCents - Largest ticket in US cents, or null.
+ * @returns The fit, or null when the check size isn't known.
+ */
+export function ticketFit({
+    minCents,
+    maxCents,
+}: {
+    minCents: number | null
+    maxCents: number | null
+}): TicketFit | null {
+    const low = minCents ?? maxCents
+    const high = maxCents ?? minCents
+    if (low === null || high === null) {
+        return null
+    }
+    const ourLow = EARTH_BANK_TICKET.minCents
+    const ourHigh = EARTH_BANK_TICKET.maxCents
+    if (high < ourLow || low > ourHigh) {
+        return 'outside'
+    }
+    if (low === high) {
+        return 'fits'
+    }
+    const covered = Math.log(Math.min(high, ourHigh)) - Math.log(Math.max(low, ourLow))
+    return covered / (Math.log(ourHigh) - Math.log(ourLow)) >= 0.5 ? 'fits' : 'partly'
 }
 
 /**

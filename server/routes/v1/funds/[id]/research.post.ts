@@ -1,19 +1,18 @@
 import { getRouterParam } from 'h3'
 import { defineRouteMeta } from 'nitropack/runtime'
-import { setFundResearchStatus } from '#server/database/fund-managers.ts'
 import { defineApiHandler, requestIp } from '#server/utils/api.ts'
 import { recordAudit } from '#server/utils/audit.ts'
 import { requireUser } from '#server/utils/auth.ts'
 import { badRequest } from '#server/utils/errors.ts'
 import { loadFundDetail, requireFund } from '#server/utils/funds/fund-detail.ts'
-import { enqueueFundResearch } from '#server/utils/jobs/enqueue.ts'
+import { queueFundRefresh } from '#server/utils/funds/refresh.ts'
 
 defineRouteMeta({
     openAPI: {
         tags: ['Funds'],
-        summary: 'Research a fund again',
+        summary: "Refresh a fund's research",
         description:
-            'Queues a new research run, ahead of funds the spider found. It fills gaps and adds newer information.',
+            "Queues a new research run, ahead of funds the spider found. It refreshes what public sources show; the team's own fields, people's diligence answers and rejected values are never changed.",
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: {
             200: {
@@ -32,8 +31,7 @@ export default defineApiHandler(async event => {
         throw badRequest({ message: 'Restore the fund before researching it.', code: 'fund_archived' })
     }
     // Asking by hand puts it ahead of the spider, whatever its origin.
-    await enqueueFundResearch({ fundManagerId, isPriority: true })
-    await setFundResearchStatus({ fundManagerId, status: 'queued', now: new Date() })
+    await queueFundRefresh({ fundManagerId, now: new Date() })
     await recordAudit({
         actor: ctx.actor,
         action: 'fund.research_requested',

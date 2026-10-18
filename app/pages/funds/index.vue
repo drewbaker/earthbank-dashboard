@@ -4,7 +4,14 @@ import { computed, h, ref, resolveComponent, watch } from 'vue'
 import { watchDebounced } from '@vueuse/core'
 import { navigateTo, useAsyncData, useRoute, useRouter, useSeoMeta, useToast } from '#imports'
 import type { FundStage } from '#shared/constants/funds.ts'
-import { FUND_STAGES, LOAN_TYPE_LABELS, WORKING_CAPITAL_TARGET_CENTS } from '#shared/constants/funds.ts'
+import {
+    FUND_STAGES,
+    LENDER_ARCHETYPE_LABELS,
+    LOAN_TYPE_LABELS,
+    TICKET_FITS,
+    TICKET_FIT_DETAILS,
+    WORKING_CAPITAL_TARGET_CENTS,
+} from '#shared/constants/funds.ts'
 import type { Fund, FundDetail, FundList, FundResearchSettings, FundResearchStatus } from '#shared/schemas/index.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { countryName } from '~/utils/fund-findings.ts'
@@ -69,6 +76,8 @@ const FundsCompletenessMeter = resolveComponent('FundsCompletenessMeter')
 const FundsResearchStatusBadge = resolveComponent('FundsResearchStatusBadge')
 
 const STAGE_ORDER = new Map(FUND_STAGES.map((stage, index) => [stage, index]))
+// Best fit first when sorting descending.
+const TICKET_FIT_ORDER = new Map(TICKET_FITS.map((fit, index) => [fit, TICKET_FITS.length - index]))
 
 const columns: TableColumn<Fund>[] = sortableColumns({
     columns: [
@@ -125,6 +134,32 @@ const columns: TableColumn<Fund>[] = sortableColumns({
             header: 'Working capital',
             meta: { term: 'working_capital_loans' },
             cell: ({ row }) => workingCapitalCell({ fund: row.original }),
+        },
+        {
+            id: 'ticket_fit',
+            accessorFn: fund => (fund.ticket_fit ? TICKET_FIT_ORDER.get(fund.ticket_fit) : undefined),
+            header: 'Our ticket',
+            meta: { term: 'ticket_fit' },
+            cell: ({ row }) =>
+                row.original.ticket_fit
+                    ? h(UBadge, {
+                          color: TICKET_FIT_DETAILS[row.original.ticket_fit].color,
+                          variant: row.original.ticket_fit === 'fits' ? 'solid' : 'soft',
+                          size: 'sm',
+                          label: TICKET_FIT_DETAILS[row.original.ticket_fit].label,
+                      })
+                    : h('span', { class: 'text-dimmed' }, '—'),
+        },
+        {
+            id: 'lender_archetype',
+            accessorFn: fund => (fund.lender_archetype ? LENDER_ARCHETYPE_LABELS[fund.lender_archetype] : undefined),
+            header: 'Lender type',
+            cell: ({ row }) =>
+                h(
+                    'span',
+                    { class: 'line-clamp-2 max-w-40 text-xs text-toned' },
+                    row.original.lender_archetype ? LENDER_ARCHETYPE_LABELS[row.original.lender_archetype] : '—',
+                ),
         },
         {
             id: 'loan_types',

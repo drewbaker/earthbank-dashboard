@@ -25,6 +25,10 @@ export type FundListFilters = {
     minWorkingCapitalCents?: bigint
     requireWorkingCapital?: boolean
     minCompleteness?: number
+    lenderArchetype?: string
+    lendingChannel?: string
+    requireLocalCurrency?: boolean
+    ticketFit?: string
     researchStatus?: string
     origin?: string
     includeArchived?: boolean
@@ -145,6 +149,10 @@ export async function listFundManagers({
     minWorkingCapitalCents,
     requireWorkingCapital,
     minCompleteness,
+    lenderArchetype,
+    lendingChannel,
+    requireLocalCurrency,
+    ticketFit,
     researchStatus,
     origin,
     includeArchived,
@@ -199,6 +207,10 @@ export async function listFundManagers({
         where: {
             AND: and,
             stage,
+            lender_archetype: lenderArchetype,
+            lending_channel: lendingChannel,
+            ticket_fit: ticketFit,
+            ...(requireLocalCurrency ? { lends_local_currency: true } : {}),
             research_status: researchStatus,
             origin,
             archived_at: includeArchived ? undefined : null,

@@ -1,5 +1,13 @@
 import type { FundResearchField, FundSector, LoanType } from '#shared/constants/funds.ts'
-import { FUND_SECTOR_LABELS, LOAN_TYPE_LABELS } from '#shared/constants/funds.ts'
+import {
+    CURRENCY_BASIS_LABELS,
+    FUND_SECTOR_LABELS,
+    LENDER_ARCHETYPE_LABELS,
+    LENDING_CHANNEL_LABELS,
+    LOAN_TYPE_LABELS,
+    RISK_SHARING_KIND_LABELS,
+    UNDERWRITING_APPROACH_LABELS,
+} from '#shared/constants/funds.ts'
 import type { FundFindingValues, ResearchMoney } from '#shared/schemas/fund-findings.ts'
 import type { FundFinding } from '#shared/schemas/index.ts'
 import { formatCurrencyAmount } from '#shared/funds/money.ts'
@@ -103,6 +111,59 @@ export function describeFinding({ finding }: { finding: Pick<FundFinding, 'field
                     .map(type => LOAN_TYPE_LABELS[type as LoanType])
                     .join(', '),
             })
+        case 'lender_archetype':
+            return plain({
+                title: LENDER_ARCHETYPE_LABELS[(value as FundFindingValues['lender_archetype']).archetype],
+            })
+        case 'loan_terms': {
+            const terms = value as FundFindingValues['loan_terms']
+            const tenor =
+                terms.tenor_months_min !== null || terms.tenor_months_max !== null
+                    ? `Tenor ${[terms.tenor_months_min, terms.tenor_months_max].filter(months => months !== null).join('–')} months`
+                    : null
+            return plain({
+                title: [terms.pricing, tenor].filter(Boolean).join(' · ') || 'Collateral',
+                detail: terms.collateral ? `Collateral: ${terms.collateral}` : null,
+            })
+        }
+        case 'lending_currency': {
+            const currency = value as FundFindingValues['lending_currency']
+            return plain({
+                title: CURRENCY_BASIS_LABELS[currency.basis],
+                detail: currency.currencies.length > 0 ? currency.currencies.join(', ') : null,
+            })
+        }
+        case 'lending_channel':
+            return plain({ title: LENDING_CHANNEL_LABELS[(value as FundFindingValues['lending_channel']).channel] })
+        case 'underwriting': {
+            const underwriting = value as FundFindingValues['underwriting']
+            return plain({
+                title:
+                    underwriting.approaches.map(approach => UNDERWRITING_APPROACH_LABELS[approach]).join(', ') ||
+                    'Origination partners',
+                detail: underwriting.origination_partners ? `Origination: ${underwriting.origination_partners}` : null,
+            })
+        }
+        case 'risk_sharing': {
+            const sharing = value as FundFindingValues['risk_sharing']
+            return plain({
+                title: `${RISK_SHARING_KIND_LABELS[sharing.kind]} from ${sharing.provider}`,
+                detail: sharing.facility,
+            })
+        }
+        case 'portfolio_scale': {
+            const scale = value as FundFindingValues['portfolio_scale']
+            return plain({
+                title: [
+                    scale.borrowers !== null ? `${scale.borrowers.toLocaleString('en-US')} borrowers` : null,
+                    scale.loans !== null ? `${scale.loans.toLocaleString('en-US')} loans` : null,
+                    scale.outstanding ? `${money({ money: scale.outstanding })} outstanding` : null,
+                ]
+                    .filter(Boolean)
+                    .join(' · '),
+                detail: scale.as_of ? `As of ${scale.as_of}` : null,
+            })
+        }
         case 'deal': {
             const deal = value as FundFindingValues['deal']
             return plain({

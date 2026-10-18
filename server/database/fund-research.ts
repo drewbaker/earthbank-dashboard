@@ -704,3 +704,26 @@ async function upsertSource({ tx, source, now }: { tx: Transaction; source: Sour
     })
     return row.id
 }
+
+/**
+ * Mark findings as superseded (kept as history, no longer shown or counted).
+ *
+ * @param input.findingIds - The findings.
+ * @returns The update count.
+ */
+export function supersedeFundFindings({ findingIds }: { findingIds: string[] }) {
+    return db().fundFinding.updateMany({
+        where: { id: { in: findingIds }, status: 'active' },
+        data: { status: 'superseded' },
+    })
+}
+
+/**
+ * Delete people (and their work history) that research recorded.
+ *
+ * @param input.personIds - The people.
+ * @returns The delete count.
+ */
+export function deleteFundPeople({ personIds }: { personIds: string[] }) {
+    return db().fundPerson.deleteMany({ where: { id: { in: personIds } } })
+}

@@ -23,6 +23,8 @@ export const GLOSSARY = {
     working_capital_loans:
         'Largest known working-capital loan: from published deals, else the top of their check size.',
     fund_spider: 'New lenders found from team work history, co-lenders and DFI lists are added and researched.',
+    ticket_fit:
+        'Their check sizes against our $500K–$5M: Fits covers most of it, Partly overlaps it, Outside misses it.',
     research_sources:
         'Every fact links to the page it was read on. The AI quotes it; the app checks the quote is there.',
 } as const

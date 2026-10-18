@@ -176,12 +176,101 @@ export type ResearchOrganizationKind = (typeof RESEARCH_ORGANIZATION_KINDS)[numb
 export const AFFILIATION_RELATIONS = ['employment', 'education', 'board'] as const
 export type AffiliationRelation = (typeof AFFILIATION_RELATIONS)[number]
 
-export const FUND_RESEARCH_GROUPS = ['basics', 'lending', 'track_record', 'presence'] as const
+// What kind of lender it is (the archetypes the consultants' proposals screen by).
+export const LENDER_ARCHETYPES = [
+    'climate_private_debt',
+    'generalist_private_credit',
+    'blended_finance_fund',
+    'digital_lender',
+    'supply_chain_finance',
+    'bank_nbfi',
+    'microfinance',
+    'cdfi',
+    'other',
+] as const
+export type LenderArchetype = (typeof LENDER_ARCHETYPES)[number]
+
+export const LENDER_ARCHETYPE_LABELS: Record<LenderArchetype, string> = {
+    climate_private_debt: 'Climate private debt fund',
+    generalist_private_credit: 'Generalist private credit fund',
+    blended_finance_fund: 'Blended-finance fund or facility',
+    digital_lender: 'Digital / embedded lender',
+    supply_chain_finance: 'Supply-chain / receivables platform',
+    bank_nbfi: 'Bank or non-bank financial institution',
+    microfinance: 'Microfinance institution',
+    cdfi: 'CDFI / community lender',
+    other: 'Other',
+}
+
+// Whether a lender lends to businesses itself, or through other lenders (local banks, MFIs).
+export const LENDING_CHANNELS = ['direct', 'on_lending', 'both'] as const
+export type LendingChannel = (typeof LENDING_CHANNELS)[number]
+
+export const LENDING_CHANNEL_LABELS: Record<LendingChannel, string> = {
+    direct: 'Lends directly',
+    on_lending: 'Lends through other lenders',
+    both: 'Direct and through lenders',
+}
+
+// What a loan is lent in: the borrower's local currency, a hard currency (USD, EUR), or either.
+export const CURRENCY_BASES = ['local', 'hard', 'both'] as const
+export type CurrencyBasis = (typeof CURRENCY_BASES)[number]
+
+export const CURRENCY_BASIS_LABELS: Record<CurrencyBasis, string> = {
+    local: 'Local currency',
+    hard: 'Hard currency',
+    both: 'Local and hard currency',
+}
+
+export const UNDERWRITING_APPROACHES = [
+    'cash_flow',
+    'collateral',
+    'invoice_buyer',
+    'data_led',
+    'asset_backed',
+    'relationship',
+] as const
+export type UnderwritingApproach = (typeof UNDERWRITING_APPROACHES)[number]
+
+export const UNDERWRITING_APPROACH_LABELS: Record<UnderwritingApproach, string> = {
+    cash_flow: 'Cash-flow based',
+    collateral: 'Collateral based',
+    invoice_buyer: 'Invoice / buyer based',
+    data_led: 'Data-led (digital scoring)',
+    asset_backed: 'Asset-backed',
+    relationship: 'Relationship / character based',
+}
+
+// First-loss, guarantees and other risk-sharing the lender already uses (e.g. IFC first-loss, FMO NASIRA).
+export const RISK_SHARING_KINDS = ['first_loss', 'guarantee', 'junior_tranche', 'technical_assistance'] as const
+export type RiskSharingKind = (typeof RISK_SHARING_KINDS)[number]
+
+export const RISK_SHARING_KIND_LABELS: Record<RiskSharingKind, string> = {
+    first_loss: 'First-loss capital',
+    guarantee: 'Guarantee',
+    junior_tranche: 'Junior / catalytic tranche',
+    technical_assistance: 'Technical assistance facility',
+}
+
+// Earth Bank's target loan size; a fund's check-size range is compared with it ("ticket fit").
+export const EARTH_BANK_TICKET = { minCents: 500_000 * 100, maxCents: 5_000_000 * 100 } as const
+
+export const TICKET_FITS = ['fits', 'partly', 'outside'] as const
+export type TicketFit = (typeof TICKET_FITS)[number]
+
+export const TICKET_FIT_DETAILS: Record<TicketFit, { label: string; color: 'success' | 'warning' | 'neutral' }> = {
+    fits: { label: 'Fits $500K–$5M', color: 'success' },
+    partly: { label: 'Partly fits', color: 'warning' },
+    outside: { label: 'Outside our range', color: 'neutral' },
+}
+
+export const FUND_RESEARCH_GROUPS = ['basics', 'lending', 'model', 'track_record', 'presence'] as const
 export type FundResearchGroup = (typeof FUND_RESEARCH_GROUPS)[number]
 
 export const FUND_RESEARCH_GROUP_LABELS: Record<FundResearchGroup, string> = {
     basics: 'Basics',
     lending: 'Size & lending',
+    model: 'Lending model',
     track_record: 'Track record',
     presence: 'News & presence',
 }
@@ -205,6 +294,13 @@ export const FUND_RESEARCH_FIELDS = [
     'fund_raise',
     'check_size',
     'loan_types',
+    'lender_archetype',
+    'loan_terms',
+    'lending_currency',
+    'lending_channel',
+    'underwriting',
+    'risk_sharing',
+    'portfolio_scale',
     'deal',
     'lp',
     'public_record',
@@ -331,6 +427,62 @@ export const FUND_RESEARCH_FIELD_DETAILS: Record<
         weight: 2,
         hint: 'Working capital, project debt, term debt and so on.',
     },
+    lender_archetype: {
+        label: 'Lender type',
+        group: 'model',
+        isList: false,
+        isLinkOnly: false,
+        weight: 1,
+        hint: 'Climate private debt, generalist private credit, blended fund, digital lender, supply-chain platform, bank/NBFI, MFI or CDFI.',
+    },
+    loan_terms: {
+        label: 'Loan terms',
+        group: 'model',
+        isList: false,
+        isLinkOnly: false,
+        weight: 1,
+        hint: 'Pricing (interest rate or range), tenor in months, and collateral they ask for.',
+    },
+    lending_currency: {
+        label: 'Lending currency',
+        group: 'model',
+        isList: false,
+        isLinkOnly: false,
+        weight: 1,
+        hint: 'Whether loans are in local currency, hard currency (USD, EUR) or both.',
+    },
+    lending_channel: {
+        label: 'Direct or on-lending',
+        group: 'model',
+        isList: false,
+        isLinkOnly: false,
+        weight: 1,
+        hint: 'Whether they lend to businesses directly or through local banks and other lenders.',
+    },
+    underwriting: {
+        label: 'Underwriting',
+        group: 'model',
+        isList: false,
+        isLinkOnly: false,
+        weight: 1,
+        hint: 'How they assess borrowers (cash flow, collateral, invoices/buyers, data) and origination partners (OEMs, co-ops, offtakers).',
+    },
+    risk_sharing: {
+        label: 'First-loss & guarantees',
+        group: 'model',
+        isList: true,
+        isLinkOnly: false,
+        weight: 0.5,
+        hint: 'First-loss capital, guarantees or catalytic tranches they already use, and from whom.',
+    },
+    portfolio_scale: {
+        label: 'Portfolio scale',
+        group: 'model',
+        isList: false,
+        isLinkOnly: false,
+        weight: 1,
+        hint: 'Number of borrowers or loans to date, and the portfolio outstanding.',
+    },
     deal: {
         label: 'Published deals',
         group: 'track_record',
@@ -395,7 +547,9 @@ export const FUND_TEAM_COMPLETENESS = { principals: 2, work_history: 1 } as cons
 // The Due Diligence questions people track down (the AI may pre-fill from public sources).
 export const FUND_DILIGENCE_QUESTIONS = [
     'default_rate',
+    'recovery_and_npls',
     'loans_per_year',
+    'deployment_capacity',
     'fx_risk',
     'technology',
     'time_to_close',
@@ -406,6 +560,14 @@ export const FUND_DILIGENCE_QUESTION_DETAILS: Record<FundDiligenceQuestion, { la
     default_rate: {
         label: 'Default rate',
         hint: 'Historical default or write-off rate on their loans (and how they define default).',
+    },
+    recovery_and_npls: {
+        label: 'Recovery rate & NPLs',
+        hint: 'How much of defaulted loans they recover and when, non-performing loans and write-offs.',
+    },
+    deployment_capacity: {
+        label: 'Deployment capacity',
+        hint: 'How much they could lend over the next 12–24 months, and how fast they deploy today.',
     },
     loans_per_year: {
         label: 'Loans per year',

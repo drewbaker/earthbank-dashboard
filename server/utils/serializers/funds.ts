@@ -18,7 +18,10 @@ import type {
     FundSector,
     FundSourceKind,
     FundStage,
+    LenderArchetype,
+    LendingChannel,
     LoanType,
+    TicketFit,
     ResearchOrganizationKind,
 } from '#shared/constants/funds.ts'
 import { FUND_DILIGENCE_QUESTIONS } from '#shared/constants/funds.ts'
@@ -67,6 +70,10 @@ export function serializeFund({ fund }: { fund: FundListRow }): Fund {
         sectors: stringArray({ value: fund.sectors }) as FundSector[],
         loan_types: stringArray({ value: fund.loan_types }) as LoanType[],
         focus_areas: stringArray({ value: fund.focus_areas }),
+        lender_archetype: fund.lender_archetype as LenderArchetype | null,
+        lending_channel: fund.lending_channel as LendingChannel | null,
+        lends_local_currency: fund.lends_local_currency,
+        ticket_fit: fund.ticket_fit as TicketFit | null,
         research_completeness: fund.research_completeness,
         diligence_completeness: fund.diligence_completeness,
         archived_at: toIsoDateTime({ date: fund.archived_at }),

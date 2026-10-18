@@ -308,6 +308,8 @@ export function findingValueKey({ field, value }: { field: FundResearchField; va
             return text('metric')
         case 'conference':
             return `${text('name')}|${String(value.year ?? '')}`
+        case 'risk_sharing':
+            return `${String(value.kind)}|${text('provider')}|${text('facility')}`
         case 'contact':
             return `${String(value.kind)}|${String(value.value ?? '')
                 .toLowerCase()
@@ -463,6 +465,45 @@ function cleanFindingValue<Field extends FundResearchField>({
                 (min === null || max === null || min <= max) &&
                 /^[A-Za-z]{3}$/.test(String(v.currency))
             return isValid ? ({ ...v, currency: String(v.currency).toUpperCase() } as FundFindingValues[Field]) : null
+        }
+        case 'lender_archetype':
+        case 'lending_channel':
+            return value
+        case 'loan_terms': {
+            const tenors = [v.tenor_months_min, v.tenor_months_max].filter((tenor): tenor is number => tenor !== null)
+            const pricing = typeof v.pricing === 'string' ? v.pricing.trim() || null : null
+            const collateral = typeof v.collateral === 'string' ? v.collateral.trim() || null : null
+            const isValid =
+                (pricing !== null || collateral !== null || tenors.length > 0) &&
+                tenors.every(tenor => tenor >= 1 && tenor <= 360) &&
+                (tenors.length < 2 || tenors[0]! <= tenors[1]!)
+            return isValid ? ({ ...v, pricing, collateral } as FundFindingValues[Field]) : null
+        }
+        case 'lending_currency': {
+            const currencies = [...new Set((v.currencies as string[]).map(code => code.trim().toUpperCase()))].filter(
+                code => /^[A-Z]{3}$/.test(code),
+            )
+            return { ...v, currencies } as FundFindingValues[Field]
+        }
+        case 'underwriting': {
+            const approaches = [...new Set(v.approaches as string[])]
+            const partners = typeof v.origination_partners === 'string' ? v.origination_partners.trim() || null : null
+            return approaches.length > 0 || partners
+                ? ({ approaches, origination_partners: partners } as FundFindingValues[Field])
+                : null
+        }
+        case 'risk_sharing':
+            return String(v.provider).trim().length > 1 ? value : null
+        case 'portfolio_scale': {
+            const outstanding =
+                v.outstanding === null ? null : cleanMoney({ money: v.outstanding as Record<string, unknown> })
+            const counts = [v.borrowers, v.loans].filter((count): count is number => count !== null)
+            const isValid =
+                (counts.length > 0 || outstanding !== null) &&
+                counts.every(count => count >= 1 && count <= 100_000_000) &&
+                (v.outstanding === null || outstanding !== null) &&
+                isPartialDateOk({ text: v.as_of, thisYear, allowNull: true })
+            return isValid ? ({ ...v, outstanding } as FundFindingValues[Field]) : null
         }
         case 'deal': {
             const amount = v.amount === null ? null : cleanMoney({ money: v.amount as Record<string, unknown> })

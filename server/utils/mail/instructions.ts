@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { findFundManager, listFundManagers, updateFundManagerColumns } from '#server/database/fund-managers.ts'
 import { findFunder, listFundersWithDetails } from '#server/database/funders.ts'
 import { goalIdsByType } from '#server/database/goals.ts'
 import { createOpportunityRow, findOpportunity } from '#server/database/opportunities.ts'
@@ -13,6 +14,8 @@ import { config } from '#server/utils/config.ts'
 import { addContactToFunder } from '#server/utils/contacts.ts'
 import { centsToNumber, fromDateOnly, toDateOnly } from '#server/utils/dates.ts'
 import { createFunderWithDetails, defaultOpportunityName } from '#server/utils/funders.ts'
+import { addFund } from '#server/utils/funds/add-fund.ts'
+import { queueFundRefresh } from '#server/utils/funds/refresh.ts'
 import { enqueueFunderBackfill } from '#server/utils/jobs/enqueue.ts'
 import type { IncomingEmail } from '#server/utils/mail/types.ts'
 import { notifyTaskAssigned } from '#server/utils/notifications.ts'
@@ -24,6 +27,7 @@ import {
     RELATIONSHIP_STATUSES,
     FUNDER_TIERS,
 } from '#shared/constants/pipeline.ts'
+import { organizationNameKey, websiteDomain } from '#shared/funds/organization-names.ts'
 import { isGeoFocusCode } from '#shared/utils/geo-focus.ts'
 
 const SOURCE = 'ai_instruction' as const
@@ -142,7 +146,10 @@ function buildTools({
         return events.map(event => event.field)
     }
 
+    const fundUrl = (fundManagerId: string) => `${config.appUrl}/funds/${fundManagerId}`
+
     return [
+        ...buildFundTools({ actor, actions, fundUrl }),
         tool({
             name: 'find_funders',
             description:
@@ -444,6 +451,137 @@ function buildTools({
             },
         }),
     ]
+}
+
+/**
+ * Tools for the Funds list (lenders Earth Bank might partner with): find a fund, add one and research
+ * it, or research an existing one again. Adding a fund needs only its name: when the email doesn't
+ * give the website or LinkedIn page, the research looks for them.
+ *
+ * @param input.actor - The team member, for audit entries.
+ * @param input.actions - Collects what was done, for the reply.
+ * @param input.fundUrl - Builds a fund's page link.
+ * @returns Tools.
+ */
+function buildFundTools({
+    actor,
+    actions,
+    fundUrl,
+}: {
+    actor: { type: 'user'; userId: string }
+    actions: InstructionAction[]
+    fundUrl: (fundManagerId: string) => string
+}): AiTool[] {
+    return [
+        tool({
+            name: 'find_funds',
+            description:
+                'Search the Funds list (lenders Earth Bank might partner with, not funders) by name, website or LinkedIn page. Always search before adding a fund.',
+            inputSchema: z.object({ query: z.string().describe('Fund name, website or LinkedIn URL.') }),
+            run: async ({ query }) => {
+                const funds = await findFundsMatching({ query })
+                if (funds.length === 0) {
+                    return 'No fund matches.'
+                }
+                return JSON.stringify(
+                    funds.map(fund => ({
+                        fund_id: fund.id,
+                        name: fund.name,
+                        website_url: fund.website_url,
+                        linkedin_url: fund.linkedin_url,
+                        research_status: fund.research_status,
+                    })),
+                )
+            },
+        }),
+        tool({
+            name: 'add_fund',
+            description:
+                'Add a lender to the Funds list and research it from public sources. Use when someone asks to research a fund or add a fund manager. Give its website and LinkedIn company page if the email has them; leave them null otherwise and the research will find them. Only after find_funds found nothing.',
+            inputSchema: z.object({
+                name: z.string(),
+                website_url: z.string().nullable().describe('Full URL, only if the email gives it.'),
+                linkedin_url: z.string().nullable().describe('LinkedIn company page, only if the email gives it.'),
+                notes: z.string().nullable().describe('Why the team is interested, if they said (neutral facts only).'),
+            }),
+            run: async ({ name, website_url, linkedin_url, notes }) => {
+                const website = website_url && /^https?:\/\/\S+\.\S+/i.test(website_url) ? website_url : null
+                const linkedin =
+                    linkedin_url && /linkedin\.com\/(company|school|showcase)\//i.test(linkedin_url)
+                        ? linkedin_url
+                        : null
+                const { fund, isNew } = await addFund({
+                    name,
+                    websiteUrl: website,
+                    linkedinUrl: linkedin,
+                    origin: 'manual',
+                    now: new Date(),
+                })
+                if (!isNew) {
+                    return `${fund.name} is already on the list (fund_id ${fund.id}); use research_fund to refresh it.`
+                }
+                if (notes) {
+                    await updateFundManagerColumns({ fundManagerId: fund.id, data: { notes } })
+                }
+                await recordAudit({
+                    actor,
+                    action: 'fund.created',
+                    entityType: 'fund',
+                    entityId: fund.id,
+                    changes: { name, website_url: website, linkedin_url: linkedin, via: 'email_instruction' },
+                })
+                actions.push({
+                    description: `Added ${fund.name} to Funds and started researching it${website ? '' : ' (the research will look for its website)'}`,
+                    url: fundUrl(fund.id),
+                })
+                return `Added ${fund.name} (fund_id ${fund.id}); research is queued.`
+            },
+        }),
+        tool({
+            name: 'research_fund',
+            description:
+                "Research a fund that's already on the list again, refreshing everything public sources show. Use when someone asks to update or refresh a fund.",
+            inputSchema: z.object({ fund_id: z.string() }),
+            run: async ({ fund_id }) => {
+                const fund = await findFundManager({ fundManagerId: fund_id })
+                if (!fund || fund.archived_at) {
+                    return 'No such fund on the list.'
+                }
+                await queueFundRefresh({ fundManagerId: fund.id, now: new Date() })
+                await recordAudit({
+                    actor,
+                    action: 'fund.research_requested',
+                    entityType: 'fund',
+                    entityId: fund.id,
+                    changes: { via: 'email_instruction' },
+                })
+                actions.push({ description: `Started refreshing the research on ${fund.name}`, url: fundUrl(fund.id) })
+                return `Research on ${fund.name} is queued.`
+            },
+        }),
+    ]
+}
+
+/**
+ * Funds whose name, website or LinkedIn page matches a query.
+ *
+ * @param input.query - Name, website or LinkedIn URL.
+ * @returns Up to 10 matching funds.
+ */
+async function findFundsMatching({ query }: { query: string }) {
+    const needle = query.trim().toLowerCase()
+    const nameKey = organizationNameKey({ name: query })
+    const domain = websiteDomain({ url: query.includes('.') ? query : null })
+    return (await listFundManagers({ limit: 1000, includeArchived: false }))
+        .filter(
+            fund =>
+                fund.name.toLowerCase().includes(needle) ||
+                (nameKey.length > 2 && fund.name_key.includes(nameKey)) ||
+                (domain !== null && fund.website_domain === domain) ||
+                (fund.linkedin_url !== null &&
+                    needle.includes(fund.linkedin_url.toLowerCase().replace(/^https?:\/\/www\./, ''))),
+        )
+        .slice(0, 10)
 }
 
 /**

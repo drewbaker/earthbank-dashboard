@@ -85,6 +85,9 @@ beforeAll(async () => {
             last_fund_close_on: new Date('2025-06-01T00:00:00Z'),
             research_completeness: 80,
             focus_areas: ['KE', 'UG'],
+            ticket_fit: 'fits',
+            lender_archetype: 'climate_private_debt',
+            lends_local_currency: true,
             loan_types: ['working_capital', 'term_debt'],
         },
     })
@@ -212,6 +215,14 @@ describe('list filters', () => {
         ])
     })
 
+    it('filters by ticket fit, lender type and local-currency lending', async () => {
+        expect(await listNames({ query: 'ticket_fit=fits' })).toEqual(['Big Working Capital Fund'])
+        expect(await listNames({ query: 'lender_archetype=climate_private_debt' })).toEqual([
+            'Big Working Capital Fund',
+        ])
+        expect(await listNames({ query: 'local_currency=true' })).toEqual(['Big Working Capital Fund'])
+    })
+
     it('matches regions by country, and includes global funds', async () => {
         expect(await listNames({ query: 'focus_area=region:eastern_africa' })).toEqual([
             'Big Working Capital Fund',
@@ -251,7 +262,7 @@ describe('team fields and diligence', () => {
             source: 'manual',
             answered_by: { name: 'Leslie' },
         })
-        expect(answered.json.diligence_completeness).toBe(20)
+        expect(answered.json.diligence_completeness).toBe(14)
         expect(
             (
                 await request({

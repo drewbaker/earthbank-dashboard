@@ -1,5 +1,13 @@
 import { z } from 'zod'
-import { FUND_SECTORS, LOAN_TYPES } from '#shared/constants/funds.ts'
+import {
+    CURRENCY_BASES,
+    FUND_SECTORS,
+    LENDER_ARCHETYPES,
+    LENDING_CHANNELS,
+    LOAN_TYPES,
+    RISK_SHARING_KINDS,
+    UNDERWRITING_APPROACHES,
+} from '#shared/constants/funds.ts'
 
 // The value of each research field. These shapes are also the research assistant's tool input
 // (shared/schemas → JSON Schema), so they stay plain: no formats or min/max, which the structured
@@ -56,6 +64,36 @@ export const FUND_FINDING_VALUE_SCHEMAS = {
         note: z.string().nullable(),
     }),
     loan_types: z.object({ types: z.array(z.enum(LOAN_TYPES)) }),
+    lender_archetype: z.object({ archetype: z.enum(LENDER_ARCHETYPES) }),
+    loan_terms: z.object({
+        pricing: z.string().nullable().describe('Interest rate or range as published, e.g. "12–18% in USD".'),
+        tenor_months_min: z.number().int().nullable(),
+        tenor_months_max: z.number().int().nullable(),
+        collateral: z.string().nullable().describe('Collateral or security they ask for, as published.'),
+    }),
+    lending_currency: z.object({
+        basis: z.enum(CURRENCY_BASES),
+        currencies: z.array(z.string()).describe('ISO 4217 codes they lend in, e.g. ["KES", "USD"].'),
+    }),
+    lending_channel: z.object({ channel: z.enum(LENDING_CHANNELS) }),
+    underwriting: z.object({
+        approaches: z.array(z.enum(UNDERWRITING_APPROACHES)),
+        origination_partners: z
+            .string()
+            .nullable()
+            .describe('Partners that bring them borrowers (OEMs, co-ops, offtakers).'),
+    }),
+    risk_sharing: z.object({
+        kind: z.enum(RISK_SHARING_KINDS),
+        provider: z.string().describe('Who provides it, e.g. IFC, FMO, USAID DCA.'),
+        facility: z.string().nullable().describe('The facility or programme name, e.g. NASIRA.'),
+    }),
+    portfolio_scale: z.object({
+        borrowers: z.number().int().nullable().describe('Borrowers financed to date.'),
+        loans: z.number().int().nullable().describe('Loans made to date.'),
+        outstanding: ResearchMoney.nullable().describe('Portfolio outstanding.'),
+        as_of: PartialDate.nullable(),
+    }),
     deal: z.object({
         borrower: z.string(),
         amount: ResearchMoney.nullable(),

@@ -119,7 +119,7 @@ describe('completeness', () => {
 
     it('counts answered diligence questions', () => {
         expect(diligenceCompleteness({ answeredCount: 0 })).toBe(0)
-        expect(diligenceCompleteness({ answeredCount: 2 })).toBe(40)
+        expect(diligenceCompleteness({ answeredCount: 2 })).toBe(29)
         expect(diligenceCompleteness({ answeredCount: 9 })).toBe(100)
     })
 })
@@ -135,5 +135,46 @@ describe('money', () => {
     it('formats amounts compactly in their own currency', () => {
         expect(formatCurrencyAmount({ amount: 1_500_000, currency: 'USD' })).toBe('$1.5M')
         expect(formatCurrencyAmount({ amount: 1_000_000_000, currency: 'EUR' })).toBe('€1B')
+    })
+})
+
+describe('screening values', () => {
+    it("compares check sizes with Earth Bank's $500K–$5M ticket", async () => {
+        const { ticketFit } = await import('#server/utils/funds/research-values.ts')
+        const dollars = (amount: number) => amount * 100
+        expect(ticketFit({ minCents: dollars(500_000), maxCents: dollars(5_000_000) })).toBe('fits')
+        expect(ticketFit({ minCents: dollars(1_000_000), maxCents: dollars(10_000_000) })).toBe('fits')
+        expect(ticketFit({ minCents: dollars(50_000), maxCents: dollars(1_000_000) })).toBe('partly')
+        expect(ticketFit({ minCents: dollars(50_000), maxCents: dollars(250_000) })).toBe('outside')
+        expect(ticketFit({ minCents: dollars(20_000_000), maxCents: null })).toBe('outside')
+        expect(ticketFit({ minCents: null, maxCents: dollars(2_000_000) })).toBe('fits')
+        expect(ticketFit({ minCents: null, maxCents: null })).toBeNull()
+    })
+
+    it('stores lender type, channel, local-currency lending and ticket fit for sorting', () => {
+        const values = deriveFundResearchValues({
+            findings: [
+                { field: 'lender_archetype', value: { archetype: 'climate_private_debt' }, created_at: earlier },
+                { field: 'lending_channel', value: { channel: 'direct' }, created_at: earlier },
+                {
+                    field: 'lending_currency',
+                    value: { basis: 'both', currencies: ['KES', 'USD'] },
+                    created_at: earlier,
+                },
+                {
+                    field: 'check_size',
+                    value: { min: 250_000, max: 3_000_000, currency: 'USD', note: null },
+                    created_at: earlier,
+                },
+            ],
+            hasPrincipals: false,
+            hasWorkHistory: false,
+        })
+        expect(values).toMatchObject({
+            lender_archetype: 'climate_private_debt',
+            lending_channel: 'direct',
+            lends_local_currency: true,
+            ticket_fit: 'fits',
+        })
     })
 })
