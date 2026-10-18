@@ -1,10 +1,12 @@
 import { z } from 'zod'
 import { config } from '#server/utils/config.ts'
 import type {
+    CompanyRecord,
     PersonProfile,
     ProfileEntry,
     ReadFailure,
     ReadPage,
+    SitePage,
     WebReader,
     WebSearchHit,
 } from '#server/utils/web/types.ts'
@@ -93,6 +95,69 @@ const LookupPayload = z.object({
                                                             organization: ProfileOrganization,
                                                             start_date: z.string().nullish(),
                                                             end_date: z.string().nullish(),
+                                                        }),
+                                                    )
+                                                    .nullish(),
+                                            }),
+                                            match_metadata: z
+                                                .object({ match_confidence: z.string().nullish() })
+                                                .nullish(),
+                                        }),
+                                    )
+                                    .nullish(),
+                            })
+                            .nullish(),
+                    }),
+                )
+                .nullish(),
+        })
+        .nullish(),
+})
+
+// Data Legion's company record in Alexandria: headcount band, founding year, locations, LinkedIn page.
+const COMPANY_LOOKUP = { provider: 'datalegion', capability: 'companies/enrich-base' } as const
+
+const MapPayload = z.object({
+    success: z.boolean(),
+    code: z.string().nullish(),
+    error: z.string().nullish(),
+    creditsUsed: z.number().nullish(),
+    links: z.array(z.object({ url: z.string(), title: z.string().nullish() })).nullish(),
+})
+
+const CompanyPayload = z.object({
+    success: z.boolean(),
+    code: z.string().nullish(),
+    error: z.string().nullish(),
+    data: z
+        .object({
+            creditsCost: z.number().nullish(),
+            alexandria: z
+                .array(
+                    z.object({
+                        error: z.object({ code: z.string().nullish(), message: z.string().nullish() }).nullish(),
+                        data: z
+                            .object({
+                                matches: z
+                                    .array(
+                                        z.object({
+                                            company: z.object({
+                                                name: CleanedText,
+                                                domain: z.string().nullish(),
+                                                description: CleanedText,
+                                                founded: z.number().nullish(),
+                                                size: z.string().nullish(),
+                                                linkedin_url: z.string().nullish(),
+                                                socials: z
+                                                    .array(z.object({ network: z.string(), url: z.string().nullish() }))
+                                                    .nullish(),
+                                                locations: z
+                                                    .array(
+                                                        z.object({
+                                                            city: z.string().nullish(),
+                                                            country_code: z.string().nullish(),
+                                                            primary: z.boolean().nullish(),
+                                                            current: z.boolean().nullish(),
                                                         }),
                                                     )
                                                     .nullish(),
@@ -223,6 +288,92 @@ export class FirecrawlReader implements WebReader {
             snippet: result.description ?? null,
         }))
         return { hits, failure: null, credits: payload.data.creditsUsed ?? Math.ceil(hits.length / 10) * 2 }
+    }
+
+    /**
+     * List a website's pages from its sitemap and links.
+     *
+     * @param input.url - The site's home page.
+     * @param input.limit - Most pages to list.
+     * @returns The pages, or why the site couldn't be mapped, and the credits used.
+     */
+    async mapSite({ url, limit }: { url: string; limit: number }) {
+        const response = await this.post({ path: '/map', body: { url, limit, includeSubdomains: false } })
+        const payload = MapPayload.safeParse(response.json)
+        if (!payload.success || !payload.data.success) {
+            return {
+                pages: [] as SitePage[],
+                failure: failureFrom({ status: response.status, code: payload.data?.code, error: payload.data?.error }),
+                credits: 0,
+            }
+        }
+        const pages: SitePage[] = (payload.data.links ?? []).map(link => ({ url: link.url, title: link.title ?? null }))
+        return { pages, failure: null, credits: payload.data.creditsUsed ?? 1 }
+    }
+
+    /**
+     * Look up a company's record by its website domain (or LinkedIn page), through Data Legion in
+     * Firecrawl's Alexandria catalog.
+     *
+     * @param input.domain - The company's website domain.
+     * @param input.linkedinUrl - Its LinkedIn company page, used when there's no domain.
+     * @returns The record, or why there isn't one, and the credits used.
+     */
+    async lookupCompany({ domain, linkedinUrl }: { domain: string | null; linkedinUrl: string | null }) {
+        const options = domain ? { domain } : linkedinUrl ? { social_url: linkedinUrl } : null
+        if (!options) {
+            return {
+                company: null,
+                failure: { code: 'no_match' as const, message: 'No domain or LinkedIn page' },
+                credits: 0,
+            }
+        }
+        const response = await this.post({
+            path: '/scrape',
+            body: { alexandria: { ...COMPANY_LOOKUP, options: { ...options, titlecase: true } } },
+        })
+        const payload = CompanyPayload.safeParse(response.json)
+        if (!payload.success || !payload.data.success) {
+            return {
+                company: null,
+                failure: failureFrom({ status: response.status, code: payload.data?.code, error: payload.data?.error }),
+                credits: 0,
+            }
+        }
+        const credits = payload.data.data?.creditsCost ?? 0
+        const call = payload.data.data?.alexandria?.[0]
+        if (call?.error) {
+            return {
+                company: null,
+                failure: failureFrom({ status: 400, code: call.error.code, error: call.error.message }),
+                credits,
+            }
+        }
+        const match = call?.data?.matches?.[0]
+        if (!match) {
+            return { company: null, failure: { code: 'no_match' as const, message: 'No company found' }, credits }
+        }
+        const company = match.company
+        const locations = company.locations ?? []
+        const headquarters =
+            locations.find(location => location.primary) ?? locations.find(location => location.current) ?? null
+        const record: CompanyRecord = {
+            provider: COMPANY_LOOKUP.provider,
+            matchConfidence: match.match_metadata?.match_confidence ?? null,
+            name: textOf({ value: company.name }),
+            domain: company.domain ?? null,
+            description: textOf({ value: company.description }),
+            founded: company.founded ?? null,
+            size: company.size ?? null,
+            linkedinUrl: company.linkedin_url ?? null,
+            headquarters: headquarters
+                ? { city: headquarters.city ?? null, countryCode: headquarters.country_code?.toUpperCase() ?? null }
+                : null,
+            socials: (company.socials ?? []).flatMap(social =>
+                social.url ? [{ network: social.network, url: social.url }] : [],
+            ),
+        }
+        return { company: record, failure: null, credits }
     }
 
     /**

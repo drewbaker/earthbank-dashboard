@@ -33,7 +33,15 @@ export const FUND_FINDING_VALUE_SCHEMAS = {
         text: z.string().describe('How the source words it.'),
     }),
     sectors: z.object({ sectors: z.array(z.enum(FUND_SECTORS)) }),
-    employee_count: z.object({ count: z.number().int() }),
+    employee_count: z.object({
+        count: z.number().int().nullable().describe('Exact number of employees, when the source gives one.'),
+        range: z.string().nullable().describe('Headcount band, e.g. 11-50, when there is no exact count.'),
+    }),
+    contact: z.object({
+        kind: z.enum(['email', 'phone', 'address', 'contact_page']),
+        value: z.string().describe('The address, number, office address or contact page URL, exactly as published.'),
+        label: z.string().nullable().describe('What it is for, e.g. "Investment enquiries" or "Nairobi office".'),
+    }),
     aum: ResearchMoney.extend({ as_of: PartialDate.nullable() }),
     fund_raise: z.object({
         fund_name: z.string(),

@@ -10,7 +10,7 @@ const emit = defineEmits<{ saved: [fund: FundDetail] }>()
 const open = defineModel<boolean>('open', { default: false })
 
 const api = useApi()
-const formState = reactive({ name: '', website_url: '' })
+const formState = reactive({ name: '', website_url: '', linkedin_url: '' })
 const errorMessage = ref<string | null>(null)
 const isSaving = ref(false)
 
@@ -18,6 +18,7 @@ watch(open, isOpen => {
     if (isOpen) {
         formState.name = ''
         formState.website_url = ''
+        formState.linkedin_url = ''
         errorMessage.value = null
     }
 })
@@ -37,7 +38,11 @@ async function saveFund(event: FormSubmitEvent<z.output<typeof CreateFundRequest
         const fund = await api<FundDetail>({
             path: '/funds',
             method: 'POST',
-            body: { name: event.data.name, website_url: event.data.website_url || null },
+            body: {
+                name: event.data.name,
+                website_url: event.data.website_url,
+                linkedin_url: event.data.linkedin_url || null,
+            },
         })
         open.value = false
         emit('saved', fund)
@@ -60,8 +65,15 @@ async function saveFund(event: FormSubmitEvent<z.output<typeof CreateFundRequest
                 <UFormField label="Name" name="name" required>
                     <UInput v-model="formState.name" placeholder="Iungo Capital" class="w-full" autofocus />
                 </UFormField>
-                <UFormField label="Website" name="website_url" hint="Optional">
-                    <UInput v-model="formState.website_url" placeholder="https://…" class="w-full" />
+                <UFormField label="Website" name="website_url" required>
+                    <UInput v-model="formState.website_url" placeholder="https://iungocapital.com" class="w-full" />
+                </UFormField>
+                <UFormField label="LinkedIn page" name="linkedin_url" hint="Optional">
+                    <UInput
+                        v-model="formState.linkedin_url"
+                        placeholder="https://www.linkedin.com/company/…"
+                        class="w-full"
+                    />
                 </UFormField>
                 <UAlert v-if="errorMessage" color="error" variant="subtle" :description="errorMessage" />
                 <div class="flex justify-end gap-2">

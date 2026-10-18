@@ -126,6 +126,7 @@ export const Fund = z.object({
     id: z.string(),
     name: z.string(),
     website_url: z.string().nullable(),
+    linkedin_url: z.string().nullable(),
     stage: z.enum(FUND_STAGES),
     fit_tags: z.array(z.enum(FUND_FIT_TAGS)),
     origin: z.enum(FUND_ORIGINS),
@@ -144,6 +145,7 @@ export const Fund = z.object({
     hq_country: z.string().nullable(),
     hq_city: z.string().nullable(),
     employee_count: z.number().int().nullable(),
+    employee_range: z.string().nullable(),
     sectors: z.array(z.enum(FUND_SECTORS)),
     loan_types: z.array(z.enum(LOAN_TYPES)),
     focus_areas: z.array(z.string()),
@@ -229,9 +231,22 @@ const WebsiteUrl = z
 // An empty website box means "no website".
 const OptionalWebsiteUrl = z.union([z.literal('').transform(() => null), WebsiteUrl]).nullable()
 
+const LinkedinCompanyUrl = z
+    .string()
+    .trim()
+    .max(500)
+    .refine(value => /^https?:\/\/([a-z]{2,3}\.)?linkedin\.com\/(company|school|showcase)\/[^/?#]+/i.test(value), {
+        message: 'Enter the LinkedIn company page (https://www.linkedin.com/company/…).',
+    })
+
+// An empty LinkedIn box means "not known".
+const OptionalLinkedinUrl = z.union([z.literal('').transform(() => null), LinkedinCompanyUrl]).nullable()
+
+// Name and website are needed to research a fund well; the LinkedIn page helps if the team knows it.
 export const CreateFundRequest = z.object({
     name: z.string().trim().min(1).max(200),
-    website_url: OptionalWebsiteUrl.optional(),
+    website_url: WebsiteUrl,
+    linkedin_url: OptionalLinkedinUrl.optional(),
 })
 export type CreateFundRequest = z.infer<typeof CreateFundRequest>
 
@@ -239,6 +254,7 @@ export const UpdateFundRequest = z
     .object({
         name: z.string().trim().min(1).max(200),
         website_url: OptionalWebsiteUrl,
+        linkedin_url: OptionalLinkedinUrl,
         stage: z.enum(FUND_STAGES),
         fit_tags: z.array(z.enum(FUND_FIT_TAGS)),
         notes: z.string().max(20_000).nullable(),

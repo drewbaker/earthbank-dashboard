@@ -8,14 +8,14 @@ import { conflict } from '#server/utils/errors.ts'
 import { loadFundDetail, requireFund } from '#server/utils/funds/fund-detail.ts'
 import { assertActiveUser } from '#server/utils/users.ts'
 import { UpdateFundRequest } from '#shared/schemas/index.ts'
-import { organizationNameKey, websiteDomain } from '#shared/funds/organization-names.ts'
+import { canonicalLinkedinUrl, organizationNameKey, websiteDomain } from '#shared/funds/organization-names.ts'
 
 defineRouteMeta({
     openAPI: {
         tags: ['Funds'],
         summary: 'Update a fund',
         description:
-            "Edits the team's own fields: name, website, stage, fit tags, notes and owner. Research findings aren't edited here.",
+            "Edits the team's own fields: name, website, LinkedIn page, stage, fit tags, notes and owner. Research findings aren't edited here.",
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: {
             required: true,
@@ -55,6 +55,10 @@ export default defineApiHandler(async event => {
             name_key: nameKey,
             website_url: body.website_url,
             website_domain: domain,
+            linkedin_url:
+                body.linkedin_url === undefined
+                    ? undefined
+                    : body.linkedin_url && canonicalLinkedinUrl({ url: body.linkedin_url }),
             stage: body.stage,
             fit_tags: body.fit_tags,
             notes: body.notes,

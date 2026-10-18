@@ -2,7 +2,7 @@ import { createFundManagerRow, findFundManagerByIdentity, isPriorityOrigin } fro
 import { linkOrganizationToFund } from '#server/database/fund-research.ts'
 import { enqueueFundResearch } from '#server/utils/jobs/enqueue.ts'
 import type { FundOrigin } from '#shared/constants/funds.ts'
-import { organizationNameKey, websiteDomain } from '#shared/funds/organization-names.ts'
+import { canonicalLinkedinUrl, organizationNameKey, websiteDomain } from '#shared/funds/organization-names.ts'
 
 /**
  * Put a lender on the list (unless it's already there) and queue its research.
@@ -12,6 +12,7 @@ import { organizationNameKey, websiteDomain } from '#shared/funds/organization-n
  *
  * @param input.name - Display name.
  * @param input.websiteUrl - Website, if known.
+ * @param input.linkedinUrl - LinkedIn company page, if known.
  * @param input.origin - How it got onto the list.
  * @param input.discoveredFromId - The fund whose research turned it up, if any.
  * @param input.now - Current time.
@@ -20,12 +21,14 @@ import { organizationNameKey, websiteDomain } from '#shared/funds/organization-n
 export async function addFund({
     name,
     websiteUrl,
+    linkedinUrl = null,
     origin,
     discoveredFromId = null,
     now,
 }: {
     name: string
     websiteUrl: string | null
+    linkedinUrl?: string | null
     origin: FundOrigin
     discoveredFromId?: string | null
     now: Date
@@ -41,6 +44,7 @@ export async function addFund({
         nameKey,
         websiteUrl: domain ? websiteUrl : null,
         websiteDomain: domain,
+        linkedinUrl: linkedinUrl ? canonicalLinkedinUrl({ url: linkedinUrl }) : null,
         origin,
         discoveredFromId,
         now,

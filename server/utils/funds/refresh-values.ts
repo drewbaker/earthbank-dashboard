@@ -8,7 +8,7 @@ import { listFundDiligenceAnswers, listFundFindings, readFundTeamCoverage } from
 import { deriveFundResearchValues } from '#server/utils/funds/research-values.ts'
 import type { FundResearchField } from '#shared/constants/funds.ts'
 import { diligenceCompleteness } from '#shared/funds/completeness.ts'
-import { websiteDomain } from '#shared/funds/organization-names.ts'
+import { canonicalLinkedinUrl, websiteDomain } from '#shared/funds/organization-names.ts'
 
 /**
  * Recompute and store a fund's sortable research values and completeness from its current data.
@@ -33,6 +33,10 @@ export async function refreshFundResearchValues({ fundManagerId }: { fundManager
         })),
         hasPrincipals: coverage.hasPrincipals,
         hasWorkHistory: coverage.hasWorkHistory,
+    })
+    await adoptResearchedLinkedin({
+        fundManagerId,
+        linkedinUrl: findings.find(finding => finding.field === 'linkedin_url')?.value as { url?: string } | undefined,
     })
     await adoptResearchedWebsite({
         fundManagerId,
@@ -73,4 +77,30 @@ async function adoptResearchedWebsite({
         return
     }
     await updateFundManagerColumns({ fundManagerId, data: { website_url: url, website_domain: domain } })
+}
+
+/**
+ * Set the fund's LinkedIn page from a verified LinkedIn finding when it has none yet.
+ *
+ * @param input.fundManagerId - The fund.
+ * @param input.linkedinUrl - The LinkedIn finding's value, if any.
+ * @returns Nothing.
+ */
+async function adoptResearchedLinkedin({
+    fundManagerId,
+    linkedinUrl,
+}: {
+    fundManagerId: string
+    linkedinUrl: { url?: string } | undefined
+}) {
+    if (!linkedinUrl?.url) {
+        return
+    }
+    const fund = await findFundManager({ fundManagerId })
+    if (fund && !fund.linkedin_url) {
+        await updateFundManagerColumns({
+            fundManagerId,
+            data: { linkedin_url: canonicalLinkedinUrl({ url: linkedinUrl.url }) },
+        })
+    }
 }

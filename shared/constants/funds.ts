@@ -144,6 +144,7 @@ export const FUND_SOURCE_KINDS = [
     'dfi_database',
     'government_database',
     'report',
+    'data_provider',
     'other',
 ] as const
 export type FundSourceKind = (typeof FUND_SOURCE_KINDS)[number]
@@ -156,6 +157,7 @@ export const FUND_SOURCE_KIND_LABELS: Record<FundSourceKind, string> = {
     dfi_database: 'DFI database',
     government_database: 'Government database',
     report: 'Report',
+    data_provider: 'Data provider',
     other: 'Other',
 }
 
@@ -198,6 +200,7 @@ export const FUND_RESEARCH_FIELDS = [
     'geographic_focus',
     'sectors',
     'employee_count',
+    'contact',
     'aum',
     'fund_raise',
     'check_size',
@@ -286,7 +289,15 @@ export const FUND_RESEARCH_FIELD_DETAILS: Record<
         isList: false,
         isLinkOnly: false,
         weight: 0.5,
-        hint: 'Number of employees.',
+        hint: 'Number of employees, or a headcount band such as 11-50.',
+    },
+    contact: {
+        label: 'Contact details',
+        group: 'basics',
+        isList: true,
+        isLinkOnly: false,
+        weight: 0.5,
+        hint: 'Email addresses, phone numbers, offices and contact pages the fund publishes.',
     },
     aum: {
         label: 'AUM',

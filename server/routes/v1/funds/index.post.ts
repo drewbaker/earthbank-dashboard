@@ -12,7 +12,8 @@ defineRouteMeta({
     openAPI: {
         tags: ['Funds'],
         summary: 'Add a fund',
-        description: 'Adds a lender to the list and queues its research (ahead of funds the spider found).',
+        description:
+            'Adds a lender to the list and queues its research (ahead of funds the spider found). Name and website are required; the LinkedIn company page is optional.',
         requestBody: {
             required: true,
             content: { 'application/json': { schema: { $ref: '#/components/schemas/CreateFundRequest' } } },
@@ -35,7 +36,8 @@ export default defineApiHandler(async event => {
     const body = await parseBody({ event, schema: CreateFundRequest })
     const { fund, isNew } = await addFund({
         name: body.name,
-        websiteUrl: body.website_url ?? null,
+        websiteUrl: body.website_url,
+        linkedinUrl: body.linkedin_url ?? null,
         origin: 'manual',
         now: new Date(),
     })

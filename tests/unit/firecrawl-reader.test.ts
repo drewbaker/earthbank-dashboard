@@ -249,3 +249,91 @@ describe('FirecrawlReader.lookupPerson', () => {
         expect(result).toMatchObject({ profile: null, failure: { code: 'no_match' }, credits: 1 })
     })
 })
+
+describe('FirecrawlReader.mapSite and lookupCompany', () => {
+    it("lists a site's pages", async () => {
+        const { fetchImpl, requests } = fakeFetch({
+            responses: [
+                {
+                    status: 200,
+                    body: { success: true, links: [{ url: 'https://iungocapital.com/team', title: 'Team' }] },
+                },
+            ],
+        })
+        const result = await reader({ fetchImpl }).mapSite({ url: 'https://iungocapital.com/', limit: 300 })
+        expect(result.pages).toEqual([{ url: 'https://iungocapital.com/team', title: 'Team' }])
+        expect(requests[0]).toMatchObject({
+            url: 'https://api.firecrawl.dev/v2/map',
+            body: { url: 'https://iungocapital.com/', limit: 300 },
+        })
+    })
+
+    it("reads Data Legion's company record by domain", async () => {
+        const { fetchImpl, requests } = fakeFetch({
+            responses: [
+                {
+                    status: 200,
+                    body: {
+                        success: true,
+                        data: {
+                            creditsCost: 10,
+                            alexandria: [
+                                {
+                                    data: {
+                                        matches: [
+                                            {
+                                                company: {
+                                                    name: { cleaned: 'iungo capital', raw: ['Iungo Capital'] },
+                                                    founded: 2016,
+                                                    size: '11-50',
+                                                    linkedin_url: 'https://www.linkedin.com/company/iungocapital',
+                                                    socials: [
+                                                        {
+                                                            network: 'crunchbase',
+                                                            url: 'https://www.crunchbase.com/organization/iungo-capital',
+                                                        },
+                                                    ],
+                                                    locations: [
+                                                        {
+                                                            city: 'kampala',
+                                                            country_code: 'UG',
+                                                            primary: false,
+                                                            current: false,
+                                                        },
+                                                        {
+                                                            city: 'Nairobi',
+                                                            country_code: 'ke',
+                                                            primary: true,
+                                                            current: true,
+                                                        },
+                                                    ],
+                                                },
+                                                match_metadata: { match_confidence: 'high' },
+                                            },
+                                        ],
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            ],
+        })
+        const result = await reader({ fetchImpl }).lookupCompany({ domain: 'iungocapital.com', linkedinUrl: null })
+        expect(result.credits).toBe(10)
+        expect(result.company).toMatchObject({
+            name: 'Iungo Capital',
+            founded: 2016,
+            size: '11-50',
+            matchConfidence: 'high',
+            headquarters: { city: 'Nairobi', countryCode: 'KE' },
+        })
+        expect(requests[0]!.body).toMatchObject({
+            alexandria: {
+                provider: 'datalegion',
+                capability: 'companies/enrich-base',
+                options: { domain: 'iungocapital.com' },
+            },
+        })
+    })
+})

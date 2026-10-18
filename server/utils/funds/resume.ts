@@ -1,7 +1,9 @@
 import { isPriorityOrigin, listFundsNeedingResearch } from '#server/database/fund-managers.ts'
 import { config } from '#server/utils/config.ts'
 import { readFundResearchSettings, readMonthResearchSpend } from '#server/utils/funds/research-settings.ts'
-import { enqueueFundResearch } from '#server/utils/jobs/enqueue.ts'
+import { listPublicInvestmentSourceStates } from '#server/database/public-investments.ts'
+import { PUBLIC_INVESTMENT_SOURCES } from '#server/utils/funds/public-investment-sources.ts'
+import { enqueueFundResearch, enqueuePublicInvestmentSync } from '#server/utils/jobs/enqueue.ts'
 
 // A fund waiting or "running" this long lost its job (a deploy restarted the service).
 const STALE_AFTER_MS = 60 * 60 * 1000
@@ -37,4 +39,24 @@ export async function resumeFundResearch({ now }: { now: Date }) {
         queued += result === 'queued' ? 1 : 0
     }
     return queued
+}
+
+/**
+ * On the first start with fund research (no public list has ever been read), queue a read of every
+ * DFI and government list so cross-references and spidering start right after deploy instead of on
+ * the next weekly run.
+ *
+ * @returns How many list reads were queued.
+ */
+export async function queueFirstPublicListSyncs() {
+    if (!config.anthropicApiKey || !(await readFundResearchSettings()).spider_enabled) {
+        return 0
+    }
+    if ((await listPublicInvestmentSourceStates()).length > 0) {
+        return 0
+    }
+    for (const source of PUBLIC_INVESTMENT_SOURCES) {
+        await enqueuePublicInvestmentSync({ sourceKey: source.key })
+    }
+    return PUBLIC_INVESTMENT_SOURCES.length
 }

@@ -263,9 +263,18 @@ Status: built on the `funds-research` branch (requested Oct 16, 2026). Replaces 
 - [x] Tests: `fund-finding-verification.test.ts`, `fund-research-values.test.ts`, `fund-name-matching.test.ts`, `public-investment-parsing.test.ts`, `fund-research.test.ts`, `funds-api.test.ts`
 - [x] **Firecrawl** (`server/utils/web/firecrawl.ts`, `FIRECRAWL_API_KEY`): research tools `read_page` (blocked and JavaScript pages, LinkedIn once enrichment is on) and `search_web` (LinkedIn team searches; quoted snippets count as evidence); public list pages read through Firecrawl with a plain-request fallback; requests spaced under the plan's per-minute limit; credits stored per run and priced into the budget. Fixed five list URLs that had moved (BII, Proparco, DEG, Finnfund, IFU)
 - [x] LinkedIn team search before every run (results in the prompt, snippets quotable) and principals' work history from Data Legion via Firecrawl Alexandria (high-confidence match that lists the fund only; up to 5 per fund); people matched by name in any word order; LinkedIn URLs stored in standard form
+- [x] **Groundwork before the model**: website and LinkedIn page pinned down from search results (or given when a fund is added: name and website now required, LinkedIn optional); company record (headcount band, founding year, HQ, profiles) from Data Legion; the fund's key pages crawled first (team, about, lending, portfolio, news, impact, contact). New `contact` research field (published emails, phones, offices, contact page)
+- [x] **Gap-filling pass**: a second, shorter research pass for important fields still empty after the first
+- [x] Public DFI and government lists are queued on the first start after deploy
 - [ ] Add `FIRECRAWL_API_KEY` in the Render dashboard
 - [ ] Check each public list against the live site after deploy (several are JavaScript apps or block bots; they show the error in Settings → Research and don't affect the others)
 - [ ] First live research runs: watch Sources → "dropped" counts and the month's spend, then raise the fund limit
+
+Free sources from the consultants' proposals (Bridgespan, Open Capital, BCG, Dalberg), worth adding as lists or context:
+
+- **Lender and deal lists**: GOGLA Investment Database (off-grid solar deals and lenders, partly members-only), Aceli Africa, Triple Jump and Oikocredit reports (loan performance and losses), the CSAF lender benchmarks, Collaborative for Frontier Finance surveys of small-business capital providers, the BII/BCG "Scaling Blended Finance" study (65+ funds), GIIN regional landscapes.
+- **Market sizing and context**: IFC MSME Finance Gap, IFC MSME Indicators, World Bank Enterprise Surveys, IMF Financial Access Survey, CPI Global and Africa Climate Finance Landscapes, UNEP State of Finance for Nature, BloombergNEF Climatescope, GEMs default and recovery statistics, Damodaran country risk premiums.
+- **Fields the proposals screen on that we could add later**: lender archetype; pricing, tenor and collateral; local or hard currency; direct or on-lending; underwriting model; first-loss or guarantees in use; recovery rate and NPLs; deployment pace and borrower count; fit with Earth Bank's $500K–$5M ticket.
 
 Paid datasets that would help (not bought):
 
@@ -274,6 +283,7 @@ Paid datasets that would help (not bought):
 - **Blended-finance deals with DFI participation**: Convergence (full database is paid)
 - **Impact fund profiles**: ImpactBase (GIIN)
 - **DFI deal flow**: Inside DFIs or IJGlobal
+- **Emerging-market company data**: EMIS (named in Dalberg's proposal)
 
 ---
 

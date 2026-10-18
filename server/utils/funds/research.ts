@@ -1,5 +1,10 @@
 import { z } from 'zod'
-import { findFundManager, setFundResearchStatus } from '#server/database/fund-managers.ts'
+import {
+    findFundManager,
+    findFundManagerByDomain,
+    setFundResearchStatus,
+    updateFundManagerColumns,
+} from '#server/database/fund-managers.ts'
 import type {
     AffiliationToSave,
     DiligenceToSave,
@@ -19,6 +24,16 @@ import { FUND_RESEARCH_INSTRUCTIONS } from '#server/utils/ai/instructions.ts'
 import type { WebResearcher } from '#server/utils/ai/web-research.ts'
 import { webReaderCostMicroUsd } from '#server/utils/web/firecrawl.ts'
 import type { WebReader, WebSearchHit } from '#server/utils/web/types.ts'
+import type { BrowserReads } from '#server/utils/funds/groundwork.ts'
+import {
+    addSearchHits,
+    companyRecordFindings,
+    crawlFundWebsite,
+    establishIdentity,
+    formatCrawledPages,
+    formatSearchHits,
+    searchLinkedIn,
+} from '#server/utils/funds/groundwork.ts'
 import { matchPublicRecordsToFund } from '#server/utils/funds/public-records.ts'
 import { addProfileWorkHistory } from '#server/utils/funds/profiles.ts'
 import { refreshFundResearchValues } from '#server/utils/funds/refresh-values.ts'
@@ -178,36 +193,97 @@ export async function researchFund({
         const proposals: Proposals = { findings: [], people: [], affiliations: [], lenders: [], diligence: [] }
         const evidence = buildResearchEvidence({ pages: [], searchResults: [] })
         const browsing: BrowserReads = { pages: [], snippets: [], searchResults: [], credits: 0, reads: 0, searches: 0 }
-        const linkedInHits = reader ? await searchLinkedIn({ reader, fundName: fund.name, browsing, evidence }) : []
-        const result = await researcher.researchWithWeb({
+        const groundwork = reader
+            ? await prepareGroundwork({ fund, reader, classifier, browsing, evidence, researchRunId: run.id, now })
+            : {
+                  linkedInHits: [] as WebSearchHit[],
+                  crawledPages: [] as RetrievedPage[],
+                  websiteUrl: fund.website_url,
+                  costMicroUsd: 0,
+              }
+        const tools = [
+            ...buildResearchTools({ proposals, evidence, minConfidence: settings.min_confidence, now }),
+            ...(reader
+                ? buildBrowserTools({
+                      reader,
+                      browsing,
+                      evidence,
+                      maxReads: settings.max_fetches_per_fund,
+                      maxSearches: settings.max_searches_per_fund,
+                  })
+                : []),
+        ]
+        const firstPass = await researcher.researchWithWeb({
             instructions: FUND_RESEARCH_INSTRUCTIONS,
             prompt: await buildResearchPrompt({
                 fundManagerId,
                 name: fund.name,
-                websiteUrl: fund.website_url,
-                linkedInHits,
+                websiteUrl: groundwork.websiteUrl,
+                linkedInHits: groundwork.linkedInHits,
+                crawledPages: groundwork.crawledPages,
                 now,
             }),
-            tools: [
-                ...buildResearchTools({ proposals, evidence, minConfidence: settings.min_confidence, now }),
-                ...(reader
-                    ? buildBrowserTools({
-                          reader,
-                          browsing,
-                          evidence,
-                          maxReads: settings.max_fetches_per_fund,
-                          maxSearches: settings.max_searches_per_fund,
-                      })
-                    : []),
-            ],
+            tools,
             maxSearches: settings.max_searches_per_fund,
             maxFetches: settings.max_fetches_per_fund,
             onRetrieved: ({ pages, searchResults }) => addEvidence({ evidence, pages, searchResults }),
         })
+        // When the website only turned up during the first pass (a common name the groundwork couldn't
+        // pin down), do the company lookup and site crawl now, so the gap pass starts from those pages.
+        const lateCrawl =
+            reader && !groundwork.websiteUrl
+                ? await groundworkForFoundWebsite({
+                      fundManagerId,
+                      proposals,
+                      evidence,
+                      reader,
+                      browsing,
+                      minConfidence: settings.min_confidence,
+                      researchRunId: run.id,
+                      now,
+                  })
+                : { websiteUrl: null, crawledPages: [] as RetrievedPage[] }
+        // A second, shorter pass aimed only at what's still missing (models tend to stop early).
+        const stillMissing = await missingResearchFields({
+            fundManagerId,
+            proposals,
+            evidence,
+            minConfidence: settings.min_confidence,
+            fundDomain: fund.website_domain,
+            now,
+        })
+        const gapPass =
+            stillMissing.length > 0
+                ? await researcher.researchWithWeb({
+                      instructions: FUND_RESEARCH_INSTRUCTIONS,
+                      prompt: buildGapPrompt({
+                          name: fund.name,
+                          websiteUrl: groundwork.websiteUrl ?? lateCrawl.websiteUrl,
+                          missing: stillMissing,
+                          crawledPages: lateCrawl.crawledPages,
+                          now,
+                      }),
+                      tools,
+                      maxSearches: Math.ceil(settings.max_searches_per_fund / 2),
+                      maxFetches: Math.ceil(settings.max_fetches_per_fund / 2),
+                      onRetrieved: ({ pages, searchResults }) => addEvidence({ evidence, pages, searchResults }),
+                  })
+                : null
+        const passes = gapPass ? [firstPass, gapPass] : [firstPass]
+        const result = {
+            model: firstPass.model,
+            usage: {
+                inputTokens: passes.reduce((sum, pass) => sum + pass.usage.inputTokens, 0),
+                outputTokens: passes.reduce((sum, pass) => sum + pass.usage.outputTokens, 0),
+                webSearches: passes.reduce((sum, pass) => sum + pass.usage.webSearches, 0),
+                webFetches: passes.reduce((sum, pass) => sum + pass.usage.webFetches, 0),
+                costMicroUsd: passes.reduce((sum, pass) => sum + pass.usage.costMicroUsd, 0) + groundwork.costMicroUsd,
+            },
+        }
         // Search snippets first, so a page read in full replaces its snippet.
         const finalEvidence = buildResearchEvidence({
-            pages: [...browsing.snippets, ...result.pages, ...browsing.pages],
-            searchResults: [...result.searchResults, ...browsing.searchResults],
+            pages: [...browsing.snippets, ...passes.flatMap(pass => pass.pages), ...browsing.pages],
+            searchResults: [...passes.flatMap(pass => pass.searchResults), ...browsing.searchResults],
         })
         const verified = verifyProposals({
             proposals,
@@ -485,6 +561,7 @@ export function classifySourceKind({ url, fundDomain }: { url: string; fundDomai
  * @param input.name - Its name.
  * @param input.websiteUrl - Its website, if known.
  * @param input.linkedInHits - LinkedIn search results found before the run (quotable).
+ * @param input.crawledPages - Pages already read from the fund's own website.
  * @param input.now - Current time.
  * @returns The prompt.
  */
@@ -493,12 +570,14 @@ async function buildResearchPrompt({
     name,
     websiteUrl,
     linkedInHits,
+    crawledPages,
     now,
 }: {
     fundManagerId: string
     name: string
     websiteUrl: string | null
     linkedInHits: WebSearchHit[]
+    crawledPages: RetrievedPage[]
     now: Date
 }) {
     const [findings, people] = await Promise.all([
@@ -514,6 +593,9 @@ async function buildResearchPrompt({
     const team = people.map(person => `- ${person.name}${person.title ? `, ${person.title}` : ''}`).join('\n')
     return [
         `Research this lender: ${name}${websiteUrl ? ` (website: ${websiteUrl})` : ''}.`,
+        websiteUrl
+            ? ''
+            : "Its website isn't known yet: first find the lender's own website and record it (website_url), then read its about, team and lending pages.",
         `Today is ${now.toISOString().slice(0, 10)}.`,
         missing.length > 0
             ? `Still missing, so look for these first: ${missing.map(field => FUND_RESEARCH_FIELD_DETAILS[field as FundResearchField].label).join(', ')}.`
@@ -523,9 +605,246 @@ async function buildResearchPrompt({
         linkedInHits.length > 0
             ? `LinkedIn search results for this lender (the snippets are quotable sources: cite the result URL). Record each person who works there now (record_person), then record_affiliation for every past employer and school their snippet names, quoting that part (e.g. \"Investment Analyst. AAIC Investment. Jan 2021 - Aug 2023\"). Use search_web or read_page to find more work history for principals:\n${formatSearchHits({ hits: linkedInHits })}`
             : '',
+        formatCrawledPages({ pages: crawledPages }),
     ]
         .filter(Boolean)
         .join('\n\n')
+}
+
+/**
+ * The prompt for the gap-filling pass: only the fields still missing.
+ *
+ * @param input.name - The fund's name.
+ * @param input.websiteUrl - Its website, if known.
+ * @param input.missing - Fields still without a verified finding.
+ * @param input.crawledPages - Pages of the fund's site read after the first pass found it.
+ * @param input.now - Current time.
+ * @returns The prompt.
+ */
+function buildGapPrompt({
+    name,
+    websiteUrl,
+    missing,
+    crawledPages,
+    now,
+}: {
+    name: string
+    websiteUrl: string | null
+    missing: FundResearchField[]
+    crawledPages: RetrievedPage[]
+    now: Date
+}) {
+    return [
+        `Second pass on ${name}${websiteUrl ? ` (website: ${websiteUrl})` : ''}. Today is ${now.toISOString().slice(0, 10)}.`,
+        `These are still missing. Look only for them, with new searches and pages you haven't read yet (press releases, DFI and investor announcements, annual or impact reports, news, LinkedIn, directories):`,
+        missing
+            .map(field => `- ${FUND_RESEARCH_FIELD_DETAILS[field].label}: ${FUND_RESEARCH_FIELD_DETAILS[field].hint}`)
+            .join('\n'),
+        "Record only what you can quote from a page you read. If something genuinely isn't public, stop; missing is fine.",
+        formatCrawledPages({ pages: crawledPages }),
+    ]
+        .filter(Boolean)
+        .join('\n\n')
+}
+
+/**
+ * Company lookup and site crawl for a website the first research pass found (verified), when the
+ * groundwork couldn't pin one down beforehand.
+ *
+ * @param input.fundManagerId - The fund.
+ * @param input.proposals - Proposals made in the first pass.
+ * @param input.evidence - What the run has retrieved so far (mutated by the crawl).
+ * @param input.reader - Firecrawl.
+ * @param input.browsing - The run's Firecrawl reads (mutated).
+ * @param input.minConfidence - Confidence floor.
+ * @param input.researchRunId - The run.
+ * @param input.now - Current time.
+ * @returns The website found (or null) and the pages crawled.
+ */
+async function groundworkForFoundWebsite({
+    fundManagerId,
+    proposals,
+    evidence,
+    reader,
+    browsing,
+    minConfidence,
+    researchRunId,
+    now,
+}: {
+    fundManagerId: string
+    proposals: Proposals
+    evidence: ResearchEvidence
+    reader: WebReader
+    browsing: BrowserReads
+    minConfidence: number
+    researchRunId: string
+    now: Date
+}) {
+    const verified = verifyProposals({ proposals, evidence, minConfidence, fundDomain: null, now })
+    const found = verified.findings.find(finding => finding.field === 'website_url')?.value as
+        { url?: string } | undefined
+    if (!found?.url) {
+        return { websiteUrl: null, crawledPages: [] as RetrievedPage[] }
+    }
+    const record = await companyRecordFindings({ websiteUrl: found.url, linkedinUrl: null, reader, now })
+    browsing.credits += record.credits
+    if (record.findings.length > 0) {
+        await saveResearchResults({
+            fundManagerId,
+            researchRunId,
+            findings: record.findings,
+            people: [],
+            affiliations: [],
+            diligence: [],
+            now,
+        })
+    }
+    const crawledPages = await crawlFundWebsite({
+        websiteUrl: found.url,
+        reader,
+        maxPages: MAX_CRAWLED_PAGES,
+        browsing,
+        evidence,
+    })
+    return { websiteUrl: found.url, crawledPages }
+}
+
+// Fields worth a second pass when they're still empty after the first.
+const GAP_FIELDS: FundResearchField[] = FUND_RESEARCH_FIELDS.filter(
+    field => field !== 'public_record' && FUND_RESEARCH_FIELD_DETAILS[field].weight >= 1,
+)
+
+/**
+ * Which important fields still have no finding: neither stored before nor verified in this run so far.
+ *
+ * @param input.fundManagerId - The fund.
+ * @param input.proposals - Proposals made so far this run.
+ * @param input.evidence - What the run has retrieved so far.
+ * @param input.minConfidence - Confidence floor.
+ * @param input.fundDomain - The fund's domain.
+ * @param input.now - Current time.
+ * @returns Missing fields.
+ */
+async function missingResearchFields({
+    fundManagerId,
+    proposals,
+    evidence,
+    minConfidence,
+    fundDomain,
+    now,
+}: {
+    fundManagerId: string
+    proposals: Proposals
+    evidence: ResearchEvidence
+    minConfidence: number
+    fundDomain: string | null
+    now: Date
+}) {
+    const stored = new Set((await listFundFindings({ fundManagerId })).map(finding => finding.field))
+    const verified = verifyProposals({ proposals, evidence, minConfidence, fundDomain, now })
+    const found = new Set([...stored, ...verified.findings.map(finding => finding.field)])
+    return GAP_FIELDS.filter(field => !found.has(field))
+}
+
+/**
+ * Groundwork before the model starts (Firecrawl only): search LinkedIn for the team, pin down the
+ * website and LinkedIn page, store the company record, and read the fund's own key pages.
+ *
+ * @param input.fund - The fund row.
+ * @param input.reader - Firecrawl.
+ * @param input.classifier - Model for picking the website and LinkedIn page; null skips that.
+ * @param input.browsing - The run's Firecrawl reads (mutated).
+ * @param input.evidence - The run's live evidence (mutated).
+ * @param input.researchRunId - The run.
+ * @param input.now - Current time.
+ * @returns LinkedIn results and crawled pages for the prompt, the website now known, and model cost.
+ */
+async function prepareGroundwork({
+    fund,
+    reader,
+    classifier,
+    browsing,
+    evidence,
+    researchRunId,
+    now,
+}: {
+    fund: { id: string; name: string; website_url: string | null; linkedin_url: string | null }
+    reader: WebReader
+    classifier: AiProvider | null
+    browsing: BrowserReads
+    evidence: ResearchEvidence
+    researchRunId: string
+    now: Date
+}) {
+    const linkedInHits = await searchLinkedIn({ reader, fundName: fund.name, browsing, evidence })
+    const identity = await establishIdentity({
+        fundManagerId: fund.id,
+        fundName: fund.name,
+        websiteUrl: fund.website_url,
+        linkedinUrl: fund.linkedin_url,
+        linkedInHits,
+        reader,
+        classifier,
+        browsing,
+        evidence,
+    })
+    const record = await companyRecordFindings({
+        websiteUrl: identity.websiteUrl,
+        linkedinUrl: identity.linkedinUrl,
+        reader,
+        now,
+    })
+    browsing.credits += record.credits
+    if (record.findings.length > 0) {
+        await saveResearchResults({
+            fundManagerId: fund.id,
+            researchRunId,
+            findings: record.findings,
+            people: [],
+            affiliations: [],
+            diligence: [],
+            now,
+        })
+    }
+    if (!identity.linkedinUrl && record.linkedinUrl) {
+        await updateFundManagerColumns({ fundManagerId: fund.id, data: { linkedin_url: record.linkedinUrl } })
+    }
+    const websiteUrl =
+        identity.websiteUrl ?? (await adoptRecordWebsite({ fundManagerId: fund.id, websiteUrl: record.websiteUrl }))
+    const crawledPages = websiteUrl
+        ? await crawlFundWebsite({
+              websiteUrl,
+              reader,
+              maxPages: MAX_CRAWLED_PAGES,
+              browsing,
+              evidence,
+          })
+        : []
+    return { linkedInHits, crawledPages, websiteUrl, costMicroUsd: identity.costMicroUsd }
+}
+
+// Pages read from the fund's own website before the model starts.
+const MAX_CRAWLED_PAGES = 8
+
+/**
+ * Set the website a company record gave (looked up by LinkedIn page) on the fund, unless another fund
+ * already uses that domain.
+ *
+ * @param input.fundManagerId - The fund.
+ * @param input.websiteUrl - The website from the record, or null.
+ * @returns The website now on the fund, or null.
+ */
+async function adoptRecordWebsite({ fundManagerId, websiteUrl }: { fundManagerId: string; websiteUrl: string | null }) {
+    const domain = websiteDomain({ url: websiteUrl })
+    if (!websiteUrl || !domain) {
+        return null
+    }
+    const owner = await findFundManagerByDomain({ websiteDomain: domain })
+    if (owner && owner.id !== fundManagerId) {
+        return null
+    }
+    await updateFundManagerColumns({ fundManagerId, data: { website_url: websiteUrl, website_domain: domain } })
+    return websiteUrl
 }
 
 /**
@@ -731,16 +1050,6 @@ function buildResearchTools({
     ]
 }
 
-/** What the run read through Firecrawl: full pages, search snippets, and the credits it used. */
-type BrowserReads = {
-    pages: RetrievedPage[]
-    snippets: RetrievedPage[]
-    searchResults: SearchResult[]
-    credits: number
-    reads: number
-    searches: number
-}
-
 // Most page text handed back to the model per read; the whole page is still kept for checking quotes.
 const MAX_PAGE_TEXT_FOR_MODEL = 30_000
 
@@ -827,84 +1136,6 @@ export function buildBrowserTools({
             },
         },
     ]
-}
-
-/**
- * Record Firecrawl search results: each result's URL counts as seen (for links), and its snippet
- * counts as a quotable source unless that page was already read in full.
- *
- * @param input.hits - Search results.
- * @param input.browsing - The run's Firecrawl reads (mutated).
- * @param input.evidence - The run's live evidence (mutated).
- * @returns Nothing.
- */
-function addSearchHits({
-    hits,
-    browsing,
-    evidence,
-}: {
-    hits: WebSearchHit[]
-    browsing: BrowserReads
-    evidence: ResearchEvidence
-}) {
-    for (const hit of hits) {
-        const key = normalizeUrl({ url: hit.url })
-        browsing.searchResults.push({ url: hit.url, title: hit.title })
-        evidence.searchResults.set(key, { url: hit.url, title: hit.title })
-        if (hit.snippet && !evidence.pages.has(key)) {
-            const snippet: RetrievedPage = {
-                url: hit.url,
-                title: hit.title,
-                text: `${hit.title ?? ''}\n${hit.snippet}`,
-            }
-            browsing.snippets.push(snippet)
-            evidence.pages.set(key, snippet)
-        }
-    }
-}
-
-/**
- * Search results as a numbered list for the model.
- *
- * @param input.hits - Search results.
- * @returns The list.
- */
-function formatSearchHits({ hits }: { hits: WebSearchHit[] }) {
-    return hits
-        .map((hit, index) => `${index + 1}. ${hit.title ?? hit.url}\n   ${hit.url}\n   ${hit.snippet ?? ''}`)
-        .join('\n')
-}
-
-/**
- * Search LinkedIn for the fund's company page and team before the model starts, so every run covers
- * the team and their work history (models tend to stop once the fund's own site is read).
- *
- * @param input.reader - Firecrawl.
- * @param input.fundName - The fund's name.
- * @param input.browsing - The run's Firecrawl reads (mutated).
- * @param input.evidence - The run's live evidence (mutated).
- * @returns The results, for the prompt.
- */
-async function searchLinkedIn({
-    reader,
-    fundName,
-    browsing,
-    evidence,
-}: {
-    reader: WebReader
-    fundName: string
-    browsing: BrowserReads
-    evidence: ResearchEvidence
-}) {
-    const hits: WebSearchHit[] = []
-    for (const query of [`site:linkedin.com/in "${fundName}"`, `site:linkedin.com/company "${fundName}"`]) {
-        const result = await reader.search({ query, limit: query.includes('/in') ? 15 : 3 })
-        browsing.credits += result.credits
-        browsing.searches += 1
-        addSearchHits({ hits: result.hits, browsing, evidence })
-        hits.push(...result.hits)
-    }
-    return hits
 }
 
 /**

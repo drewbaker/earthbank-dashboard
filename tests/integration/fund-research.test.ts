@@ -109,7 +109,7 @@ function iungoCalls() {
         {
             name: 'record_finding',
             input: {
-                finding: { field: 'employee_count', value: { count: 25 } },
+                finding: { field: 'employee_count', value: { count: 25, range: null } },
                 source_urls: [ABOUT_PAGE.url],
                 quote: 'Iungo Capital was founded in 2017',
                 confidence: 0.4,
@@ -371,6 +371,12 @@ describe('Firecrawl', () => {
                     credits: 1,
                 }
             },
+            async mapSite() {
+                return { pages: [], failure: null, credits: 0 }
+            },
+            async lookupCompany() {
+                return { company: null, failure: { code: 'no_match', message: 'No company found' }, credits: 0 }
+            },
             async lookupPerson({ linkedinUrl }) {
                 lookedUp.push(linkedinUrl)
                 return {
@@ -526,7 +532,229 @@ describe('Firecrawl', () => {
             end_year: 2015,
             sources: [{ url: 'https://www.linkedin.com/in/sam-partner', kind: 'linkedin' }],
         })
-        expect(detail.runs[0]).toMatchObject({ firecrawl_credits: 17, web_fetches: 2, web_searches: 6 })
+        // 3 searches per model pass (the gap pass ran too) plus 3 Firecrawl searches.
+        expect(detail.runs[0]).toMatchObject({ firecrawl_credits: 17, web_fetches: 2, web_searches: 9 })
+    })
+})
+
+describe('groundwork', () => {
+    it('finds the website, stores the company record, crawls the site first, then fills gaps', async () => {
+        const { addFund } = await import('#server/utils/funds/add-fund.ts')
+        const { researchFund } = await import('#server/utils/funds/research.ts')
+        const { loadFundDetail } = await import('#server/utils/funds/fund-detail.ts')
+        const fund = (await addFund({ name: 'Clarmondial', websiteUrl: null, origin: 'seed', now })).fund
+        const pageText: Record<string, string> = {
+            'https://clarmondial.com/':
+                'Clarmondial is a Swiss investment manager financing sustainable agriculture supply chains.',
+            'https://clarmondial.com/team': 'Our team: Anna Example, Managing Partner.',
+            'https://clarmondial.com/contact': 'Contact us at info@clarmondial.com or visit our Zurich office.',
+        }
+        const reader: WebReader = {
+            name: 'fake-firecrawl',
+            async readPage({ url }) {
+                const text = pageText[url]
+                return text
+                    ? {
+                          page: { url, title: 'Clarmondial', markdown: text, links: [], statusCode: 200 },
+                          failure: null,
+                          credits: 1,
+                      }
+                    : { page: null, failure: { code: 'not_found', message: 'Not found' }, credits: 1 }
+            },
+            async search({ query }) {
+                if (query === '"Clarmondial"') {
+                    return {
+                        hits: [
+                            {
+                                url: 'https://www.agrinews.example/clarmondial-fund',
+                                title: 'Clarmondial closes fund',
+                                snippet: 'News.',
+                            },
+                            { url: 'https://clarmondial.com/', title: 'Clarmondial', snippet: 'Investment manager.' },
+                        ],
+                        failure: null,
+                        credits: 2,
+                    }
+                }
+                return {
+                    hits: query.includes('/company')
+                        ? [
+                              {
+                                  url: 'https://ch.linkedin.com/company/clarmondial',
+                                  title: 'Clarmondial | LinkedIn',
+                                  snippet: 'Investment management',
+                              },
+                          ]
+                        : [],
+                    failure: null,
+                    credits: 2,
+                }
+            },
+            async mapSite() {
+                return {
+                    pages: [
+                        'https://clarmondial.com/',
+                        'https://clarmondial.com/team',
+                        'https://clarmondial.com/contact',
+                        'https://clarmondial.com/privacy',
+                    ].map(url => ({ url, title: null })),
+                    failure: null,
+                    credits: 1,
+                }
+            },
+            async lookupCompany({ domain }) {
+                expect(domain).toBe('clarmondial.com')
+                return {
+                    company: {
+                        provider: 'datalegion',
+                        matchConfidence: 'high',
+                        name: 'Clarmondial',
+                        description: null,
+                        founded: 2013,
+                        size: '11-50',
+                        linkedinUrl: 'https://www.linkedin.com/company/clarmondial',
+                        headquarters: { city: 'Zurich', countryCode: 'CH' },
+                        socials: [],
+                    },
+                    failure: null,
+                    credits: 10,
+                }
+            },
+            async lookupPerson() {
+                return { profile: null, failure: { code: 'no_match', message: 'No profile found' }, credits: 1 }
+            },
+        }
+        const classifier = fakeAi({
+            answers: [
+                {
+                    website_url: 'https://clarmondial.com/',
+                    website_confidence: 0.95,
+                    linkedin_url: 'https://ch.linkedin.com/company/clarmondial',
+                    linkedin_confidence: 0.9,
+                },
+            ],
+        })
+        const { researcher, prompts } = fakeWebResearcher({
+            scripts: [
+                {
+                    pages: [],
+                    calls: [
+                        {
+                            name: 'record_finding',
+                            input: {
+                                finding: {
+                                    field: 'contact',
+                                    value: { kind: 'email', value: 'info@clarmondial.com', label: null },
+                                },
+                                source_urls: ['https://clarmondial.com/contact'],
+                                quote: 'Contact us at info@clarmondial.com',
+                                confidence: 0.95,
+                            },
+                        },
+                    ],
+                },
+                { pages: [], calls: [] },
+            ],
+        })
+        await researchFund({ fundManagerId: fund.id, researcher, reader, classifier: classifier.provider, now })
+
+        const detail = await loadFundDetail({ fundManagerId: fund.id })
+        // Identity: website and LinkedIn picked from search results and stored on the fund.
+        expect(detail).toMatchObject({
+            website_url: 'https://clarmondial.com/',
+            linkedin_url: 'https://www.linkedin.com/company/clarmondial',
+            employee_count: 11,
+            employee_range: '11-50',
+            year_established: 2013,
+            hq_country: 'CH',
+        })
+        // Company record facts are sourced to the data provider.
+        const team = detail.findings.find(finding => finding.field === 'employee_count')!
+        expect(team.sources[0]).toMatchObject({ kind: 'data_provider', url: 'https://clarmondial.com/' })
+        // The site was crawled before the model started (privacy skipped), and its pages are in the prompt.
+        expect(prompts[0]).toContain('<page url="https://clarmondial.com/team"')
+        expect(prompts[0]).not.toContain('privacy')
+        // A contact quoted from a crawled page passes verification.
+        expect(detail.findings.find(finding => finding.field === 'contact')?.value).toMatchObject({
+            value: 'info@clarmondial.com',
+        })
+        // The gap pass asked only for what was still missing.
+        expect(prompts[1]).toContain('Second pass on Clarmondial')
+        expect(prompts[1]).toContain('AUM')
+        expect(prompts[1]).not.toContain('Year established:')
+    })
+})
+
+describe('late groundwork', () => {
+    it('crawls the site the first pass found when the name was too common to pin down', async () => {
+        const { addFund } = await import('#server/utils/funds/add-fund.ts')
+        const { researchFund } = await import('#server/utils/funds/research.ts')
+        const fund = (await addFund({ name: 'Common Name Bank', websiteUrl: null, origin: 'seed', now })).fund
+        const mapped: string[] = []
+        const reader: WebReader = {
+            name: 'fake-firecrawl',
+            async readPage({ url }) {
+                return {
+                    page: { url, title: 'Common Name Bank', markdown: `Page ${url}`, links: [], statusCode: 200 },
+                    failure: null,
+                    credits: 1,
+                }
+            },
+            async search() {
+                return {
+                    hits: [
+                        {
+                            url: 'https://commonnamebank.example/',
+                            title: 'Common Name Bank',
+                            snippet: 'A community bank.',
+                        },
+                    ],
+                    failure: null,
+                    credits: 2,
+                }
+            },
+            async mapSite({ url }) {
+                mapped.push(url)
+                return {
+                    pages: [{ url: 'https://commonnamebank.example/team', title: null }],
+                    failure: null,
+                    credits: 1,
+                }
+            },
+            async lookupCompany() {
+                return { company: null, failure: { code: 'no_match', message: 'No company found' }, credits: 0 }
+            },
+            async lookupPerson() {
+                return { profile: null, failure: { code: 'no_match', message: 'No profile found' }, credits: 0 }
+            },
+        }
+        // The identity pick isn't sure, so nothing is crawled before the first pass.
+        const classifier = fakeAi({
+            answers: [{ website_url: null, website_confidence: 0.4, linkedin_url: null, linkedin_confidence: 0.4 }],
+        })
+        const { researcher, prompts } = fakeWebResearcher({
+            scripts: [
+                {
+                    pages: [],
+                    calls: [
+                        {
+                            name: 'record_finding',
+                            input: {
+                                finding: { field: 'website_url', value: { url: 'https://commonnamebank.example/' } },
+                                source_urls: [],
+                                quote: '',
+                                confidence: 0.9,
+                            },
+                        },
+                    ],
+                },
+                { pages: [], calls: [] },
+            ],
+        })
+        await researchFund({ fundManagerId: fund.id, researcher, reader, classifier: classifier.provider, now })
+        expect(mapped).toEqual(['https://commonnamebank.example/'])
+        expect(prompts[0]).not.toContain('<page url=')
+        expect(prompts[1]).toContain('<page url="https://commonnamebank.example/team"')
     })
 })
 

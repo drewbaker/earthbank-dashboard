@@ -140,22 +140,46 @@ async function listNames({ query }: { query: string }) {
 }
 
 describe('adding funds', () => {
+    it('needs a name and website; the LinkedIn page is optional', async () => {
+        const noWebsite = await request({ method: 'POST', path: '/v1/funds', body: { name: 'Open Road Impact' } })
+        expect(noWebsite.status).toBe(422)
+        const badLinkedin = await request({
+            method: 'POST',
+            path: '/v1/funds',
+            body: {
+                name: 'Open Road Impact',
+                website_url: 'https://openroadimpact.example',
+                linkedin_url: 'https://example.com/x',
+            },
+        })
+        expect(badLinkedin.status).toBe(422)
+    })
+
     it('adds a fund, queues its research ahead of the spider, and refuses duplicates', async () => {
         const created = await request({
             method: 'POST',
             path: '/v1/funds',
-            body: { name: 'Open Road Impact', website_url: '' },
+            body: {
+                name: 'Open Road Impact',
+                website_url: 'https://openroadimpact.example',
+                linkedin_url: 'https://ke.linkedin.com/company/open-road-impact/',
+            },
         })
         expect(created.status).toBe(201)
         expect(created.json).toMatchObject({
             name: 'Open Road Impact',
             origin: 'manual',
             research_status: 'queued',
-            website_url: null,
+            website_url: 'https://openroadimpact.example',
+            linkedin_url: 'https://www.linkedin.com/company/open-road-impact',
         })
         expect(queuedResearch).toContainEqual({ fundManagerId: created.json.id, isPriority: true })
 
-        const duplicate = await request({ method: 'POST', path: '/v1/funds', body: { name: 'Open Road Impact, LLC' } })
+        const duplicate = await request({
+            method: 'POST',
+            path: '/v1/funds',
+            body: { name: 'Open Road Impact, LLC', website_url: 'https://another-site.example' },
+        })
         expect(duplicate.status).toBe(409)
         const sameSite = await request({
             method: 'POST',

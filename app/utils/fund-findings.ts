@@ -51,8 +51,20 @@ export function describeFinding({ finding }: { finding: Pick<FundFinding, 'field
                     .map(sector => FUND_SECTOR_LABELS[sector as FundSector])
                     .join(', '),
             })
-        case 'employee_count':
-            return plain({ title: `${(value as FundFindingValues['employee_count']).count} people` })
+        case 'employee_count': {
+            const team = value as FundFindingValues['employee_count']
+            return plain({ title: team.count !== null ? `${team.count} people` : `${team.range} people` })
+        }
+        case 'contact': {
+            const contact = value as FundFindingValues['contact']
+            const href =
+                contact.kind === 'email'
+                    ? `mailto:${contact.value}`
+                    : contact.kind === 'contact_page'
+                      ? contact.value
+                      : null
+            return { title: contact.value, detail: contact.label, href }
+        }
         case 'aum': {
             const aum = value as FundFindingValues['aum']
             return plain({ title: money({ money: aum }), detail: aum.as_of ? `As of ${aum.as_of}` : null })

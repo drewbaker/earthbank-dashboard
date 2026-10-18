@@ -22,6 +22,7 @@ export type FundResearchValues = {
     hq_country: string | null
     hq_city: string | null
     employee_count: number | null
+    employee_range: string | null
     sectors: string[]
     loan_types: string[]
     focus_areas: string[]
@@ -93,7 +94,9 @@ export function deriveFundResearchValues({
         year_established: latest('year_established')?.year ?? null,
         hq_country: headquarters?.country ?? null,
         hq_city: headquarters?.city ?? null,
-        employee_count: latest('employee_count')?.count ?? null,
+        employee_count:
+            latest('employee_count')?.count ?? lowerBound({ range: latest('employee_count')?.range ?? null }),
+        employee_range: latest('employee_count')?.range ?? null,
         sectors: latest('sectors')?.sectors ?? [],
         loan_types: loanTypes,
         focus_areas: latest('geographic_focus')?.codes ?? [],
@@ -112,6 +115,17 @@ function maxCents({ amounts }: { amounts: (ResearchMoney | null)[] }) {
         .map(amount => (amount ? toUsdCents(amount) : null))
         .filter((value): value is number => value !== null)
     return cents.length > 0 ? Math.max(...cents) : null
+}
+
+/**
+ * The low end of a headcount band ("11-50" → 11, "1000+" → 1000), so bands sort with exact counts.
+ *
+ * @param input.range - The band, or null.
+ * @returns The lower bound, or null.
+ */
+function lowerBound({ range }: { range: string | null }) {
+    const match = /^(\d[\d,]*)/.exec(range ?? '')
+    return match ? Number(match[1]!.replace(/,/g, '')) : null
 }
 
 /**

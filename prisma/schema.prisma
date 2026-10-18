@@ -640,6 +640,8 @@ model FundManager {
     website_url        String?
     // Bare host without "www.", also used for de-duplication.
     website_domain     String?   @unique
+    // The fund's LinkedIn company page (given when added, or found by research).
+    linkedin_url       String?
     // new_addition | sourced | in_diligence | shortlisted | passed
     stage              String    @default("new_addition")
     // FUND_FIT_TAGS keys.
@@ -669,6 +671,8 @@ model FundManager {
     hq_country                     String?
     hq_city                        String?
     employee_count                 Int?
+    // Headcount band as a data provider gives it (e.g. "11-50"), when there's no exact count.
+    employee_range                 String?
     sectors                        Json      @default("[]")
     loan_types                     Json      @default("[]")
     focus_areas                    Json      @default("[]")
@@ -725,7 +729,7 @@ model FundSource {
     id           String   @id
     url          String   @unique
     title        String?
-    // fund_website | linkedin | news | press_release | dfi_database | government_database | report | other
+    // fund_website | linkedin | news | press_release | dfi_database | government_database | report | data_provider | other
     kind         String   @default("other")
     retrieved_at DateTime
     created_at   DateTime @default(now())

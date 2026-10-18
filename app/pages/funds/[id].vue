@@ -578,6 +578,30 @@ async function rejectFinding(finding: FundFinding) {
                                 </dd>
                             </div>
                             <div class="flex justify-between gap-2">
+                                <dt class="text-muted">LinkedIn</dt>
+                                <dd class="truncate">
+                                    <a
+                                        v-if="fund.linkedin_url"
+                                        :href="fund.linkedin_url"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="underline"
+                                        >{{ fund.linkedin_url.replace(/^https?:\/\/(www\.)?linkedin\.com\//, '') }}</a
+                                    >
+                                    <span v-else>—</span>
+                                </dd>
+                            </div>
+                            <div class="flex justify-between gap-2">
+                                <dt class="text-muted">Team size</dt>
+                                <dd>
+                                    {{
+                                        fund.employee_count !== null && !fund.employee_range
+                                            ? fund.employee_count
+                                            : (fund.employee_range ?? '—')
+                                    }}
+                                </dd>
+                            </div>
+                            <div class="flex justify-between gap-2">
                                 <dt class="text-muted">Found</dt>
                                 <dd class="text-right">
                                     {{ FUND_ORIGIN_LABELS[fund.origin] }}

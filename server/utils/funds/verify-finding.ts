@@ -157,6 +157,22 @@ export function verifyFinding({
 }
 
 /**
+ * Validate and tidy a value that didn't come from the model (a data provider's record): schema and
+ * range checks only, since there's no page to quote.
+ *
+ * @param input.field - The research field.
+ * @param input.value - The proposed value.
+ * @param input.now - Current time, for date range checks.
+ * @returns The cleaned value, or null when it fails.
+ */
+export function validateFindingValue({ field, value, now }: { field: FundResearchField; value: unknown; now: Date }) {
+    const parsed = (FUND_FINDING_VALUE_SCHEMAS[field] as z.ZodType).safeParse(value)
+    return parsed.success
+        ? cleanFindingValue({ field, value: parsed.data as FundFindingValues[typeof field], now })
+        : null
+}
+
+/**
  * Keep the sources whose fetched text contains the quote.
  *
  * @param input.sourceUrls - Pages the AI cited.
@@ -292,6 +308,10 @@ export function findingValueKey({ field, value }: { field: FundResearchField; va
             return text('metric')
         case 'conference':
             return `${text('name')}|${String(value.year ?? '')}`
+        case 'contact':
+            return `${String(value.kind)}|${String(value.value ?? '')
+                .toLowerCase()
+                .replace(/\s+/g, '')}`
         case 'social_account':
         case 'website_url':
         case 'linkedin_url':
@@ -386,8 +406,23 @@ function cleanFindingValue<Field extends FundResearchField>({
             return /linkedin\.com\/(company|school|showcase)\//i.test(String(v.url)) ? value : null
         case 'year_established':
             return Number(v.year) >= 1800 && Number(v.year) <= thisYear ? value : null
-        case 'employee_count':
-            return Number(v.count) >= 1 && Number(v.count) <= 1_000_000 ? value : null
+        case 'employee_count': {
+            const count = v.count as number | null
+            const range = typeof v.range === 'string' ? v.range.trim() : null
+            const isCountOk = count === null || (count >= 1 && count <= 1_000_000)
+            const isRangeOk = range === null || /^\d[\d,]*\s*[-–]\s*\d[\d,]*$|^\d[\d,]*\+$/.test(range)
+            return isCountOk && isRangeOk && (count !== null || range)
+                ? ({ count, range: range || null } as FundFindingValues[Field])
+                : null
+        }
+        case 'contact': {
+            const contactValue = String(v.value).trim()
+            const isValid =
+                contactValue.length > 2 &&
+                (v.kind !== 'email' || /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(contactValue)) &&
+                (v.kind !== 'contact_page' || isHttpUrl({ url: contactValue }))
+            return isValid ? ({ ...v, value: contactValue } as FundFindingValues[Field]) : null
+        }
         case 'headquarters': {
             const country = String(v.country).toUpperCase()
             return COUNTRIES.has(country) ? ({ ...v, country } as FundFindingValues[Field]) : null
