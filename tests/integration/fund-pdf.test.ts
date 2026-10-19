@@ -93,7 +93,8 @@ describe('fund PDF', () => {
 
         expect(response.status).toBe(200)
         expect(response.headers.get('content-type')).toBe('application/pdf')
-        expect(response.headers.get('content-disposition')).toContain('Iungo%20Capital%202026-10-18.pdf')
+        // Named for the day it's downloaded (the viewer's today).
+        expect(response.headers.get('content-disposition')).toMatch(/Iungo%20Capital%20\d{4}-\d{2}-\d{2}\.pdf/)
         const bytes = new Uint8Array(await response.arrayBuffer())
         expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-')
         const { text } = await extractText(await getDocumentProxy(bytes), { mergePages: true })
