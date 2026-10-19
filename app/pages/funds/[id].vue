@@ -368,8 +368,12 @@ async function rejectFinding(finding: FundFinding) {
                     v-if="fund.archived_at"
                     color="neutral"
                     icon="i-lucide-archive"
-                    title="Archived"
-                    description="This fund is hidden from the Funds list and map, and isn't researched. Restore it to bring it back."
+                    :title="fund.screened_out_at ? 'Screened out by the AI' : 'Archived'"
+                    :description="
+                        fund.screened_out_at
+                            ? `${fund.screening_note ?? 'The AI judged this lender outside Earth Bank\'s focus.'} It is hidden from the Funds list and map, and isn't researched. Restore it to move it to pending approval.`
+                            : 'This fund is hidden from the Funds list and map, and isn\'t researched. Restore it to bring it back.'
+                    "
                 />
                 <UAlert
                     v-else-if="fund.approval_status === 'pending'"
@@ -377,7 +381,7 @@ async function rejectFinding(finding: FundFinding) {
                     variant="subtle"
                     icon="i-lucide-hourglass"
                     title="Pending approval"
-                    description="The spider found this lender. It isn't researched or shown on the board or map until someone approves it. Archive it if it's outside Earth Bank's focus."
+                    :description="`The spider found this lender.${fund.screening_note ? ` AI screen: ${fund.screening_note}` : ''} It isn't researched or shown on the board or map until someone approves it. Archive it if it's outside Earth Bank's focus.`"
                     :actions="[
                         {
                             label: 'Approve',

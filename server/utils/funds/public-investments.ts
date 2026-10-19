@@ -108,7 +108,10 @@ export async function syncPublicInvestmentSource({
         } while (cursor && pages < MAX_PAGES_PER_RUN)
 
         await crossReferenceFunds({ now })
-        const candidates = await listUnmatchedIntermediaries({ sourceKey, limit: SPIDER_CANDIDATES_PER_RUN })
+        const candidates =
+            source.feedsSpider === false
+                ? []
+                : await listUnmatchedIntermediaries({ sourceKey, limit: SPIDER_CANDIDATES_PER_RUN })
         const discovered = await discoverLenders({
             candidates: candidates.map(candidate => ({
                 type: 'public_record' as const,

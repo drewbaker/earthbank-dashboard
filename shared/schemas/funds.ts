@@ -150,6 +150,10 @@ export const Fund = z.object({
     fit_tags: z.array(z.enum(FUND_FIT_TAGS)),
     origin: z.enum(FUND_ORIGINS),
     approval_status: z.enum(FUND_APPROVAL_STATUSES),
+    // The AI screen of a spider find: one line on where and to whom it lends, and when it archived the
+    // fund as outside Earth Bank's focus.
+    screening_note: z.string().nullable(),
+    screened_out_at: IsoDateTime.nullable(),
     // How the fund came up (spider context or the seed list's hint); helps tell funds with common names apart.
     discovery_context: z.string().nullable(),
     owner: UserSummary.nullable(),
@@ -263,6 +267,7 @@ export const FundResearchStatus = z.object({
     skipped: z.number().int(),
     // Spider finds waiting for someone to approve or archive them.
     pending_approval: z.number().int(),
+    archived: z.number().int(),
     month_spend_usd: z.number(),
     monthly_budget_usd: z.number(),
     spider_enabled: z.boolean(),
@@ -275,6 +280,8 @@ export const PublicInvestmentSource = z.object({
     label: z.string(),
     publisher_kind: z.enum(['dfi', 'multilateral', 'us_government']),
     url: z.string(),
+    // False for lists of mostly local lenders: their rows attach to funds on the list but add no new funds.
+    feeds_spider: z.boolean(),
     status: z.enum(['idle', 'running', 'error']),
     last_synced_at: IsoDateTime.nullable(),
     records: z.number().int(),
@@ -364,5 +371,7 @@ export const ListFundsQuery = CursorQuery.extend({
     origin: z.enum(FUND_ORIGINS).optional(),
     approval_status: z.enum(FUND_APPROVAL_STATUSES).optional(),
     include_archived: queryBoolean(),
+    // Only archived funds.
+    archived: queryBoolean(),
 })
 export type ListFundsQuery = z.infer<typeof ListFundsQuery>

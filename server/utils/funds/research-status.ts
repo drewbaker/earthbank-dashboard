@@ -1,5 +1,6 @@
 import {
     countActiveFundManagers,
+    countArchivedFundManagers,
     countFundsByResearchStatus,
     countPendingFundManagers,
 } from '#server/database/fund-managers.ts'
@@ -16,10 +17,11 @@ import type { FundResearchStatus } from '#shared/schemas/index.ts'
  */
 export async function readFundResearchStatus({ now }: { now: Date }): Promise<FundResearchStatus> {
     const settings = await readFundResearchSettings()
-    const [funds, counts, pendingApproval, spend] = await Promise.all([
+    const [funds, counts, pendingApproval, archived, spend] = await Promise.all([
         countActiveFundManagers(),
         countFundsByResearchStatus(),
         countPendingFundManagers(),
+        countArchivedFundManagers(),
         readMonthResearchSpend({ settings, now }),
     ])
     return {
@@ -31,6 +33,7 @@ export async function readFundResearchStatus({ now }: { now: Date }): Promise<Fu
         failed: counts.failed ?? 0,
         skipped: counts.skipped ?? 0,
         pending_approval: pendingApproval,
+        archived,
         month_spend_usd: Math.round(spend.spendUsd * 100) / 100,
         monthly_budget_usd: settings.monthly_budget_usd,
         spider_enabled: settings.spider_enabled,

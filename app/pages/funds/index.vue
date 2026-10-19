@@ -69,12 +69,27 @@ const {
 } = await useAsyncData('funds.pending', () => api<FundList>({ path: '/funds', query: pendingQuery.value }), {
     watch: [pendingQuery],
 })
+// The archived list loads only once someone opens it.
+const isArchivedOpen = ref(false)
+const {
+    data: archivedList,
+    refresh: refreshArchived,
+    status: archivedStatus,
+} = await useAsyncData(
+    'funds.archived',
+    () =>
+        isArchivedOpen.value
+            ? api<FundList>({ path: '/funds', query: { q: pendingQuery.value.q, archived: true } })
+            : Promise.resolve(null),
+    { watch: [isArchivedOpen, pendingQuery] },
+)
 const { data: researchStatus, refresh: refreshStatus } = await useAsyncData('funds.research-status', () =>
     api<FundResearchStatus>({ path: '/fund-research/status' }),
 )
 
 const funds = computed(() => fundList.value?.data ?? [])
 const pendingFunds = computed(() => pendingList.value?.data ?? [])
+const archivedFunds = computed(() => archivedList.value?.data ?? [])
 const isCreateOpen = ref(false)
 const isTogglingSpider = ref(false)
 
@@ -325,12 +340,12 @@ async function toggleSpider() {
 }
 
 /**
- * Reload both lists and the counts after a pending fund was approved or archived.
+ * Reload the lists and the counts after a fund was approved, archived or restored.
  *
  * @returns Resolves once reloaded.
  */
 async function refreshAfterDecision() {
-    await Promise.all([refreshFunds(), refreshPending(), refreshStatus()])
+    await Promise.all([refreshFunds(), refreshPending(), refreshArchived(), refreshStatus()])
 }
 
 /**
@@ -444,11 +459,46 @@ async function openCreatedFund(fund: FundDetail) {
                             />
                         </template>
                     </UTable>
-                    <FundsPendingList
-                        :funds="pendingFunds"
-                        :is-loading="pendingStatus === 'pending'"
-                        @changed="refreshAfterDecision"
-                    />
+                    <section class="space-y-2 pt-4">
+                        <div>
+                            <h2 class="font-semibold text-highlighted">
+                                Pending approval <span class="font-normal text-muted">({{ pendingFunds.length }})</span>
+                                <TermHint term="fund_approval" />
+                            </h2>
+                            <p class="text-sm text-muted">
+                                Lenders the spider found. They aren't researched, or shown on the board or map, until
+                                someone approves them. Archive the ones outside Earth Bank's focus.
+                            </p>
+                        </div>
+                        <FundsReviewList
+                            list="pending"
+                            :funds="pendingFunds"
+                            :is-loading="pendingStatus === 'pending'"
+                            @changed="refreshAfterDecision"
+                        />
+                    </section>
+                    <section class="space-y-2 pt-4">
+                        <UButton
+                            :icon="isArchivedOpen ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+                            :label="`Archived (${researchStatus?.archived ?? 0})`"
+                            color="neutral"
+                            variant="ghost"
+                            class="-ml-2.5 font-semibold"
+                            @click="isArchivedOpen = !isArchivedOpen"
+                        />
+                        <template v-if="isArchivedOpen">
+                            <p class="text-sm text-muted">
+                                Funds the team archived, and spider finds the AI screened out as outside Earth Bank's
+                                focus. Restore one to bring it back; spider finds go back to pending.
+                            </p>
+                            <FundsReviewList
+                                list="archived"
+                                :funds="archivedFunds"
+                                :is-loading="archivedStatus === 'pending'"
+                                @changed="refreshAfterDecision"
+                            />
+                        </template>
+                    </section>
                 </template>
                 <FundsBoard v-else-if="view === 'board'" :funds="funds" @move="moveFund" />
                 <FundsCoverageMap v-else :funds="funds" />

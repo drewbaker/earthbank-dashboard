@@ -33,6 +33,8 @@ export type FundListFilters = {
     origin?: string
     approvalStatus?: FundApprovalStatus
     includeArchived?: boolean
+    // Only archived funds (the Archived list).
+    archivedOnly?: boolean
     limit: number
 }
 
@@ -49,6 +51,8 @@ export type FundListFilters = {
  * @param input.discoveredFromId - The fund whose research turned it up, if any.
  * @param input.approvalStatus - `pending` waits for someone to approve it before any research.
  * @param input.approvedById - Who added it, when it is approved on creation.
+ * @param input.screening - The AI screen of a spider find: its reason, and whether it fits Earth Bank
+ *   (when not, the fund is created archived).
  * @param input.now - Creation time (also when research was queued).
  * @returns The created row.
  */
@@ -63,6 +67,7 @@ export function createFundManagerRow({
     discoveredFromId,
     approvalStatus,
     approvedById = null,
+    screening = null,
     now,
 }: {
     name: string
@@ -75,9 +80,11 @@ export function createFundManagerRow({
     discoveredFromId: string | null
     approvalStatus: FundApprovalStatus
     approvedById?: string | null
+    screening?: { note: string | null; fitsEarthBank: boolean } | null
     now: Date
 }) {
     const isApproved = approvalStatus === 'approved'
+    const isScreenedOut = screening?.fitsEarthBank === false
     return db().fundManager.create({
         data: {
             id: newId({ kind: 'fundManager', now: now.getTime() }),
@@ -94,6 +101,10 @@ export function createFundManagerRow({
             approved_by_id: isApproved ? approvedById : null,
             research_status: isApproved ? 'queued' : 'awaiting_approval',
             research_queued_at: isApproved ? now : null,
+            screened_at: screening ? now : null,
+            screening_note: screening?.note ?? null,
+            screened_out_at: isScreenedOut ? now : null,
+            archived_at: isScreenedOut ? now : null,
         },
     })
 }
@@ -172,6 +183,7 @@ export async function listFundManagers({
     origin,
     approvalStatus,
     includeArchived,
+    archivedOnly,
     limit,
 }: FundListFilters) {
     const and: Prisma.FundManagerWhereInput[] = []
@@ -230,7 +242,7 @@ export async function listFundManagers({
             research_status: researchStatus,
             origin,
             approval_status: approvalStatus,
-            archived_at: includeArchived ? undefined : null,
+            archived_at: archivedOnly ? { not: null } : includeArchived ? undefined : null,
         },
         include: FUND_LIST_INCLUDE,
         orderBy: { id: 'desc' },
@@ -344,6 +356,93 @@ export function countActiveFundManagers() {
  */
 export function countPendingFundManagers() {
     return db().fundManager.count({ where: { archived_at: null, approval_status: 'pending' } })
+}
+
+/**
+ * How many funds are archived (by a person, or screened out by the AI).
+ *
+ * @returns The count.
+ */
+export function countArchivedFundManagers() {
+    return db().fundManager.count({ where: { archived_at: { not: null } } })
+}
+
+/**
+ * Pending funds the AI hasn't screened yet (found before the screen existed, or its screen failed).
+ *
+ * @param input.limit - Most rows.
+ * @returns The funds, oldest first.
+ */
+export function listUnscreenedPendingFunds({ limit }: { limit: number }) {
+    return db().fundManager.findMany({
+        where: { approval_status: 'pending', archived_at: null, screened_at: null },
+        select: { id: true, name: true, name_key: true, website_url: true, discovery_context: true },
+        orderBy: { id: 'asc' },
+        take: limit,
+    })
+}
+
+/**
+ * Store the AI screen of a pending fund, archiving it when it doesn't fit Earth Bank.
+ *
+ * @param input.fundManagerId - The fund.
+ * @param input.note - The model's one-line reason.
+ * @param input.isScreenedOut - Archive it as outside Earth Bank's focus.
+ * @param input.now - Current time.
+ * @returns The updated row.
+ */
+export function recordFundScreening({
+    fundManagerId,
+    note,
+    isScreenedOut,
+    now,
+}: {
+    fundManagerId: string
+    note: string | null
+    isScreenedOut: boolean
+    now: Date
+}) {
+    return db().fundManager.update({
+        where: { id: fundManagerId },
+        data: {
+            screened_at: now,
+            screening_note: note,
+            ...(isScreenedOut ? { screened_out_at: now, archived_at: now } : {}),
+        },
+    })
+}
+
+/**
+ * The team's own recent decisions on funds the spider found, as examples for the classifier: funds a
+ * person approved, and funds a person archived while they were pending (not ones the AI screened out,
+ * which nobody has confirmed).
+ *
+ * @param input.limit - Most of each.
+ * @returns Approved and archived funds, newest decisions first.
+ */
+export async function listTeamFundDecisions({ limit }: { limit: number }) {
+    const spiderFound = { origin: { startsWith: 'spider_' } }
+    const select = { name: true, discovery_context: true }
+    const [approved, archived] = await Promise.all([
+        db().fundManager.findMany({
+            where: { ...spiderFound, approval_status: 'approved', approved_by_id: { not: null } },
+            select,
+            orderBy: { approved_at: 'desc' },
+            take: limit,
+        }),
+        db().fundManager.findMany({
+            where: {
+                ...spiderFound,
+                approval_status: 'pending',
+                archived_at: { not: null },
+                screened_out_at: null,
+            },
+            select,
+            orderBy: { archived_at: 'desc' },
+            take: limit,
+        }),
+    ])
+    return { approved, archived }
 }
 
 /**

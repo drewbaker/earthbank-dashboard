@@ -19,6 +19,8 @@ import { canonicalLinkedinUrl, organizationNameKey, websiteDomain } from '#share
  * @param input.origin - How it got onto the list.
  * @param input.discoveredFromId - The fund whose research turned it up, if any.
  * @param input.addedById - The team member who added it by hand, if any (recorded as its approver).
+ * @param input.screening - The spider's AI screen: its reason, and whether the lender fits Earth Bank
+ *   (when not, it goes in archived so the team can review it later).
  * @param input.now - Current time.
  * @returns The fund row and whether it was newly created.
  */
@@ -30,6 +32,7 @@ export async function addFund({
     origin,
     discoveredFromId = null,
     addedById = null,
+    screening = null,
     now,
 }: {
     name: string
@@ -39,6 +42,7 @@ export async function addFund({
     origin: FundOrigin
     discoveredFromId?: string | null
     addedById?: string | null
+    screening?: { note: string | null; fitsEarthBank: boolean } | null
     now: Date
 }) {
     const nameKey = organizationNameKey({ name })
@@ -58,6 +62,7 @@ export async function addFund({
         discoveredFromId,
         approvalStatus: needsApproval({ origin }) ? 'pending' : 'approved',
         approvedById: addedById,
+        screening,
         now,
     })
     await linkOrganizationToFund({ nameKey, fundManagerId: fund.id })

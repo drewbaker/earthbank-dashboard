@@ -161,7 +161,9 @@ async function syncSource({ source }: { source: PublicInvestmentSource }) {
                             >{{ source.label }}</a
                         >
                         <p class="text-xs text-muted">
-                            {{ PUBLISHER_LABELS[source.publisher_kind] }} · {{ source.records }} records ·
+                            {{ PUBLISHER_LABELS[source.publisher_kind] }} ·
+                            {{ source.feeds_spider ? '' : 'matched to funds only, adds none · '
+                            }}{{ source.records }} records ·
                             {{
                                 source.last_synced_at
                                     ? `read ${formatRelativeTime({ value: source.last_synced_at })}`

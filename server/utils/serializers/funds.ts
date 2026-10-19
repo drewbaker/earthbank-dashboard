@@ -65,6 +65,8 @@ export function serializeFund({ fund }: { fund: FundListRow }): Fund {
         fit_tags: stringArray({ value: fund.fit_tags }) as FundFitTag[],
         origin: fund.origin as FundOrigin,
         approval_status: fund.approval_status as FundApprovalStatus,
+        screening_note: fund.screening_note,
+        screened_out_at: toIsoDateTime({ date: fund.screened_out_at }),
         discovery_context: fund.discovery_context,
         owner: serializeUserSummary({ user: fund.owner }),
         research_status: fund.research_status as FundResearchStatus,

@@ -44,6 +44,12 @@ defineRouteMeta({
                 schema: { type: 'string', enum: ['pending', 'approved'] },
             },
             { name: 'include_archived', in: 'query', schema: { type: 'boolean' } },
+            {
+                name: 'archived',
+                in: 'query',
+                description: 'Only archived funds (by the team, or screened out by the AI).',
+                schema: { type: 'boolean' },
+            },
             { name: 'limit', in: 'query', schema: { type: 'integer', maximum: 1000 } },
         ],
         responses: {
@@ -81,6 +87,7 @@ export default defineApiHandler(async event => {
         origin: query.origin,
         approvalStatus: query.approval_status,
         includeArchived: query.include_archived,
+        archivedOnly: query.archived,
         limit: query.limit,
     })
     // The whole list (at most 1,000) fits in one response, so there is never a next page.

@@ -1,6 +1,7 @@
 import { BackfillFunderJob } from '#root/jobs/backfill-funder.job.ts'
 import { ProcessForwardedEmailJob } from '#root/jobs/process-forwarded-email.job.ts'
 import { ResearchFundJob } from '#root/jobs/research-fund.job.ts'
+import { ScreenPendingFundsJob } from '#root/jobs/screen-pending-funds.job.ts'
 import { SendEmailJob } from '#root/jobs/send-email.job.ts'
 import { SyncBookkeepingJob } from '#root/jobs/sync-bookkeeping.job.ts'
 import { SyncKnowledgeJob } from '#root/jobs/sync-knowledge.job.ts'
@@ -172,6 +173,24 @@ export async function enqueueFundResearch({
                 .timeout(30 * 60 * 1000)
                 .unique({ withArgs: true })
                 .enqueue({ fundManagerId }),
+    })
+}
+
+/**
+ * Queue a screen of pending funds the AI hasn't checked yet (one job at a time).
+ *
+ * @returns `queued`, or `already_queued`.
+ */
+export async function enqueuePendingFundScreening() {
+    await ensureJobQueue()
+    return queueOnce({
+        enqueue: () =>
+            Sidequest.build(ScreenPendingFundsJob)
+                .queue('research-spider')
+                .maxAttempts(3)
+                .timeout(10 * 60 * 1000)
+                .unique(true)
+                .enqueue(),
     })
 }
 

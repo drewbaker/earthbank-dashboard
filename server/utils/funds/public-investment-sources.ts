@@ -18,6 +18,9 @@ export type PublicInvestmentSourceDefinition = {
     // Where a person can see the list.
     url: string
     adapter: PublicInvestmentAdapter
+    // False for lists whose recipients are almost all local lenders (US town, county and state funds):
+    // their rows still attach to funds already on the list, but they don't add new funds.
+    feedsSpider?: boolean
 }
 
 // Federal grant award type codes (USAspending): block, formula, project grants and cooperative agreements.
@@ -126,6 +129,7 @@ export const PUBLIC_INVESTMENT_SOURCES: PublicInvestmentSourceDefinition[] = [
         label: 'CDFI Fund awards (US Treasury)',
         publisherKind: 'us_government',
         url: 'https://www.usaspending.gov/agency/department-of-the-treasury',
+        feedsSpider: false,
         adapter: {
             type: 'usaspending',
             filters: {
@@ -141,6 +145,7 @@ export const PUBLIC_INVESTMENT_SOURCES: PublicInvestmentSourceDefinition[] = [
         label: 'SBA Microloan intermediaries',
         publisherKind: 'us_government',
         url: 'https://www.sba.gov/partners/lenders/microloan-program',
+        feedsSpider: false,
         // Assistance listing 59.046: grants to the nonprofit lenders that run SBA microloans.
         adapter: { type: 'usaspending', filters: { award_type_codes: GRANT_AWARD_TYPES, program_numbers: ['59.046'] } },
     },
@@ -149,6 +154,7 @@ export const PUBLIC_INVESTMENT_SOURCES: PublicInvestmentSourceDefinition[] = [
         label: 'USDA Intermediary Relending Program',
         publisherKind: 'us_government',
         url: 'https://www.rd.usda.gov/programs-services/business-programs/intermediary-relending-program',
+        feedsSpider: false,
         // Assistance listing 10.767: loans to intermediaries that relend to rural businesses.
         adapter: { type: 'usaspending', filters: { award_type_codes: ['07', '08'], program_numbers: ['10.767'] } },
     },

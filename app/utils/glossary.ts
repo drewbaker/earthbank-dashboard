@@ -24,8 +24,10 @@ export const GLOSSARY = {
         'Largest known working-capital loan: from published deals, else the top of their check size.',
     fund_spider:
         'New lenders found from team work history, co-lenders and DFI lists wait as pending until someone approves them; then they are researched.',
+    fund_screening:
+        'Before a spider find reaches this list, the AI checks where and to whom it lends. Lenders limited to one town, county or state with no climate focus, or with no climate or impact focus at all, are archived with its reason. It learns from what the team approves and archives.',
     fund_approval:
-        "Spider finds wait here so nobody pays to research a lender outside Earth Bank's focus (a local development corporation, say). Approve to add it to the list and research it; archive to drop it for good.",
+        "Spider finds wait here so nobody pays to research a lender outside Earth Bank's focus (a local development corporation, say). Approve to add it to the list and research it; archive to drop it (it moves to Archived and the spider never adds it again).",
     ticket_fit:
         'Their check sizes against our $500K–$5M: Fits covers most of it, Partly overlaps it, Outside misses it.',
     research_sources:

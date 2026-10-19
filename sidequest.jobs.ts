@@ -3,6 +3,7 @@
 export { BackfillFunderJob } from '#root/jobs/backfill-funder.job.ts'
 export { ProcessForwardedEmailJob } from '#root/jobs/process-forwarded-email.job.ts'
 export { ResearchFundJob } from '#root/jobs/research-fund.job.ts'
+export { ScreenPendingFundsJob } from '#root/jobs/screen-pending-funds.job.ts'
 export { SendEmailJob } from '#root/jobs/send-email.job.ts'
 export { SyncBookkeepingJob } from '#root/jobs/sync-bookkeeping.job.ts'
 export { SyncKnowledgeJob } from '#root/jobs/sync-knowledge.job.ts'

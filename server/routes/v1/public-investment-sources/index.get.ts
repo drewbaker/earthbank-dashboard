@@ -34,6 +34,7 @@ export default defineApiHandler(async event => {
             label: source.label,
             publisher_kind: source.publisherKind,
             url: source.url,
+            feeds_spider: source.feedsSpider !== false,
             status: (state?.status as PublicInvestmentSource['status'] | undefined) ?? 'idle',
             last_synced_at: toIsoDateTime({ date: state?.last_synced_at }),
             records: counts.get(source.key) ?? 0,

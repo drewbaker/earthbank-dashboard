@@ -1,5 +1,11 @@
 import { z } from 'zod'
-import { countActiveFundManagers, findFundManagerByIdentity } from '#server/database/fund-managers.ts'
+import {
+    countActiveFundManagers,
+    findFundManagerByIdentity,
+    listTeamFundDecisions,
+    listUnscreenedPendingFunds,
+    recordFundScreening,
+} from '#server/database/fund-managers.ts'
 import {
     createFundResearchRun,
     finishFundResearchRun,
@@ -27,6 +33,10 @@ const LenderClassification = z.object({
             name: z.string(),
             is_lender: z.boolean(),
             kind: z.enum(RESEARCH_ORGANIZATION_KINDS),
+            scope: z.enum(['local', 'state_or_province', 'national', 'multi_country', 'global', 'unknown']),
+            impact_focus: z.enum(['climate', 'impact', 'general', 'unknown']),
+            fits_earth_bank: z.boolean(),
+            reason: z.string(),
         }),
     ),
 })
@@ -34,6 +44,11 @@ const LenderClassification = z.object({
 // Organizations of these kinds (as the researcher labelled them) are never lenders to research.
 const NEVER_LENDER_KINDS: readonly ResearchOrganizationKind[] = ['school', 'government', 'dfi']
 const CLASSIFY_BATCH_SIZE = 25
+// How many of the team's recent approvals and archivals the classifier sees as examples.
+const TEAM_DECISION_EXAMPLES = 15
+const SCREENING_NOTE_MAX_LENGTH = 300
+
+type LenderVerdict = z.infer<typeof LenderClassification>['organizations'][number]
 
 type ResolvedCandidate = {
     name: string
@@ -49,8 +64,10 @@ type ResolvedCandidate = {
  *
  * Stops when the spider is turned off, the list reaches its limit, or this month's budget is spent.
  * Candidates already on the list are skipped; the rest are checked by a cheap model call (is this a
- * lender to SMEs or projects?), and only lenders become fund profiles. Everyone else stays a node in
- * the team network.
+ * lender to SMEs or projects, and does it fit Earth Bank: climate or impact focus, beyond one town or
+ * state?), with the team's recent approve/archive decisions as examples. Lenders that fit become
+ * pending funds; lenders that don't are added archived with the model's reason, so the team can
+ * review and restore them. Everyone else stays a node in the team network.
  *
  * @param input.candidates - What to consider.
  * @param input.discoveredFromId - The fund (if any) whose research produced them.
@@ -114,10 +131,12 @@ export async function discoverLenders({
                     discoveryContext: candidate.context,
                     origin: candidate.origin,
                     discoveredFromId,
+                    screening: screeningFromVerdict({ verdict }),
                     now,
                 })
                 fundManagerId = fund.id
-                added += isNew ? 1 : 0
+                // Funds screened out go in archived, so they don't use up room on the list.
+                added += isNew && verdict.fits_earth_bank ? 1 : 0
             }
             if (candidate.organizationId) {
                 await markOrganizationClassified({
@@ -177,6 +196,90 @@ async function resolveCandidates({ candidates }: { candidates: LenderCandidate[]
 }
 
 /**
+ * Screen pending funds that were found before the screen existed (or whose screen failed), archiving
+ * the ones that aren't lenders or don't fit Earth Bank. Runs from the hourly research task; each fund
+ * is screened once.
+ *
+ * @param input.classifier - The model.
+ * @param input.now - Current time.
+ * @returns How many funds were screened and how many of them were archived.
+ */
+export async function screenPendingFunds({ classifier, now }: { classifier: AiProvider; now: Date }) {
+    const settings = await readFundResearchSettings()
+    if ((await readMonthResearchSpend({ settings, now })).isOverBudget) {
+        return { screened: 0, archived: 0 }
+    }
+    const funds = await listUnscreenedPendingFunds({ limit: CLASSIFY_BATCH_SIZE * 4 })
+    let screened = 0
+    let archived = 0
+    for (let start = 0; start < funds.length; start += CLASSIFY_BATCH_SIZE) {
+        const batch = funds.slice(start, start + CLASSIFY_BATCH_SIZE).map(fund => ({
+            fundManagerId: fund.id,
+            name: fund.name,
+            nameKey: fund.name_key,
+            website: fund.website_url,
+            context: fund.discovery_context ?? 'a lender the spider found',
+        }))
+        const verdicts = await classifyCandidates({ batch, classifier, discoveredFromId: null, now })
+        if (verdicts.size === 0) {
+            // The model refused or failed; try again next hour.
+            continue
+        }
+        for (const candidate of batch) {
+            const verdict = verdicts.get(candidate.nameKey)
+            if (!verdict) {
+                continue
+            }
+            // Something the screen says isn't a lender at all doesn't belong on the list either.
+            const fitsEarthBank = verdict.is_lender && verdict.fits_earth_bank
+            await recordFundScreening({
+                fundManagerId: candidate.fundManagerId,
+                note: screeningFromVerdict({ verdict }).note,
+                isScreenedOut: !fitsEarthBank,
+                now,
+            })
+            screened += 1
+            archived += fitsEarthBank ? 0 : 1
+        }
+    }
+    return { screened, archived }
+}
+
+/**
+ * The screening result addFund stores for a lender, from the model's verdict.
+ *
+ * @param input.verdict - The model's verdict on one organization.
+ * @returns The note to keep and whether the lender fits Earth Bank.
+ */
+function screeningFromVerdict({ verdict }: { verdict: LenderVerdict }) {
+    const note = verdict.reason.trim().slice(0, SCREENING_NOTE_MAX_LENGTH) || null
+    return { note, fitsEarthBank: verdict.fits_earth_bank }
+}
+
+/**
+ * The team's recent approve and archive decisions on spider finds, as prompt text for the classifier.
+ *
+ * @returns A block of examples, or an empty string before the team has decided anything.
+ */
+async function teamDecisionExamples() {
+    const { approved, archived } = await listTeamFundDecisions({ limit: TEAM_DECISION_EXAMPLES })
+    if (approved.length === 0 && archived.length === 0) {
+        return ''
+    }
+    const describe = (fund: { name: string; discovery_context: string | null }) =>
+        `- ${fund.name}${fund.discovery_context ? `: came up as ${fund.discovery_context}` : ''}`
+    return [
+        "The team's recent decisions on lenders the spider found (follow their judgment for similar organizations):",
+        approved.length ? `Approved for research:\n${approved.map(describe).join('\n')}` : '',
+        archived.length ? `Archived as outside Earth Bank's focus:\n${archived.map(describe).join('\n')}` : '',
+        '',
+        'Organizations to classify:',
+    ]
+        .filter(line => line !== '')
+        .join('\n\n')
+}
+
+/**
  * Ask the model which candidates are lenders, and record what it cost.
  *
  * @param input.batch - Up to 25 candidates.
@@ -191,7 +294,7 @@ async function classifyCandidates({
     discoveredFromId,
     now,
 }: {
-    batch: ResolvedCandidate[]
+    batch: { name: string; website: string | null; context: string }[]
     classifier: AiProvider
     discoveredFromId: string | null
     now: Date
@@ -204,12 +307,17 @@ async function classifyCandidates({
     })
     const result = await classifier.completeStructured({
         instructions: CLASSIFY_LENDERS_INSTRUCTIONS,
-        prompt: batch
-            .map(
-                candidate =>
-                    `- ${candidate.name}${candidate.website ? ` (${candidate.website})` : ''}: came up as ${candidate.context}`,
-            )
-            .join('\n'),
+        prompt: [
+            await teamDecisionExamples(),
+            batch
+                .map(
+                    candidate =>
+                        `- ${candidate.name}${candidate.website ? ` (${candidate.website})` : ''}: came up as ${candidate.context}`,
+                )
+                .join('\n'),
+        ]
+            .filter(Boolean)
+            .join('\n\n'),
         schema: LenderClassification,
         effort: 'low',
     })
@@ -229,7 +337,7 @@ async function classifyCandidates({
             error: result.status === 'ok' ? null : result.status,
         },
     })
-    const verdicts = new Map<string, z.infer<typeof LenderClassification>['organizations'][number]>()
+    const verdicts = new Map<string, LenderVerdict>()
     for (const organization of result.output?.organizations ?? []) {
         verdicts.set(organizationNameKey({ name: organization.name }), organization)
     }

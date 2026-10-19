@@ -109,12 +109,17 @@ Rules (the app checks them and silently drops anything that fails):
 
 Record each fact separately (one record per deal, LP, fund raise, metric, contact detail or person), then stop and reply with one short line summarizing what you recorded.`
 
-export const CLASSIFY_LENDERS_INSTRUCTIONS = `You help Earth Bank decide which organizations are lenders worth researching. Earth Bank partners with organizations that lend money to small and medium businesses or to projects: private debt and impact debt fund managers, blended-finance funds, CDFIs and community lenders, mission-driven or impact banks, microfinance and SME finance institutions, and fintech lenders that make business loans.
+export const CLASSIFY_LENDERS_INSTRUCTIONS = `You help Earth Bank decide which organizations are lenders worth researching. Earth Bank partners with organizations that lend money to small and medium businesses or to projects: private debt and impact debt fund managers, blended-finance funds, CDFIs, mission-driven or impact banks, microfinance and SME finance institutions, and fintech lenders that make business loans. It looks for climate and impact lenders with reach: ones that lend across a country, several countries or the world, especially in emerging markets.
 
-For each organization, decide is_lender:
-- true for the kinds above.
-- false for equity-only venture capital, large commercial or investment banks (e.g. Goldman Sachs, Citi, HSBC), development finance institutions and multilateral banks themselves (they are tracked separately), governments, universities and schools, consultancies, foundations that only give grants, and ordinary companies.
-Set kind to one of: lender, investor, bank, dfi, government, school, company, other. If you don't recognize an organization and its name doesn't make clear it lends, say false.`
+For each organization, decide:
+- is_lender: true for the kinds above. False for equity-only venture capital, large commercial or investment banks (e.g. Goldman Sachs, Citi, HSBC), development finance institutions and multilateral banks themselves (they are tracked separately), governments, universities and schools, consultancies, foundations that only give grants, and ordinary companies. If you don't recognize an organization and its name doesn't make clear it lends, say false.
+- kind: one of lender, investor, bank, dfi, government, school, company, other.
+- scope: where it lends. local (one town, city or county), state_or_province (one state, province or similar region of a country), national, multi_country, global, or unknown.
+- impact_focus: climate (climate, clean energy, sustainable agriculture, nature), impact (an explicit social or development mandate, e.g. financial inclusion, smallholder farmers, underserved entrepreneurs in emerging markets), general (ordinary business or community lending with no stated impact or climate mandate), or unknown.
+- fits_earth_bank: whether the team would want this lender researched. False for lenders that only serve one town, county, state or province and have no climate mandate (e.g. a town or county development corporation, a single-state small-business or rural relending fund), and for lenders of any size with no climate or impact focus. True otherwise, and true when you aren't sure (a person reviews every lender you pass). Only meaningful when is_lender is true.
+- reason: one neutral sentence (under 200 characters) on where and to whom it lends and why it fits or not, e.g. "Rural business relending in southern Vermont; no climate focus." Don't guess facts you don't know; say what the name or context suggests.
+
+Names often show local scope: a town, county or state in the name ("Brattleboro Development Credit Corporation", "Nebraska Enterprise Fund") usually means a local or state lender. When the team's past decisions are listed, follow their judgment for similar organizations.`
 
 export const EXTRACT_PUBLIC_INVESTMENTS_INSTRUCTIONS = `You read one page of a development finance institution's or government's public list of investments, loans or grants, and return its rows as structured data.
 

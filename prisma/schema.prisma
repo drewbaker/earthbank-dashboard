@@ -649,6 +649,11 @@ model FundManager {
     approval_status    String    @default("approved")
     approved_at        DateTime?
     approved_by_id     String?
+    // The AI screen of a spider find (lends where and to whom, and whether that fits Earth Bank): when it
+    // ran, its one-line reason, and when it archived the fund as outside Earth Bank's focus.
+    screened_at        DateTime?
+    screening_note     String?
+    screened_out_at    DateTime?
     // new_addition | sourced | in_diligence | shortlisted | passed
     stage              String    @default("new_addition")
     // FUND_FIT_TAGS keys.

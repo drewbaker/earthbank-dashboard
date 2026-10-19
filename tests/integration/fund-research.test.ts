@@ -16,6 +16,7 @@ vi.mock('#server/utils/jobs/enqueue.ts', () => ({
         return 'queued'
     },
     enqueuePublicInvestmentSync: async () => 'queued',
+    enqueuePendingFundScreening: async () => 'queued',
 }))
 
 const { cleanupTestDatabase } = setupTestDatabase()
@@ -197,6 +198,40 @@ afterAll(async () => {
     await cleanupTestDatabase()
 })
 
+/**
+ * One organization as the lender classifier returns it.
+ *
+ * @param input.name - Organization name.
+ * @param input.isLender - Whether it lends to SMEs or projects.
+ * @param input.kind - Its kind.
+ * @param input.fits - Whether it fits Earth Bank (climate or impact focus, beyond one town or state).
+ * @param input.reason - The model's one-line reason.
+ * @returns The classifier's verdict.
+ */
+function lenderVerdict({
+    name,
+    isLender,
+    kind,
+    fits = true,
+    reason = 'Lends to SMEs across several countries.',
+}: {
+    name: string
+    isLender: boolean
+    kind: string
+    fits?: boolean
+    reason?: string
+}) {
+    return {
+        name,
+        is_lender: isLender,
+        kind,
+        scope: fits ? 'multi_country' : 'state_or_province',
+        impact_focus: fits ? 'impact' : 'general',
+        fits_earth_bank: fits,
+        reason,
+    }
+}
+
 describe('researchFund', () => {
     it('stores only verified findings, with their sources', async () => {
         const { researchFund } = await import('#server/utils/funds/research.ts')
@@ -204,7 +239,9 @@ describe('researchFund', () => {
             scripts: [{ pages: [ABOUT_PAGE], calls: iungoCalls() }],
         })
         const classifier = fakeAi({
-            answers: [{ organizations: [{ name: 'Acumen Capital Partners', is_lender: true, kind: 'lender' }] }],
+            answers: [
+                { organizations: [lenderVerdict({ name: 'Acumen Capital Partners', isLender: true, kind: 'lender' })] },
+            ],
         })
         const outcome = await researchFund({ fundManagerId: iungoId, researcher, classifier: classifier.provider, now })
         expect(outcome).toMatchObject({ status: 'done', findingsAdded: 5, findingsDropped: 2, fundsDiscovered: 1 })
@@ -800,9 +837,9 @@ describe('limits', () => {
             answers: [
                 {
                     organizations: [
-                        { name: 'Goldman Sachs', is_lender: false, kind: 'bank' },
-                        { name: 'Sunfunder', is_lender: true, kind: 'lender' },
-                        { name: 'Triodos Investment Management', is_lender: true, kind: 'lender' },
+                        lenderVerdict({ name: 'Goldman Sachs', isLender: false, kind: 'bank' }),
+                        lenderVerdict({ name: 'Sunfunder', isLender: true, kind: 'lender' }),
+                        lenderVerdict({ name: 'Triodos Investment Management', isLender: true, kind: 'lender' }),
                     ],
                 },
             ],
@@ -839,6 +876,145 @@ describe('limits', () => {
     it('seeds the starting funds only once', async () => {
         const { ensureSeedFunds } = await import('#server/utils/funds/seed.ts')
         expect(await ensureSeedFunds({ now })).toBe(0)
+    })
+})
+
+describe('screening spider finds', () => {
+    it("adds lenders outside Earth Bank's focus as archived, with the reason", async () => {
+        const { discoverLenders } = await import('#server/utils/funds/spider.ts')
+        const { listFundManagers } = await import('#server/database/fund-managers.ts')
+        const classifier = fakeAi({
+            answers: [
+                {
+                    organizations: [
+                        lenderVerdict({
+                            name: 'Brattleboro Development Credit Corporation',
+                            isLender: true,
+                            kind: 'lender',
+                            fits: false,
+                            reason: 'Business lending in southern Vermont; no climate focus.',
+                        }),
+                        lenderVerdict({
+                            name: 'Sunrise Climate Debt',
+                            isLender: true,
+                            kind: 'lender',
+                            reason: 'Climate debt for SMEs in East Africa.',
+                        }),
+                    ],
+                },
+            ],
+        })
+        const added = await discoverLenders({
+            candidates: ['Brattleboro Development Credit Corporation', 'Sunrise Climate Debt'].map(name => ({
+                type: 'named' as const,
+                name,
+                website: null,
+                context: 'test',
+            })),
+            discoveredFromId: null,
+            classifier: classifier.provider,
+            now,
+        })
+        // Only the lender that fits counts toward the list.
+        expect(added).toBe(1)
+        const funds = await listFundManagers({ includeArchived: true, limit: 1000 })
+        expect(funds.find(fund => fund.name === 'Brattleboro Development Credit Corporation')).toMatchObject({
+            approval_status: 'pending',
+            research_status: 'awaiting_approval',
+            screening_note: 'Business lending in southern Vermont; no climate focus.',
+            archived_at: now,
+            screened_out_at: now,
+        })
+        expect(funds.find(fund => fund.name === 'Sunrise Climate Debt')).toMatchObject({
+            approval_status: 'pending',
+            screening_note: 'Climate debt for SMEs in East Africa.',
+            archived_at: null,
+            screened_out_at: null,
+        })
+    })
+
+    it("shows the classifier the team's own approvals and archivals, not the AI's", async () => {
+        const { addFund } = await import('#server/utils/funds/add-fund.ts')
+        const { approveFund } = await import('#server/utils/funds/approve.ts')
+        const { discoverLenders } = await import('#server/utils/funds/spider.ts')
+        const { findFundManagerByIdentity, updateFundManagerColumns } =
+            await import('#server/database/fund-managers.ts')
+        const approver = await createTestUser({ email: 'steve@theearthbank.org', name: 'Steve' })
+        const sunrise = await findFundManagerByIdentity({ nameKey: 'sunrise climate debt', websiteDomain: null })
+        await approveFund({ fundManagerId: sunrise!.id, approvedById: approver.id, now })
+        const { fund: county } = await addFund({
+            name: 'Lincoln County Loan Fund',
+            websiteUrl: null,
+            discoveryContext: 'a recipient on a US list',
+            origin: 'spider_public_record',
+            now,
+        })
+        await updateFundManagerColumns({ fundManagerId: county.id, data: { archived_at: now } })
+
+        const classifier = fakeAi({ answers: [{ organizations: [] }] })
+        await discoverLenders({
+            candidates: [{ type: 'named', name: 'Kijani Green Lending', website: null, context: 'test' }],
+            discoveredFromId: null,
+            classifier: classifier.provider,
+            now,
+        })
+        const [prompt] = classifier.prompts
+        expect(prompt).toContain('Approved for research:\n- Sunrise Climate Debt')
+        expect(prompt).toContain("Archived as outside Earth Bank's focus:\n- Lincoln County Loan Fund")
+        // The AI's own screen-outs aren't team decisions.
+        expect(prompt).not.toContain('Brattleboro')
+        expect(prompt).toContain('- Kijani Green Lending: came up as test')
+    })
+
+    it('screens pending funds found before the screen existed, once', async () => {
+        const { addFund } = await import('#server/utils/funds/add-fund.ts')
+        const { screenPendingFunds } = await import('#server/utils/funds/spider.ts')
+        const { findFundManager } = await import('#server/database/fund-managers.ts')
+        const { fund: nebraska } = await addFund({
+            name: 'Nebraska Enterprise Fund',
+            websiteUrl: null,
+            discoveryContext: 'SBA microloan intermediary',
+            origin: 'spider_public_record',
+            now,
+        })
+        const classifier = fakeAi({
+            answers: [
+                {
+                    organizations: [
+                        lenderVerdict({
+                            name: 'Nebraska Enterprise Fund',
+                            isLender: true,
+                            kind: 'lender',
+                            fits: false,
+                            reason: 'Microloans in Nebraska; no climate focus.',
+                        }),
+                    ],
+                },
+            ],
+        })
+        expect(await screenPendingFunds({ classifier: classifier.provider, now })).toEqual({
+            screened: 1,
+            archived: 1,
+        })
+        expect(await findFundManager({ fundManagerId: nebraska.id })).toMatchObject({
+            screening_note: 'Microloans in Nebraska; no climate focus.',
+            screened_at: now,
+            screened_out_at: now,
+            archived_at: now,
+        })
+        const again = fakeAi({ answers: [] })
+        expect(await screenPendingFunds({ classifier: again.provider, now })).toEqual({ screened: 0, archived: 0 })
+        expect(again.prompts).toHaveLength(0)
+    })
+
+    it('does not spider from US lists of local lenders', async () => {
+        const { PUBLIC_INVESTMENT_SOURCES } = await import('#server/utils/funds/public-investment-sources.ts')
+        const localLists = PUBLIC_INVESTMENT_SOURCES.filter(source => source.feedsSpider === false)
+        expect(localLists.map(source => source.key).sort()).toEqual([
+            'cdfi_fund',
+            'sba_microloan',
+            'usda_rural_business',
+        ])
     })
 })
 

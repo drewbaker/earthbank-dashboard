@@ -25,7 +25,8 @@ export default defineApiHandler(async event => {
     const { ctx } = requireUser({ event })
     const fundManagerId = getRouterParam(event, 'id') ?? ''
     await requireFund({ fundManagerId })
-    await updateFundManagerColumns({ fundManagerId, data: { archived_at: null } })
+    // A fund the AI screened out goes back to pending for a person to decide.
+    await updateFundManagerColumns({ fundManagerId, data: { archived_at: null, screened_out_at: null } })
     await recordAudit({
         actor: ctx.actor,
         action: 'fund.restored',
