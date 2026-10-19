@@ -1,6 +1,7 @@
 import {
     findFundManager,
     findFundManagerByDomain,
+    listFundsWithoutFitSignals,
     storeFundResearchValues,
     updateFundManagerColumns,
 } from '#server/database/fund-managers.ts'
@@ -9,6 +10,20 @@ import { deriveFundResearchValues } from '#server/utils/funds/research-values.ts
 import type { FundResearchField } from '#shared/constants/funds.ts'
 import { diligenceCompleteness } from '#shared/funds/completeness.ts'
 import { canonicalLinkedinUrl, websiteDomain } from '#shared/funds/organization-names.ts'
+
+/**
+ * Work out the fit signals of funds researched before the signals existed (runs at boot; each fund
+ * once, since refreshing stores them).
+ *
+ * @returns How many funds were refreshed.
+ */
+export async function fillMissingFitSignals() {
+    const funds = await listFundsWithoutFitSignals()
+    for (const fund of funds) {
+        await refreshFundResearchValues({ fundManagerId: fund.id })
+    }
+    return funds.length
+}
 
 /**
  * Recompute and store a fund's sortable research values and completeness from its current data.

@@ -105,6 +105,7 @@ const FundsStageBadge = resolveComponent('FundsStageBadge')
 const FundsFocusTags = resolveComponent('FundsFocusTags')
 const FundsCompletenessMeter = resolveComponent('FundsCompletenessMeter')
 const FundsResearchStatusBadge = resolveComponent('FundsResearchStatusBadge')
+const FundsFitSignals = resolveComponent('FundsFitSignals')
 
 const STAGE_ORDER = new Map(FUND_STAGES.map((stage, index) => [stage, index]))
 // The table's sort order is remembered in this browser, so coming back to Funds keeps it.
@@ -153,6 +154,13 @@ const columns: TableColumn<Fund>[] = sortableColumns({
             accessorFn: fund => (fund.focus_areas.length ? geoFocusLabel({ code: fund.focus_areas[0]! }) : undefined),
             header: 'Regional focus',
             cell: ({ row }) => h(FundsFocusTags, { codes: row.original.focus_areas }),
+        },
+        {
+            id: 'fit_signals',
+            accessorKey: 'fit_signals_met',
+            header: 'Fit',
+            meta: { term: 'fit_signals' },
+            cell: ({ row }) => h(FundsFitSignals, { signals: row.original.fit_signals }),
         },
         {
             id: 'aum',

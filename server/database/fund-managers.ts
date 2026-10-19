@@ -1,4 +1,4 @@
-import type { Prisma } from '#server/generated/prisma/client.ts'
+import { Prisma } from '#server/generated/prisma/client.ts'
 import { db } from '#server/utils/db.ts'
 import { newId } from '#server/utils/ids.ts'
 import type { FundResearchValues } from '#server/utils/funds/research-values.ts'
@@ -25,6 +25,7 @@ export type FundListFilters = {
     minWorkingCapitalCents?: bigint
     requireWorkingCapital?: boolean
     minCompleteness?: number
+    minFitSignals?: number
     lenderArchetype?: string
     lendingChannel?: string
     requireLocalCurrency?: boolean
@@ -175,6 +176,7 @@ export async function listFundManagers({
     minWorkingCapitalCents,
     requireWorkingCapital,
     minCompleteness,
+    minFitSignals,
     lenderArchetype,
     lendingChannel,
     requireLocalCurrency,
@@ -227,6 +229,9 @@ export async function listFundManagers({
     }
     if (minWorkingCapitalCents !== undefined) {
         and.push({ max_working_capital_loan_cents: { gte: minWorkingCapitalCents } })
+    }
+    if (minFitSignals !== undefined) {
+        and.push({ fit_signals_met: { gte: minFitSignals } })
     }
     if (minCompleteness !== undefined) {
         and.push({ research_completeness: { gte: minCompleteness } })
@@ -356,6 +361,19 @@ export function countActiveFundManagers() {
  */
 export function countPendingFundManagers() {
     return db().fundManager.count({ where: { archived_at: null, approval_status: 'pending' } })
+}
+
+/**
+ * Funds whose fit signals haven't been worked out yet (researched before the signals existed).
+ *
+ * @returns Their ids.
+ */
+export function listFundsWithoutFitSignals() {
+    return db().fundManager.findMany({
+        where: { fit_signals: { equals: Prisma.DbNull } },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+    })
 }
 
 /**

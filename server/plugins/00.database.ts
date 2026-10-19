@@ -2,6 +2,7 @@ import { defineNitroPlugin } from 'nitropack/runtime'
 import { ensureDefaultGoals } from '#server/database/goals.ts'
 import { supersedeAllStaleSuggestions } from '#server/utils/change-events.ts'
 import { reattributeSyncedEmails } from '#server/utils/mail/attribution.ts'
+import { fillMissingFitSignals } from '#server/utils/funds/refresh-values.ts'
 import { fillFocusAreasFromGeoFocus } from '#server/utils/pipeline-import/focus-areas.ts'
 import { configureDatabase, disconnectDatabase } from '#server/utils/db.ts'
 
@@ -21,5 +22,9 @@ export default defineNitroPlugin(async nitroApp => {
     reattributeSyncedEmails()
         .then(count => count > 0 && console.info(`[mail] credited ${count} emails to their sender or recipient`))
         .catch(error => console.error('[mail] crediting emails failed', error))
+    // Funds researched before the fit signals existed get them from their stored research.
+    fillMissingFitSignals()
+        .then(count => count > 0 && console.info(`[research] worked out fit signals for ${count} funds`))
+        .catch(error => console.error('[research] working out fit signals failed', error))
     nitroApp.hooks.hook('close', () => disconnectDatabase())
 })

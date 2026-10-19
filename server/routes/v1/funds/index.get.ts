@@ -27,6 +27,12 @@ defineRouteMeta({
             { name: 'check_size_max_usd', in: 'query', schema: { type: 'number' } },
             { name: 'working_capital', in: 'query', schema: { type: 'string', enum: ['any', 'min_500k'] } },
             { name: 'min_completeness', in: 'query', schema: { type: 'integer' } },
+            {
+                name: 'min_fit_signals',
+                in: 'query',
+                description: "Funds meeting at least this many of the team's criteria (FUND_FIT_SIGNALS, 0–6).",
+                schema: { type: 'integer' },
+            },
             { name: 'lender_archetype', in: 'query', schema: { type: 'string' } },
             {
                 name: 'lending_channel',
@@ -79,6 +85,7 @@ export default defineApiHandler(async event => {
         requireWorkingCapital: query.working_capital !== undefined,
         minWorkingCapitalCents: query.working_capital === 'min_500k' ? BigInt(WORKING_CAPITAL_TARGET_CENTS) : undefined,
         minCompleteness: query.min_completeness,
+        minFitSignals: query.min_fit_signals,
         lenderArchetype: query.lender_archetype,
         lendingChannel: query.lending_channel,
         requireLocalCurrency: query.local_currency,

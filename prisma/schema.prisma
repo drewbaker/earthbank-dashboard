@@ -704,6 +704,10 @@ model FundManager {
     lends_local_currency           Boolean   @default(false)
     // How the check-size range compares with Earth Bank's $500K–$5M ticket: fits | partly | outside.
     ticket_fit                     String?
+    // The team's criteria for a lender worth researching (FUND_FIT_SIGNALS → met | not_met | unknown) and
+    // how many are met; null until worked out from research.
+    fit_signals                    Json?
+    fit_signals_met                Int       @default(0)
     research_completeness          Int       @default(0)
     diligence_completeness         Int       @default(0)
 
@@ -724,6 +728,7 @@ model FundManager {
 
     @@index([stage])
     @@index([approval_status])
+    @@index([fit_signals_met])
     @@index([research_status])
     @@map("fund_manager")
 }

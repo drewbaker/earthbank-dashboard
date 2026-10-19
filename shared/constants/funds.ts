@@ -70,6 +70,13 @@ export const FUND_SECTORS = [
     'forestry_nature',
     'blue_economy',
     'climate_adaptation',
+    'distributed_energy',
+    'clean_industrials',
+    'alternative_materials',
+    'alternative_proteins',
+    'sustainable_textiles',
+    'retrofitting',
+    'space',
     'financial_inclusion',
     'sme',
     'health',
@@ -90,6 +97,13 @@ export const FUND_SECTOR_LABELS: Record<FundSector, string> = {
     forestry_nature: 'Forestry & nature',
     blue_economy: 'Blue economy',
     climate_adaptation: 'Climate adaptation',
+    distributed_energy: 'Distributed energy',
+    clean_industrials: 'Clean industrials',
+    alternative_materials: 'Alternative plastics & materials',
+    alternative_proteins: 'Alternative proteins',
+    sustainable_textiles: 'Sustainable textiles',
+    retrofitting: 'Building retrofits',
+    space: 'Space',
     financial_inclusion: 'Financial inclusion',
     sme: 'SMEs (general)',
     health: 'Health',
@@ -99,6 +113,7 @@ export const FUND_SECTOR_LABELS: Record<FundSector, string> = {
 
 export const LOAN_TYPES = [
     'working_capital',
+    'credit_line',
     'trade_finance',
     'inventory',
     'receivables',
@@ -116,6 +131,7 @@ export type LoanType = (typeof LOAN_TYPES)[number]
 
 export const LOAN_TYPE_LABELS: Record<LoanType, string> = {
     working_capital: 'Working capital',
+    credit_line: 'Lines of credit',
     trade_finance: 'Trade finance',
     inventory: 'Inventory finance',
     receivables: 'Receivables / invoice finance',
@@ -133,9 +149,61 @@ export const LOAN_TYPE_LABELS: Record<LoanType, string> = {
 // Loan types that count as working-capital lending for the "made working-capital loans" filter.
 export const WORKING_CAPITAL_LOAN_TYPES: readonly LoanType[] = [
     'working_capital',
+    'credit_line',
     'trade_finance',
     'inventory',
     'receivables',
+]
+
+// Signals that a lender is worth tracking and researching (the team's criteria). Each is met, not met
+// or unknown, worked out from research after every run (deriveFundFitSignals).
+export const FUND_FIT_SIGNALS = [
+    'raised_funds',
+    'established_3_years',
+    'managed_10m',
+    'working_capital_or_term_debt',
+    'has_lps',
+    'target_sectors',
+] as const
+export type FundFitSignal = (typeof FUND_FIT_SIGNALS)[number]
+
+export const FUND_FIT_SIGNAL_STATUSES = ['met', 'not_met', 'unknown'] as const
+export type FundFitSignalStatus = (typeof FUND_FIT_SIGNAL_STATUSES)[number]
+
+export const FUND_FIT_SIGNAL_LABELS: Record<FundFitSignal, string> = {
+    raised_funds: 'Has raised funds before',
+    established_3_years: '3+ years old',
+    managed_10m: 'Managed $10M+',
+    working_capital_or_term_debt: 'Working capital, credit lines or term debt',
+    has_lps: 'Raised from limited partners',
+    target_sectors: 'Lends in our sectors',
+}
+
+// Managing this much (AUM, or one fund's size) is a good sign, though not a hard rule.
+export const FIT_SIGNAL_MANAGED_CENTS = 10_000_000 * 100
+export const FIT_SIGNAL_MIN_YEARS = 3
+
+// Loan types that show working-capital, credit-line or term-debt experience.
+export const FIT_SIGNAL_LOAN_TYPES: readonly LoanType[] = ['working_capital', 'credit_line', 'term_debt']
+
+// The sectors Earth Bank wants its lenders to work in: climate, nature, agriculture, clean energy,
+// clean industrials, alternative plastics and proteins, sustainable textiles, distributed energy,
+// retrofitting and space.
+export const TARGET_SECTORS: readonly FundSector[] = [
+    'agriculture',
+    'electrification',
+    'energy',
+    'clean_cooking',
+    'forestry_nature',
+    'blue_economy',
+    'climate_adaptation',
+    'distributed_energy',
+    'clean_industrials',
+    'alternative_materials',
+    'alternative_proteins',
+    'sustainable_textiles',
+    'retrofitting',
+    'space',
 ]
 
 // The size the team cares most about: working-capital loans of at least $500K.

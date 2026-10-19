@@ -1,5 +1,6 @@
 // Covers how a fund's sortable values and completeness are worked out from its findings: newest
-// scalar wins, latest close, working-capital loans (≥ $500K matters), and currency conversion.
+// scalar wins, latest close, working-capital loans (≥ $500K matters), currency conversion, and the
+// team's fit signals.
 import { describe, expect, it } from 'vitest'
 import { deriveFundResearchValues } from '#server/utils/funds/research-values.ts'
 import { diligenceCompleteness, researchCompleteness } from '#shared/funds/completeness.ts'
@@ -176,5 +177,68 @@ describe('screening values', () => {
             lends_local_currency: true,
             ticket_fit: 'fits',
         })
+    })
+})
+
+describe('fit signals', () => {
+    const now = new Date('2026-10-19T00:00:00Z')
+
+    it('marks the criteria research shows, and leaves the rest unknown', () => {
+        const values = deriveFundResearchValues({
+            findings: [
+                { field: 'year_established', value: { year: 2019 }, created_at: earlier },
+                {
+                    field: 'fund_raise',
+                    value: {
+                        fund_name: 'Fund I',
+                        size: { amount: 25_000_000, currency: 'USD' },
+                        close_type: 'final_close',
+                        closed_on: '2021',
+                    },
+                    created_at: earlier,
+                },
+                { field: 'loan_types', value: { types: ['credit_line', 'asset_finance'] }, created_at: earlier },
+                { field: 'sectors', value: { sectors: ['alternative_proteins'] }, created_at: earlier },
+            ],
+            hasPrincipals: false,
+            hasWorkHistory: false,
+            now,
+        })
+        expect(values.fit_signals).toEqual({
+            raised_funds: 'met',
+            established_3_years: 'met',
+            managed_10m: 'met',
+            working_capital_or_term_debt: 'met',
+            has_lps: 'unknown',
+            target_sectors: 'met',
+        })
+        expect(values.fit_signals_met).toBe(5)
+    })
+
+    it('says not met only when research rules a criterion out', () => {
+        const { fit_signals } = deriveFundResearchValues({
+            findings: [
+                { field: 'year_established', value: { year: 2025 }, created_at: earlier },
+                { field: 'aum', value: { amount: 4_000_000, currency: 'USD', as_of: '2025' }, created_at: earlier },
+                { field: 'loan_types', value: { types: ['equity'] }, created_at: earlier },
+                { field: 'sectors', value: { sectors: ['health', 'education'] }, created_at: earlier },
+                { field: 'lp', value: { name: 'FMO', fund_name: null, amount: null }, created_at: earlier },
+            ],
+            hasPrincipals: false,
+            hasWorkHistory: false,
+            now,
+        })
+        expect(fit_signals).toEqual({
+            // LPs mean it has raised money, even with no fund raise on record.
+            raised_funds: 'met',
+            established_3_years: 'not_met',
+            managed_10m: 'not_met',
+            working_capital_or_term_debt: 'not_met',
+            has_lps: 'met',
+            target_sectors: 'not_met',
+        })
+        const none = deriveFundResearchValues({ findings: [], hasPrincipals: false, hasWorkHistory: false, now })
+        expect(Object.values(none.fit_signals).every(status => status === 'unknown')).toBe(true)
+        expect(none.fit_signals_met).toBe(0)
     })
 })

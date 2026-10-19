@@ -24,6 +24,8 @@ export const GLOSSARY = {
         'Largest known working-capital loan: from published deals, else the top of their check size.',
     fund_spider:
         'New lenders found from team work history, co-lenders and DFI lists wait as pending until someone approves them; then they are researched.',
+    fit_signals:
+        "The team's signs of a lender worth researching: has raised funds, 3+ years old, managed $10M+, makes working-capital, credit-line or term-debt loans, raised from LPs, and lends in our sectors (climate, nature, agriculture, clean energy and industrials, alternative materials and proteins, textiles, distributed energy, retrofits, space). Worked out from research; ? means not found yet.",
     fund_screening:
         'Before a spider find reaches this list, the AI checks where and to whom it lends. Lenders limited to one town, county or state with no climate focus, or with no climate or impact focus at all, are archived with its reason. It learns from what the team approves and archives.',
     fund_approval:

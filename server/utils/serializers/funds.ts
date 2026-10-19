@@ -14,6 +14,8 @@ import { serializeUserSummary } from '#server/utils/serializers/common.ts'
 import type {
     AffiliationRelation,
     FundApprovalStatus,
+    FundFitSignal,
+    FundFitSignalStatus,
     FundDiligenceQuestion,
     FundFitTag,
     FundOrigin,
@@ -28,7 +30,7 @@ import type {
     TicketFit,
     ResearchOrganizationKind,
 } from '#shared/constants/funds.ts'
-import { FUND_DILIGENCE_QUESTIONS } from '#shared/constants/funds.ts'
+import { FUND_DILIGENCE_QUESTIONS, FUND_FIT_SIGNAL_STATUSES, FUND_FIT_SIGNALS } from '#shared/constants/funds.ts'
 import type {
     Fund,
     FundDetail,
@@ -92,11 +94,34 @@ export function serializeFund({ fund }: { fund: FundListRow }): Fund {
         lending_channel: fund.lending_channel as LendingChannel | null,
         lends_local_currency: fund.lends_local_currency,
         ticket_fit: fund.ticket_fit as TicketFit | null,
+        fit_signals: fitSignals({ value: fund.fit_signals }),
+        fit_signals_met: fund.fit_signals_met,
         research_completeness: fund.research_completeness,
         diligence_completeness: fund.diligence_completeness,
         archived_at: toIsoDateTime({ date: fund.archived_at }),
         created_at: fund.created_at.toISOString(),
     }
+}
+
+/**
+ * The stored fit signals, with every signal present (unknown until research has worked it out).
+ *
+ * @param input.value - The fit_signals column.
+ * @returns Status per signal.
+ */
+function fitSignals({ value }: { value: unknown }) {
+    const stored = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+    return Object.fromEntries(
+        FUND_FIT_SIGNALS.map(signal => {
+            const status = stored[signal]
+            return [
+                signal,
+                FUND_FIT_SIGNAL_STATUSES.includes(status as FundFitSignalStatus)
+                    ? (status as FundFitSignalStatus)
+                    : 'unknown',
+            ]
+        }),
+    ) as Record<FundFitSignal, FundFitSignalStatus>
 }
 
 /**

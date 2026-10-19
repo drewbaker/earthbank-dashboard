@@ -482,6 +482,16 @@ async function rejectFinding(finding: FundFinding) {
                             </dd>
                         </div>
                     </dl>
+                    <div class="mt-4 border-t border-default pt-4">
+                        <p class="mb-2 text-sm text-muted">
+                            Fit signals: {{ fund.fit_signals_met }} of 6 <TermHint term="fit_signals" />
+                        </p>
+                        <FundsFitSignals
+                            :signals="fund.fit_signals"
+                            list
+                            class="grid gap-x-6 sm:grid-cols-2 lg:grid-cols-3"
+                        />
+                    </div>
                 </UCard>
                 <UTabs v-model="tab" :items="tabItems" :content="false" size="sm" />
                 <div class="space-y-6">

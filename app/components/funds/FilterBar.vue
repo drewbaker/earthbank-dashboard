@@ -81,6 +81,11 @@ const completenessItems = [
     ...[25, 50, 75].map(percent => ({ label: `Research ${percent}%+`, value: String(percent) })),
 ]
 
+const fitSignalItems = [
+    anyItem('Any fit signals'),
+    ...[2, 3, 4, 5].map(count => ({ label: `${count}+ fit signals`, value: String(count) })),
+]
+
 const ticketFitItems = [
     anyItem('Any ticket fit'),
     ...TICKET_FITS.map(fit => ({ label: TICKET_FIT_DETAILS[fit].label, value: fit })),
@@ -99,6 +104,7 @@ type SelectFilterKey = Exclude<keyof FundFilters, 'q'>
 
 // Every select filter, in the order shown when they're all open.
 const selectFilters: { key: SelectFilterKey; items: { label: string; value: string }[]; widthClass: string }[] = [
+    { key: 'min_fit_signals', items: fitSignalItems, widthClass: 'w-44' },
     { key: 'working_capital', items: workingCapitalItems, widthClass: 'w-52' },
     { key: 'ticket_fit', items: ticketFitItems, widthClass: 'w-44' },
     { key: 'check_size_usd', items: checkSizeItems, widthClass: 'w-40' },
