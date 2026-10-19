@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { isGeoFocusCode } from '#shared/utils/geo-focus.ts'
 import {
     AFFILIATION_RELATIONS,
+    FUND_APPROVAL_STATUSES,
     FUND_DILIGENCE_QUESTIONS,
     FUND_FIT_TAGS,
     FUND_ORIGINS,
@@ -148,6 +149,9 @@ export const Fund = z.object({
     stage: z.enum(FUND_STAGES),
     fit_tags: z.array(z.enum(FUND_FIT_TAGS)),
     origin: z.enum(FUND_ORIGINS),
+    approval_status: z.enum(FUND_APPROVAL_STATUSES),
+    // How the fund came up (spider context or the seed list's hint); helps tell funds with common names apart.
+    discovery_context: z.string().nullable(),
     owner: UserSummary.nullable(),
     research_status: z.enum(FUND_RESEARCH_STATUSES),
     researched_at: IsoDateTime.nullable(),
@@ -216,8 +220,8 @@ export type ImportFundNoteRequest = z.infer<typeof ImportFundNoteRequest>
 export const FundDetail = Fund.extend({
     notes: z.string().nullable(),
     research_error: z.string().nullable(),
-    // How the fund came up (spider context or the seed list's hint); helps tell funds with common names apart.
-    discovery_context: z.string().nullable(),
+    approved_at: IsoDateTime.nullable(),
+    approved_by: UserSummary.nullable(),
     discovered_from: z.object({ id: z.string(), name: z.string() }).nullable(),
     findings: z.array(FundFinding),
     people: z.array(FundPerson),
@@ -257,6 +261,8 @@ export const FundResearchStatus = z.object({
     done: z.number().int(),
     failed: z.number().int(),
     skipped: z.number().int(),
+    // Spider finds waiting for someone to approve or archive them.
+    pending_approval: z.number().int(),
     month_spend_usd: z.number(),
     monthly_budget_usd: z.number(),
     spider_enabled: z.boolean(),
@@ -356,6 +362,7 @@ export const ListFundsQuery = CursorQuery.extend({
     min_completeness: z.coerce.number().int().min(0).max(100).optional(),
     research_status: z.enum(FUND_RESEARCH_STATUSES).optional(),
     origin: z.enum(FUND_ORIGINS).optional(),
+    approval_status: z.enum(FUND_APPROVAL_STATUSES).optional(),
     include_archived: queryBoolean(),
 })
 export type ListFundsQuery = z.infer<typeof ListFundsQuery>

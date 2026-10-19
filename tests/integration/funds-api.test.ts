@@ -36,6 +36,7 @@ beforeAll(async () => {
         restore: (await import('#server/routes/v1/fund-findings/[id]/restore.post.ts')).default,
         status: (await import('#server/routes/v1/fund-research/status.get.ts')).default,
         settings: (await import('#server/routes/v1/fund-research/settings.patch.ts')).default,
+        approve: (await import('#server/routes/v1/funds/[id]/approve.post.ts')).default,
     }
     const app = createApp()
     app.use(
@@ -59,7 +60,8 @@ beforeAll(async () => {
             .post('/v1/fund-findings/:id/reject', routes.reject)
             .post('/v1/fund-findings/:id/restore', routes.restore)
             .get('/v1/fund-research/status', routes.status)
-            .patch('/v1/fund-research/settings', routes.settings),
+            .patch('/v1/fund-research/settings', routes.settings)
+            .post('/v1/funds/:id/approve', routes.approve),
     )
     callApi = toWebHandler(app)
 
@@ -331,7 +333,9 @@ describe('research settings and status', () => {
         expect(status.json).toMatchObject({
             funds: 4,
             max_funds: 250,
-            queued: 4,
+            // The spider's find waits for approval instead of being researched.
+            queued: 3,
+            pending_approval: 1,
             spider_enabled: false,
             month_spend_usd: 0,
         })
@@ -391,5 +395,31 @@ describe('regional focus', () => {
             body: { focus_areas: null },
         })
         expect(cleared.json).toMatchObject({ focus_areas: ['BR'], is_focus_set_by_team: false })
+    })
+})
+
+describe('approving funds the spider found', () => {
+    it('keeps spider finds pending and unresearched until someone approves them', async () => {
+        const pending = await request({ path: '/v1/funds?approval_status=pending' })
+        expect(pending.json.data.map((fund: { name: string }) => fund.name)).toEqual(['Project Debt Partners'])
+        expect(pending.json.data[0]).toMatchObject({ approval_status: 'pending', research_status: 'awaiting_approval' })
+        const approved = await request({ path: '/v1/funds?approval_status=approved' })
+        expect(approved.json.data.map((fund: { name: string }) => fund.name)).not.toContain('Project Debt Partners')
+    })
+
+    it('approves a pending fund and queues its research', async () => {
+        queuedResearch.length = 0
+        const response = await request({ method: 'POST', path: `/v1/funds/${ids.project}/approve` })
+        expect(response.status).toBe(200)
+        expect(response.json).toMatchObject({
+            approval_status: 'approved',
+            research_status: 'queued',
+            approved_by: { name: 'Leslie' },
+        })
+        expect(queuedResearch).toEqual([{ fundManagerId: ids.project, isPriority: true }])
+        // Approving again changes nothing.
+        queuedResearch.length = 0
+        expect((await request({ method: 'POST', path: `/v1/funds/${ids.project}/approve` })).status).toBe(200)
+        expect(queuedResearch).toEqual([])
     })
 })

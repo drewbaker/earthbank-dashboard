@@ -39,6 +39,7 @@ export default defineApiHandler(async event => {
         websiteUrl: body.website_url,
         linkedinUrl: body.linkedin_url ?? null,
         origin: 'manual',
+        addedById: ctx.user.id,
         now: new Date(),
     })
     if (!isNew) {

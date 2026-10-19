@@ -15,6 +15,7 @@ import { addContactToFunder } from '#server/utils/contacts.ts'
 import { centsToNumber, fromDateOnly, toDateOnly } from '#server/utils/dates.ts'
 import { createFunderWithDetails, defaultOpportunityName } from '#server/utils/funders.ts'
 import { addFund } from '#server/utils/funds/add-fund.ts'
+import { approveFund } from '#server/utils/funds/approve.ts'
 import { queueFundRefresh } from '#server/utils/funds/refresh.ts'
 import { enqueueFunderBackfill } from '#server/utils/jobs/enqueue.ts'
 import type { IncomingEmail } from '#server/utils/mail/types.ts'
@@ -515,6 +516,7 @@ function buildFundTools({
                     websiteUrl: website,
                     linkedinUrl: linkedin,
                     origin: 'manual',
+                    addedById: actor.userId,
                     now: new Date(),
                 })
                 if (!isNew) {
@@ -546,6 +548,11 @@ function buildFundTools({
                 const fund = await findFundManager({ fundManagerId: fund_id })
                 if (!fund || fund.archived_at) {
                     return 'No such fund on the list.'
+                }
+                // Asking for research on a fund the spider found approves it.
+                if (fund.approval_status === 'pending') {
+                    await approveFund({ fundManagerId: fund.id, approvedById: actor.userId, now: new Date() })
+                    await recordAudit({ actor, action: 'fund.approved', entityType: 'fund', entityId: fund.id })
                 }
                 await queueFundRefresh({ fundManagerId: fund.id, now: new Date() })
                 await recordAudit({

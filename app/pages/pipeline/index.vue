@@ -12,7 +12,7 @@ import { coverageAsksFromOpportunities } from '~/utils/coverage-asks.ts'
 import { stageAsksFromOpportunities } from '~/utils/stage-asks.ts'
 import { sortableColumns } from '~/utils/table-sorting.ts'
 
-useSeoMeta({ title: 'Pipeline · Earth Bank Dashboard' })
+useSeoMeta({ title: 'Funding Pipeline · Earth Bank Dashboard' })
 
 const api = useApi()
 const toast = useToast()
@@ -367,7 +367,7 @@ async function openCreatedFunder(funder: FunderDetail) {
 <template>
     <UDashboardPanel>
         <template #header>
-            <UDashboardNavbar title="Pipeline">
+            <UDashboardNavbar title="Funding Pipeline">
                 <template #leading>
                     <UDashboardSidebarCollapse />
                 </template>

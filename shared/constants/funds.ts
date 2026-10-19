@@ -42,10 +42,15 @@ export const FUND_ORIGIN_LABELS: Record<FundOrigin, string> = {
     spider_suggestion: 'Found while researching another fund',
 }
 
-export const FUND_RESEARCH_STATUSES = ['queued', 'running', 'done', 'failed', 'skipped'] as const
+// Funds the spider finds wait as pending until someone approves them; funds people add are approved.
+export const FUND_APPROVAL_STATUSES = ['pending', 'approved'] as const
+export type FundApprovalStatus = (typeof FUND_APPROVAL_STATUSES)[number]
+
+export const FUND_RESEARCH_STATUSES = ['awaiting_approval', 'queued', 'running', 'done', 'failed', 'skipped'] as const
 export type FundResearchStatus = (typeof FUND_RESEARCH_STATUSES)[number]
 
 export const FUND_RESEARCH_STATUS_DETAILS: Record<FundResearchStatus, { label: string; color: BadgeColor }> = {
+    awaiting_approval: { label: 'Not researched', color: 'neutral' },
     queued: { label: 'Waiting', color: 'neutral' },
     running: { label: 'Researching', color: 'info' },
     done: { label: 'Researched', color: 'success' },

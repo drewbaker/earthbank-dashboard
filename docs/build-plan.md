@@ -279,6 +279,8 @@ Status: built on the `funds-research` branch (requested Oct 16, 2026). Replaces 
 - [x] Funds list: filters behind a "…" button (active and recent ones stay visible), text columns clipped, sort order remembered
 - [x] **Import notes** on the fund page: paste call notes or link a Google Doc; the AI fills research fields, people and diligence from it, each quoted and credited "Note from {author} on {time}"; people's existing answers kept
 - [x] Archive / Restore button on the fund page header
+- [x] **Pending approval**: spider finds wait under the Funds table (not researched, not on the board or map) until someone approves or archives them; sidebar says "Funding Pipeline"
+- [ ] Screen out local or non-impact lenders before they reach the pending list
 - [ ] Add `FIRECRAWL_API_KEY` in the Render dashboard
 - [ ] Check each public list against the live site after deploy (several are JavaScript apps or block bots; they show the error in Settings → Research and don't affect the others)
 - [ ] First live research runs: watch Sources → "dropped" counts and the month's spend, then raise the fund limit

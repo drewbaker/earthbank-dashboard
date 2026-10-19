@@ -265,7 +265,9 @@ describe('researchFund', () => {
         const acumen = funds.find(fund => fund.name === 'Acumen Capital Partners')
         expect(acumen).toMatchObject({ origin: 'spider_person', discovered_from_id: iungoId })
         expect(funds.some(fund => fund.name === 'Strathmore University')).toBe(false)
-        expect(queuedResearch).toContainEqual({ fundManagerId: acumen!.id, isPriority: false })
+        // Spider finds wait for someone's approval before they are researched.
+        expect(acumen).toMatchObject({ approval_status: 'pending', research_status: 'awaiting_approval' })
+        expect(queuedResearch).not.toContainEqual(expect.objectContaining({ fundManagerId: acumen!.id }))
     })
 
     it('never records a rejected value again, and supersedes old values', async () => {

@@ -150,6 +150,7 @@ watch(
 const isSavingTeam = ref(false)
 const isResearching = ref(false)
 const isArchiving = ref(false)
+const isApproving = ref(false)
 const busyFindingId = ref<string | null>(null)
 
 /**
@@ -270,6 +271,23 @@ async function toggleArchived() {
 }
 
 /**
+ * Approve a fund the spider found: it joins the list, board and map, and its research is queued.
+ *
+ * @returns Resolves once done.
+ */
+async function approveFund() {
+    isApproving.value = true
+    try {
+        fund.value = await api<FundDetail>({ path: `/funds/${fundId.value}/approve`, method: 'POST' })
+        toast.add({ title: 'Fund approved', description: 'Its research is queued.', color: 'success' })
+    } catch (error) {
+        toast.add({ title: apiErrorMessage({ error }), color: 'error' })
+    } finally {
+        isApproving.value = false
+    }
+}
+
+/**
  * Reject a wrong finding; the AI won't record it again.
  *
  * @param finding - The finding.
@@ -352,6 +370,24 @@ async function rejectFinding(finding: FundFinding) {
                     icon="i-lucide-archive"
                     title="Archived"
                     description="This fund is hidden from the Funds list and map, and isn't researched. Restore it to bring it back."
+                />
+                <UAlert
+                    v-else-if="fund.approval_status === 'pending'"
+                    color="warning"
+                    variant="subtle"
+                    icon="i-lucide-hourglass"
+                    title="Pending approval"
+                    description="The spider found this lender. It isn't researched or shown on the board or map until someone approves it. Archive it if it's outside Earth Bank's focus."
+                    :actions="[
+                        {
+                            label: 'Approve',
+                            icon: 'i-lucide-check',
+                            variant: 'solid',
+                            color: 'primary',
+                            loading: isApproving,
+                            onClick: approveFund,
+                        },
+                    ]"
                 />
                 <UCard>
                     <template #header>

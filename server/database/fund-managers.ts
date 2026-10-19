@@ -2,7 +2,7 @@ import type { Prisma } from '#server/generated/prisma/client.ts'
 import { db } from '#server/utils/db.ts'
 import { newId } from '#server/utils/ids.ts'
 import type { FundResearchValues } from '#server/utils/funds/research-values.ts'
-import type { FundOrigin, FundResearchStatus } from '#shared/constants/funds.ts'
+import type { FundApprovalStatus, FundOrigin, FundResearchStatus } from '#shared/constants/funds.ts'
 import { GLOBAL_FOCUS } from '#shared/constants/regions.ts'
 import { countriesInFocus } from '#shared/utils/geo-focus.ts'
 
@@ -31,6 +31,7 @@ export type FundListFilters = {
     ticketFit?: string
     researchStatus?: string
     origin?: string
+    approvalStatus?: FundApprovalStatus
     includeArchived?: boolean
     limit: number
 }
@@ -46,6 +47,8 @@ export type FundListFilters = {
  * @param input.discoveryContext - How the fund came up, or a region hint.
  * @param input.origin - How it got onto the list.
  * @param input.discoveredFromId - The fund whose research turned it up, if any.
+ * @param input.approvalStatus - `pending` waits for someone to approve it before any research.
+ * @param input.approvedById - Who added it, when it is approved on creation.
  * @param input.now - Creation time (also when research was queued).
  * @returns The created row.
  */
@@ -58,6 +61,8 @@ export function createFundManagerRow({
     discoveryContext = null,
     origin,
     discoveredFromId,
+    approvalStatus,
+    approvedById = null,
     now,
 }: {
     name: string
@@ -68,8 +73,11 @@ export function createFundManagerRow({
     discoveryContext?: string | null
     origin: FundOrigin
     discoveredFromId: string | null
+    approvalStatus: FundApprovalStatus
+    approvedById?: string | null
     now: Date
 }) {
+    const isApproved = approvalStatus === 'approved'
     return db().fundManager.create({
         data: {
             id: newId({ kind: 'fundManager', now: now.getTime() }),
@@ -81,8 +89,11 @@ export function createFundManagerRow({
             discovery_context: discoveryContext,
             origin,
             discovered_from_id: discoveredFromId,
-            research_status: 'queued',
-            research_queued_at: now,
+            approval_status: approvalStatus,
+            approved_at: isApproved ? now : null,
+            approved_by_id: isApproved ? approvedById : null,
+            research_status: isApproved ? 'queued' : 'awaiting_approval',
+            research_queued_at: isApproved ? now : null,
         },
     })
 }
@@ -96,7 +107,7 @@ export function createFundManagerRow({
 export function findFundManager({ fundManagerId }: { fundManagerId: string }) {
     return db().fundManager.findUnique({
         where: { id: fundManagerId },
-        include: { owner: true, discovered_from: true },
+        include: { owner: true, approved_by: true, discovered_from: true },
     })
 }
 
@@ -159,6 +170,7 @@ export async function listFundManagers({
     ticketFit,
     researchStatus,
     origin,
+    approvalStatus,
     includeArchived,
     limit,
 }: FundListFilters) {
@@ -217,6 +229,7 @@ export async function listFundManagers({
             ...(requireLocalCurrency ? { lends_local_currency: true } : {}),
             research_status: researchStatus,
             origin,
+            approval_status: approvalStatus,
             archived_at: includeArchived ? undefined : null,
         },
         include: FUND_LIST_INCLUDE,
@@ -325,6 +338,42 @@ export function countActiveFundManagers() {
 }
 
 /**
+ * How many funds the spider found are waiting for someone to approve or archive them.
+ *
+ * @returns The count.
+ */
+export function countPendingFundManagers() {
+    return db().fundManager.count({ where: { archived_at: null, approval_status: 'pending' } })
+}
+
+/**
+ * Mark a pending fund approved.
+ *
+ * Only a pending fund changes, so two people approving at once both see it approved and it's
+ * recorded once.
+ *
+ * @param input.fundManagerId - The fund's id.
+ * @param input.approvedById - Who approved it.
+ * @param input.now - Approval time.
+ * @returns Whether this call approved it (false when it was already approved).
+ */
+export async function approveFundManager({
+    fundManagerId,
+    approvedById,
+    now,
+}: {
+    fundManagerId: string
+    approvedById: string
+    now: Date
+}) {
+    const { count } = await db().fundManager.updateMany({
+        where: { id: fundManagerId, approval_status: 'pending' },
+        data: { approval_status: 'approved', approved_at: now, approved_by_id: approvedById },
+    })
+    return count > 0
+}
+
+/**
  * Count funds per research status.
  *
  * @returns Status → count.
@@ -353,6 +402,7 @@ export async function listFundsNeedingResearch({ staleBefore, limit }: { staleBe
     const rows = await db().fundManager.findMany({
         where: {
             archived_at: null,
+            approval_status: 'approved',
             OR: [
                 { research_status: 'skipped' },
                 {

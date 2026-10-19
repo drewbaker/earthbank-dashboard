@@ -22,7 +22,10 @@ export const GLOSSARY = {
     finding_confidence: "How sure the AI was. Findings below the confidence floor (Settings → Research) aren't kept.",
     working_capital_loans:
         'Largest known working-capital loan: from published deals, else the top of their check size.',
-    fund_spider: 'New lenders found from team work history, co-lenders and DFI lists are added and researched.',
+    fund_spider:
+        'New lenders found from team work history, co-lenders and DFI lists wait as pending until someone approves them; then they are researched.',
+    fund_approval:
+        "Spider finds wait here so nobody pays to research a lender outside Earth Bank's focus (a local development corporation, say). Approve to add it to the list and research it; archive to drop it for good.",
     ticket_fit:
         'Their check sizes against our $500K–$5M: Fits covers most of it, Partly overlaps it, Outside misses it.',
     research_sources:

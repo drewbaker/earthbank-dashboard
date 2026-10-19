@@ -64,6 +64,7 @@ model User {
     knowledge_sources   KnowledgeSource[]
     share_links         ShareLink[]
     owned_fund_managers FundManager[]
+    approved_fund_managers FundManager[] @relation("fund_approval")
     rejected_findings   FundFinding[]
     diligence_answers   FundDiligenceAnswer[]
     fund_notes          FundNote[]
@@ -643,6 +644,11 @@ model FundManager {
     website_domain     String?   @unique
     // The fund's LinkedIn company page (given when added, or found by research).
     linkedin_url       String?
+    // pending | approved. Funds the spider finds wait as pending (not researched, not on the board or
+    // map) until someone approves them; funds people add are approved.
+    approval_status    String    @default("approved")
+    approved_at        DateTime?
+    approved_by_id     String?
     // new_addition | sourced | in_diligence | shortlisted | passed
     stage              String    @default("new_addition")
     // FUND_FIT_TAGS keys.
@@ -700,6 +706,7 @@ model FundManager {
     updated_at DateTime @updatedAt
 
     owner             User?                    @relation(fields: [owner_id], references: [id], onDelete: SetNull)
+    approved_by       User?                    @relation("fund_approval", fields: [approved_by_id], references: [id], onDelete: SetNull)
     discovered_from   FundManager?             @relation("fund_discovery", fields: [discovered_from_id], references: [id], onDelete: SetNull)
     discovered        FundManager[]            @relation("fund_discovery")
     findings          FundFinding[]
@@ -711,6 +718,7 @@ model FundManager {
     public_records    PublicInvestmentRecord[]
 
     @@index([stage])
+    @@index([approval_status])
     @@index([research_status])
     @@map("fund_manager")
 }

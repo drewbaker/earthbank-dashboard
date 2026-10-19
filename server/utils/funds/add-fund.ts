@@ -8,7 +8,9 @@ import { canonicalLinkedinUrl, organizationNameKey, websiteDomain } from '#share
  * Put a lender on the list (unless it's already there) and queue its research.
  *
  * Funds are matched by normalized name or website domain, so "Iungo Capital Ltd" and
- * iungocapital.com don't create a second profile.
+ * iungocapital.com don't create a second profile. Funds the spider finds go in as pending and aren't
+ * researched until someone approves them (many turn out to be local lenders outside Earth Bank's
+ * focus); funds people add or the seed list holds are approved and queued at once.
  *
  * @param input.name - Display name.
  * @param input.websiteUrl - Website, if known.
@@ -16,6 +18,7 @@ import { canonicalLinkedinUrl, organizationNameKey, websiteDomain } from '#share
  * @param input.discoveryContext - How the fund came up or a region hint, used to find the right website.
  * @param input.origin - How it got onto the list.
  * @param input.discoveredFromId - The fund whose research turned it up, if any.
+ * @param input.addedById - The team member who added it by hand, if any (recorded as its approver).
  * @param input.now - Current time.
  * @returns The fund row and whether it was newly created.
  */
@@ -26,6 +29,7 @@ export async function addFund({
     discoveryContext = null,
     origin,
     discoveredFromId = null,
+    addedById = null,
     now,
 }: {
     name: string
@@ -34,6 +38,7 @@ export async function addFund({
     discoveryContext?: string | null
     origin: FundOrigin
     discoveredFromId?: string | null
+    addedById?: string | null
     now: Date
 }) {
     const nameKey = organizationNameKey({ name })
@@ -51,9 +56,23 @@ export async function addFund({
         discoveryContext: discoveryContext?.slice(0, 500) ?? null,
         origin,
         discoveredFromId,
+        approvalStatus: needsApproval({ origin }) ? 'pending' : 'approved',
+        approvedById: addedById,
         now,
     })
     await linkOrganizationToFund({ nameKey, fundManagerId: fund.id })
-    await enqueueFundResearch({ fundManagerId: fund.id, isPriority: isPriorityOrigin({ origin }) })
+    if (fund.approval_status === 'approved') {
+        await enqueueFundResearch({ fundManagerId: fund.id, isPriority: isPriorityOrigin({ origin }) })
+    }
     return { fund, isNew: true }
+}
+
+/**
+ * Whether a fund that got onto the list this way waits for someone's approval before research.
+ *
+ * @param input.origin - How it got onto the list.
+ * @returns True for funds the spider found.
+ */
+export function needsApproval({ origin }: { origin: FundOrigin }) {
+    return origin.startsWith('spider_')
 }

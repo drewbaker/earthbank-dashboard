@@ -48,7 +48,12 @@ watch(
     { deep: true },
 )
 
-const apiQuery = computed(() => fundFiltersToApiQuery({ filters: debouncedFilters.value, today: localToday() }))
+const apiQuery = computed(() => ({
+    ...fundFiltersToApiQuery({ filters: debouncedFilters.value, today: localToday() }),
+    approval_status: 'approved',
+}))
+// Pending funds haven't been researched, so only the search applies to them (research filters would hide them all).
+const pendingQuery = computed(() => ({ q: debouncedFilters.value.q.trim() || undefined, approval_status: 'pending' }))
 
 const {
     data: fundList,
@@ -57,11 +62,19 @@ const {
 } = await useAsyncData('funds.list', () => api<FundList>({ path: '/funds', query: apiQuery.value }), {
     watch: [apiQuery],
 })
+const {
+    data: pendingList,
+    refresh: refreshPending,
+    status: pendingStatus,
+} = await useAsyncData('funds.pending', () => api<FundList>({ path: '/funds', query: pendingQuery.value }), {
+    watch: [pendingQuery],
+})
 const { data: researchStatus, refresh: refreshStatus } = await useAsyncData('funds.research-status', () =>
     api<FundResearchStatus>({ path: '/fund-research/status' }),
 )
 
 const funds = computed(() => fundList.value?.data ?? [])
+const pendingFunds = computed(() => pendingList.value?.data ?? [])
 const isCreateOpen = ref(false)
 const isTogglingSpider = ref(false)
 
@@ -312,6 +325,15 @@ async function toggleSpider() {
 }
 
 /**
+ * Reload both lists and the counts after a pending fund was approved or archived.
+ *
+ * @returns Resolves once reloaded.
+ */
+async function refreshAfterDecision() {
+    await Promise.all([refreshFunds(), refreshPending(), refreshStatus()])
+}
+
+/**
  * Open a newly added fund.
  *
  * @param fund - The fund.
@@ -363,7 +385,10 @@ async function openCreatedFund(fund: FundDetail) {
                             {{ researchStatus.funds
                             }}<span class="text-base font-normal text-muted"> / {{ researchStatus.max_funds }}</span>
                         </p>
-                        <p class="text-xs text-muted">Spider {{ researchStatus.spider_enabled ? 'on' : 'paused' }}</p>
+                        <p class="text-xs text-muted">
+                            Spider {{ researchStatus.spider_enabled ? 'on' : 'paused' }} ·
+                            {{ researchStatus.pending_approval }} pending approval
+                        </p>
                     </UCard>
                     <UCard :ui="{ body: 'p-4 sm:p-4' }">
                         <p class="text-xs text-muted">Researched</p>
@@ -403,22 +428,28 @@ async function openCreatedFund(fund: FundDetail) {
 
                 <FundsFilterBar v-model="filters" />
 
-                <UTable
-                    v-if="view === 'table'"
-                    :data="funds"
-                    v-model:sorting="sorting"
-                    :columns="columns"
-                    :loading="listStatus === 'pending'"
-                    class="rounded-md border border-default"
-                >
-                    <template #empty>
-                        <UEmpty
-                            icon="i-lucide-landmark"
-                            title="No funds match"
-                            description="Try fewer filters, or add a fund."
-                        />
-                    </template>
-                </UTable>
+                <template v-if="view === 'table'">
+                    <UTable
+                        :data="funds"
+                        v-model:sorting="sorting"
+                        :columns="columns"
+                        :loading="listStatus === 'pending'"
+                        class="rounded-md border border-default"
+                    >
+                        <template #empty>
+                            <UEmpty
+                                icon="i-lucide-landmark"
+                                title="No funds match"
+                                description="Try fewer filters, or add a fund."
+                            />
+                        </template>
+                    </UTable>
+                    <FundsPendingList
+                        :funds="pendingFunds"
+                        :is-loading="pendingStatus === 'pending'"
+                        @changed="refreshAfterDecision"
+                    />
+                </template>
                 <FundsBoard v-else-if="view === 'board'" :funds="funds" @move="moveFund" />
                 <FundsCoverageMap v-else :funds="funds" />
             </div>

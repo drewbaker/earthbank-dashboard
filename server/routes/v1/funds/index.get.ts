@@ -37,6 +37,12 @@ defineRouteMeta({
             { name: 'ticket_fit', in: 'query', schema: { type: 'string', enum: ['fits', 'partly', 'outside'] } },
             { name: 'research_status', in: 'query', schema: { type: 'string' } },
             { name: 'origin', in: 'query', schema: { type: 'string' } },
+            {
+                name: 'approval_status',
+                in: 'query',
+                description: 'Pending funds were found by the spider and wait for someone to approve them.',
+                schema: { type: 'string', enum: ['pending', 'approved'] },
+            },
             { name: 'include_archived', in: 'query', schema: { type: 'boolean' } },
             { name: 'limit', in: 'query', schema: { type: 'integer', maximum: 1000 } },
         ],
@@ -73,6 +79,7 @@ export default defineApiHandler(async event => {
         ticketFit: query.ticket_fit,
         researchStatus: query.research_status,
         origin: query.origin,
+        approvalStatus: query.approval_status,
         includeArchived: query.include_archived,
         limit: query.limit,
     })

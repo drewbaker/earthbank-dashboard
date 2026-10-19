@@ -13,6 +13,7 @@ import { centsToNumber, toDateOnly, toIsoDateTime } from '#server/utils/dates.ts
 import { serializeUserSummary } from '#server/utils/serializers/common.ts'
 import type {
     AffiliationRelation,
+    FundApprovalStatus,
     FundDiligenceQuestion,
     FundFitTag,
     FundOrigin,
@@ -63,6 +64,8 @@ export function serializeFund({ fund }: { fund: FundListRow }): Fund {
         stage: fund.stage as FundStage,
         fit_tags: stringArray({ value: fund.fit_tags }) as FundFitTag[],
         origin: fund.origin as FundOrigin,
+        approval_status: fund.approval_status as FundApprovalStatus,
+        discovery_context: fund.discovery_context,
         owner: serializeUserSummary({ user: fund.owner }),
         research_status: fund.research_status as FundResearchStatus,
         researched_at: toIsoDateTime({ date: fund.researched_at }),
@@ -115,7 +118,7 @@ export function serializeFundDetail({
     fund: FundListRow & {
         notes: string | null
         research_error: string | null
-        discovery_context: string | null
+        approved_by: UserRow | null
         discovered_from: { id: string; name: string } | null
     }
     findings: FundFindingRow[]
@@ -128,7 +131,8 @@ export function serializeFundDetail({
         ...serializeFund({ fund }),
         notes: fund.notes,
         research_error: fund.research_error,
-        discovery_context: fund.discovery_context,
+        approved_at: toIsoDateTime({ date: fund.approved_at }),
+        approved_by: serializeUserSummary({ user: fund.approved_by }),
         discovered_from: fund.discovered_from ? { id: fund.discovered_from.id, name: fund.discovered_from.name } : null,
         findings: findings.map(finding => serializeFundFinding({ finding })),
         people: people.map(person => serializeFundPerson({ person })),
