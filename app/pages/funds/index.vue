@@ -92,6 +92,7 @@ const pendingFunds = computed(() => pendingList.value?.data ?? [])
 const archivedFunds = computed(() => archivedList.value?.data ?? [])
 const isCreateOpen = ref(false)
 const isTogglingSpider = ref(false)
+const isRetryingFailed = ref(false)
 
 const viewItems = [
     { label: 'Table', value: 'table', icon: 'i-lucide-table' },
@@ -357,6 +358,25 @@ async function refreshAfterDecision() {
 }
 
 /**
+ * Queue research again for every fund whose research failed (e.g. after the AI account ran out of credit).
+ *
+ * @returns Resolves once queued and the counts reloaded.
+ */
+async function retryFailedResearch() {
+    isRetryingFailed.value = true
+    try {
+        const before = researchStatus.value?.failed ?? 0
+        researchStatus.value = await api<FundResearchStatus>({ path: '/fund-research/retry-failed', method: 'POST' })
+        toast.add({ title: `Research queued again for ${before} fund${before === 1 ? '' : 's'}`, color: 'success' })
+        await refreshFunds()
+    } catch (error) {
+        toast.add({ title: 'Not queued', description: apiErrorMessage({ error }), color: 'error' })
+    } finally {
+        isRetryingFailed.value = false
+    }
+}
+
+/**
  * Open a newly added fund.
  *
  * @param fund - The fund.
@@ -419,6 +439,16 @@ async function openCreatedFund(fund: FundDetail) {
                         <p class="text-xs text-muted">
                             {{ researchStatus.failed }} failed · {{ researchStatus.skipped }} paused
                         </p>
+                        <UButton
+                            v-if="researchStatus.failed > 0"
+                            icon="i-lucide-rotate-ccw"
+                            label="Retry failed"
+                            size="xs"
+                            color="neutral"
+                            class="mt-1"
+                            :loading="isRetryingFailed"
+                            @click="retryFailedResearch"
+                        />
                     </UCard>
                     <UCard :ui="{ body: 'p-4 sm:p-4' }">
                         <p class="text-xs text-muted">In the queue</p>

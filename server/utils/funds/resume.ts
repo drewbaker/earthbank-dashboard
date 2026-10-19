@@ -1,7 +1,9 @@
 import {
     isPriorityOrigin,
+    listFailedFundResearch,
     listFundsNeedingResearch,
     listUnscreenedPendingFunds,
+    setFundResearchStatus,
 } from '#server/database/fund-managers.ts'
 import { config } from '#server/utils/config.ts'
 import { readFundResearchSettings, readMonthResearchSpend } from '#server/utils/funds/research-settings.ts'
@@ -18,7 +20,8 @@ const STALE_AFTER_MS = 60 * 60 * 1000
 const MAX_PER_RUN = 200
 
 /**
- * Queue research again for funds whose job was lost or that were paused by the budget.
+ * Queue research again for funds whose job was lost, that were paused by the budget, or that failed
+ * because the AI account ran out of credit (or was overloaded or rate limited).
  *
  * Runs hourly and at startup. Does nothing without an API key or when this month's budget is spent;
  * jobs are unique per fund, so a fund already waiting isn't queued twice. Also queues the AI screen of
@@ -42,13 +45,38 @@ export async function resumeFundResearch({ now }: { now: Date }) {
     if ((await listUnscreenedPendingFunds({ limit: 1 })).length > 0) {
         await enqueuePendingFundScreening()
     }
+    return requeueFundResearch({ funds, now })
+}
+
+/**
+ * Queue research again for every approved fund whose research failed, whatever the reason ("Retry
+ * failed research" on the Funds page).
+ *
+ * @param input.now - Current time.
+ * @returns How many funds were queued.
+ */
+export async function retryFailedFundResearch({ now }: { now: Date }) {
+    return requeueFundResearch({ funds: await listFailedFundResearch(), now })
+}
+
+/**
+ * Queue research for some funds, each on its origin's queue, and show them as waiting.
+ *
+ * @param input.funds - Fund ids and origins.
+ * @param input.now - Current time.
+ * @returns How many were queued (a fund whose job is already waiting isn't queued twice).
+ */
+async function requeueFundResearch({ funds, now }: { funds: { id: string; origin: string }[]; now: Date }) {
     let queued = 0
     for (const fund of funds) {
         const result = await enqueueFundResearch({
             fundManagerId: fund.id,
             isPriority: isPriorityOrigin({ origin: fund.origin }),
         })
-        queued += result === 'queued' ? 1 : 0
+        if (result === 'queued') {
+            await setFundResearchStatus({ fundManagerId: fund.id, status: 'queued', now })
+            queued += 1
+        }
     }
     return queued
 }

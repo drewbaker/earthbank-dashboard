@@ -764,7 +764,7 @@ Declared in `nitro.scheduledTasks` (cron, UTC; comment any timezone math). Each 
 | `mail-sync` | every 15 min | Enqueue one `SyncMailboxJob` per connected mailbox |
 | `knowledge-sync` | nightly 04:30 | Enqueue one `SyncKnowledgeJob` per connected Drive folder |
 | `task-digest` | weekdays 13:00 UTC (morning US time) | Optional: email each user their tasks due in the next 7 days |
-| `fund-research-resume` | hourly :40 | Re-queue fund research lost in a restart or paused by the budget (also runs at startup, after seeding) |
+| `fund-research-resume` | hourly :40 | Re-queue fund research lost in a restart, paused by the budget, or failed because the AI account ran out of credit, was overloaded or rate limited (also runs at startup, after seeding); other failures wait for "Retry failed" on the Funds page (`POST /v1/fund-research/retry-failed`) |
 | `public-investments-sync` | Sundays 05:00 UTC | Enqueue one `SyncPublicInvestmentsJob` per public DFI/government list |
 
 Fund research has two queues: `research` (seeds, funds the team added, "Research again") runs ahead of `research-spider` (spidered funds and public lists); each has concurrency 1.

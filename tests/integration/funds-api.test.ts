@@ -424,3 +424,36 @@ describe('approving funds the spider found', () => {
         expect(queuedResearch).toEqual([])
     })
 })
+
+describe('resuming research after failures', () => {
+    it('retries research that failed because the AI account ran out of credit, and the rest on request', async () => {
+        const { listFundsNeedingResearch, setFundResearchStatus, updateFundManagerColumns } =
+            await import('#server/database/fund-managers.ts')
+        const { retryFailedFundResearch } = await import('#server/utils/funds/resume.ts')
+        const now = new Date('2026-10-19T00:00:00Z')
+        // Nothing else is waiting, so only the failures below show up.
+        for (const fundManagerId of Object.values(ids)) {
+            await updateFundManagerColumns({ fundManagerId, data: { research_status: 'done' } })
+        }
+        await setFundResearchStatus({
+            fundManagerId: ids.big!,
+            status: 'failed',
+            error: '400 {"type":"error","error":{"message":"Your credit balance is too low to access the Anthropic API."}}',
+            now,
+        })
+        await setFundResearchStatus({
+            fundManagerId: ids.small!,
+            status: 'failed',
+            error: 'Unexpected response from the research model',
+            now,
+        })
+        const needing = await listFundsNeedingResearch({ staleBefore: now, limit: 100 })
+        expect(needing.map(fund => fund.id)).toEqual([ids.big])
+
+        queuedResearch.length = 0
+        expect(await retryFailedFundResearch({ now })).toBe(2)
+        expect(queuedResearch.map(job => job.fundManagerId).sort()).toEqual([ids.big, ids.small].sort())
+        const status = await request({ path: '/v1/fund-research/status' })
+        expect(status.json).toMatchObject({ failed: 0 })
+    })
+})

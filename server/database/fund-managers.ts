@@ -506,8 +506,13 @@ export async function countFundsByResearchStatus() {
     >
 }
 
+// Research errors that come from the AI account (credit ran out, billing, overload or rate limits)
+// rather than the fund itself; research that failed with one of these is retried automatically.
+const ACCOUNT_ERROR_PATTERNS = ['credit balance', 'billing', 'insufficient', 'rate_limit', 'overloaded', '529']
+
 /**
- * Funds whose research should be (re)queued: waiting, stuck running since before a cutoff, or paused.
+ * Funds whose research should be (re)queued: waiting, stuck running since before a cutoff, paused, or
+ * failed because of the AI account (out of credit, billing, overload) rather than the fund.
  *
  * Seeds and team-added funds come first, then the rest in the order they were found.
  *
@@ -523,6 +528,10 @@ export async function listFundsNeedingResearch({ staleBefore, limit }: { staleBe
             OR: [
                 { research_status: 'skipped' },
                 {
+                    research_status: 'failed',
+                    OR: ACCOUNT_ERROR_PATTERNS.map(pattern => ({ research_error: { contains: pattern } })),
+                },
+                {
                     research_status: { in: ['queued', 'running'] },
                     OR: [{ research_queued_at: null }, { research_queued_at: { lt: staleBefore } }],
                 },
@@ -535,6 +544,19 @@ export async function listFundsNeedingResearch({ staleBefore, limit }: { staleBe
     return rows.sort(
         (a, b) => Number(isPriorityOrigin({ origin: b.origin })) - Number(isPriorityOrigin({ origin: a.origin })),
     )
+}
+
+/**
+ * Approved funds whose research failed, for "Retry failed research".
+ *
+ * @returns Fund ids and origins.
+ */
+export function listFailedFundResearch() {
+    return db().fundManager.findMany({
+        where: { archived_at: null, approval_status: 'approved', research_status: 'failed' },
+        select: { id: true, origin: true },
+        orderBy: { id: 'asc' },
+    })
 }
 
 /**

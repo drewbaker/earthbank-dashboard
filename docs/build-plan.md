@@ -280,6 +280,7 @@ Status: built on the `funds-research` branch (requested Oct 16, 2026). Replaces 
 - [x] **Import notes** on the fund page: paste call notes or link a Google Doc; the AI fills research fields, people and diligence from it, each quoted and credited "Note from {author} on {time}"; people's existing answers kept
 - [x] Archive / Restore button on the fund page header
 - [x] **Pending approval**: spider finds wait under the Funds table (not researched, not on the board or map) until someone approves or archives them; sidebar says "Funding Pipeline"
+- [x] Research resumes on its own after the AI account runs out of credit (hourly); **Retry failed** on the Funds page re-queues every other failure
 - [x] **Fit signals**: the team's six criteria (raised funds, 3+ years, $10M+ managed, working capital / credit lines / term debt, LPs, target sectors) worked out from research for every fund; Fit column, filter and checklist; new sectors and the credit-line loan type; research and the spider screen prioritise them
 - [x] **AI screen of spider finds**: the lender classifier also judges scope and climate/impact focus, learns from the team's approvals and archivals, and adds lenders outside Earth Bank's focus as archived with its reason (Archived list on Funds; restore puts them back in pending); existing pending funds screened once; US CDFI, SBA and USDA lists no longer add funds
 - [ ] Add `FIRECRAWL_API_KEY` in the Render dashboard
