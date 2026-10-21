@@ -123,7 +123,13 @@ export function createFundManagerRow({
 export function findFundManager({ fundManagerId }: { fundManagerId: string }) {
     return db().fundManager.findUnique({
         where: { id: fundManagerId },
-        include: { owner: true, approved_by: true, discovered_from: true },
+        include: {
+            owner: true,
+            approved_by: true,
+            last_email_user: true,
+            activity_confirmed_by: true,
+            discovered_from: true,
+        },
     })
 }
 
@@ -365,6 +371,65 @@ export function countActiveFundManagers() {
  */
 export function countPendingFundManagers() {
     return db().fundManager.count({ where: { archived_at: null, approval_status: 'pending' } })
+}
+
+/**
+ * Funds whose email activity is worth checking: approved, not archived, with a website domain.
+ *
+ * @returns Id, domain and the newest email date already known per fund.
+ */
+export function listFundsForEmailActivity() {
+    return db().fundManager.findMany({
+        where: { archived_at: null, approval_status: 'approved', website_domain: { not: null } },
+        select: { id: true, website_domain: true, last_email_on: true },
+        orderBy: { id: 'asc' },
+    })
+}
+
+/**
+ * Store the newest email with a fund's domain found in a connected Gmail.
+ *
+ * @param input.fundManagerId - The fund.
+ * @param input.lastEmailOn - When that email was sent.
+ * @param input.userId - Whose mailbox it was in.
+ * @returns The updated row.
+ */
+export function storeFundLastEmail({
+    fundManagerId,
+    lastEmailOn,
+    userId,
+}: {
+    fundManagerId: string
+    lastEmailOn: Date
+    userId: string
+}) {
+    return db().fundManager.update({
+        where: { id: fundManagerId },
+        data: { last_email_on: lastEmailOn, last_email_user_id: userId },
+    })
+}
+
+/**
+ * Record that a team member confirmed a fund is still operating.
+ *
+ * @param input.fundManagerId - The fund.
+ * @param input.userId - Who confirmed it.
+ * @param input.now - When.
+ * @returns The updated row.
+ */
+export function confirmFundActivity({
+    fundManagerId,
+    userId,
+    now,
+}: {
+    fundManagerId: string
+    userId: string
+    now: Date
+}) {
+    return db().fundManager.update({
+        where: { id: fundManagerId },
+        data: { activity_confirmed_at: now, activity_confirmed_by_id: userId },
+    })
 }
 
 /**

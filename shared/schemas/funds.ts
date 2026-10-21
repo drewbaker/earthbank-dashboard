@@ -167,6 +167,9 @@ export const Fund = z.object({
     last_fund_close_on: DateOnly.nullable(),
     // The newest dated public activity research found; none in 12 months suggests it may have closed.
     last_public_activity_on: DateOnly.nullable(),
+    // The newest of research's activity, the latest email with the fund and the team's confirmation.
+    last_activity_on: DateOnly.nullable(),
+    last_activity_source: z.enum(['research', 'email', 'team']).nullable(),
     check_min_cents: Cents.nullable(),
     check_max_cents: Cents.nullable(),
     has_working_capital_loans: z.boolean(),
@@ -261,6 +264,11 @@ export const FundDetail = Fund.extend({
     research_error: z.string().nullable(),
     approved_at: IsoDateTime.nullable(),
     approved_by: UserSummary.nullable(),
+    // The newest email with the fund's domain in a connected Gmail (date only), and whose inbox it's in.
+    last_email_on: DateOnly.nullable(),
+    last_email_user: UserSummary.nullable(),
+    activity_confirmed_at: IsoDateTime.nullable(),
+    activity_confirmed_by: UserSummary.nullable(),
     discovered_from: z.object({ id: z.string(), name: z.string() }).nullable(),
     findings: z.array(FundFinding),
     people: z.array(FundPerson),

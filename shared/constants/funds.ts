@@ -192,7 +192,7 @@ export const FUND_FIT_SIGNAL_LABELS: Record<FundFitSignal, string> = {
     working_capital_or_term_debt: 'Working capital, credit lines or term debt',
     has_lps: 'Raised from limited partners',
     target_sectors: 'Lends in our sectors',
-    recently_active: 'Public activity in the last 12 months',
+    recently_active: 'Active in the last 12 months',
 }
 
 // Managing this much (AUM, or one fund's size) is a good sign, though not a hard rule.

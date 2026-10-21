@@ -36,12 +36,15 @@ export async function fillMissingFitSignals() {
  * @returns The stored fund row.
  */
 export async function refreshFundResearchValues({ fundManagerId }: { fundManagerId: string }) {
-    const [findings, coverage, answers] = await Promise.all([
+    const [findings, coverage, answers, row] = await Promise.all([
         listFundFindings({ fundManagerId }),
         readFundTeamCoverage({ fundManagerId }),
         listFundDiligenceAnswers({ fundManagerId }),
+        findFundManager({ fundManagerId }),
     ])
     const values = deriveFundResearchValues({
+        lastEmailOn: row?.last_email_on ?? null,
+        activityConfirmedAt: row?.activity_confirmed_at ?? null,
         findings: findings.map(finding => ({
             field: finding.field as FundResearchField,
             value: finding.value,

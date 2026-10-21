@@ -21,7 +21,7 @@ import { displayUrl } from '#shared/utils/display-url.ts'
 import { geoFocusOptions } from '#shared/utils/geo-focus.ts'
 import { apiErrorMessage, useApi } from '~/composables/useApi.ts'
 import { NO_OWNER, ownerIdFromSelection, usePipelineReference } from '~/composables/usePipelineReference.ts'
-import { formatDateTime, formatMoney } from '~/utils/format.ts'
+import { formatDate, formatDateTime, formatMoney } from '~/utils/format.ts'
 
 const route = useRoute()
 const api = useApi()
@@ -152,6 +152,25 @@ const isSavingTeam = ref(false)
 const isResearching = ref(false)
 const isArchiving = ref(false)
 const isApproving = ref(false)
+const isConfirmingActive = ref(false)
+
+// Where the fund's activity comes from, one line each (research, email, the team).
+const activityDetails = computed(() => {
+    if (!fund.value) {
+        return []
+    }
+    const { last_public_activity_on, last_email_on, last_email_user, activity_confirmed_at, activity_confirmed_by } =
+        fund.value
+    return [
+        last_public_activity_on ? `Research: ${formatDate({ value: last_public_activity_on })}` : null,
+        last_email_on
+            ? `Email: ${formatDate({ value: last_email_on })}${last_email_user ? ` (${last_email_user.name}'s inbox)` : ''}`
+            : null,
+        activity_confirmed_at
+            ? `Confirmed active${activity_confirmed_by ? ` by ${activity_confirmed_by.name}` : ''} on ${formatDate({ value: activity_confirmed_at })}`
+            : null,
+    ].filter((line): line is string => line !== null)
+})
 const busyFindingId = ref<string | null>(null)
 
 /**
@@ -268,6 +287,23 @@ async function toggleArchived() {
         toast.add({ title: apiErrorMessage({ error }), color: 'error' })
     } finally {
         isArchiving.value = false
+    }
+}
+
+/**
+ * Record that the fund is still operating (counts as activity today, clearing "Possibly closed").
+ *
+ * @returns Resolves once saved.
+ */
+async function confirmStillActive() {
+    isConfirmingActive.value = true
+    try {
+        fund.value = await api<FundDetail>({ path: `/funds/${fundId.value}/confirm-active`, method: 'POST' })
+        toast.add({ title: 'Marked as still active', color: 'success' })
+    } catch (error) {
+        toast.add({ title: apiErrorMessage({ error }), color: 'error' })
+    } finally {
+        isConfirmingActive.value = false
     }
 }
 
@@ -471,8 +507,24 @@ async function rejectFinding(finding: FundFinding) {
                             </dd>
                         </div>
                         <div class="min-w-0 space-y-0.5">
-                            <dt class="text-muted">Last public activity <TermHint term="last_public_activity" /></dt>
-                            <dd><FundsLastActivity :last-activity-on="fund.last_public_activity_on" /></dd>
+                            <dt class="text-muted">Last activity <TermHint term="last_public_activity" /></dt>
+                            <dd class="space-y-0.5">
+                                <FundsLastActivity
+                                    :last-activity-on="fund.last_activity_on"
+                                    :source="fund.last_activity_source"
+                                />
+                                <p v-for="line in activityDetails" :key="line" class="text-xs text-muted">
+                                    {{ line }}
+                                </p>
+                                <UButton
+                                    label="Still active"
+                                    icon="i-lucide-badge-check"
+                                    size="xs"
+                                    color="neutral"
+                                    :loading="isConfirmingActive"
+                                    @click="confirmStillActive"
+                                />
+                            </dd>
                         </div>
                         <div class="min-w-0 space-y-0.5">
                             <dt class="text-muted">Found</dt>

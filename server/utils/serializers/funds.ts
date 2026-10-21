@@ -78,6 +78,8 @@ export function serializeFund({ fund }: { fund: FundListRow }): Fund {
         latest_fund_size_cents: centsToNumber({ cents: fund.latest_fund_size_cents }),
         last_fund_close_on: toDateOnly({ date: fund.last_fund_close_on }),
         last_public_activity_on: toDateOnly({ date: fund.last_public_activity_on }),
+        last_activity_on: toDateOnly({ date: fund.last_activity_on }),
+        last_activity_source: fund.last_activity_source as Fund['last_activity_source'],
         check_min_cents: centsToNumber({ cents: fund.check_min_cents }),
         check_max_cents: centsToNumber({ cents: fund.check_max_cents }),
         has_working_capital_loans: fund.has_working_capital_loans,
@@ -147,6 +149,8 @@ export function serializeFundDetail({
         notes: string | null
         research_error: string | null
         approved_by: UserRow | null
+        last_email_user: UserRow | null
+        activity_confirmed_by: UserRow | null
         discovered_from: { id: string; name: string } | null
     }
     findings: FundFindingRow[]
@@ -161,6 +165,10 @@ export function serializeFundDetail({
         research_error: fund.research_error,
         approved_at: toIsoDateTime({ date: fund.approved_at }),
         approved_by: serializeUserSummary({ user: fund.approved_by }),
+        last_email_on: toDateOnly({ date: fund.last_email_on }),
+        last_email_user: serializeUserSummary({ user: fund.last_email_user }),
+        activity_confirmed_at: toIsoDateTime({ date: fund.activity_confirmed_at }),
+        activity_confirmed_by: serializeUserSummary({ user: fund.activity_confirmed_by }),
         discovered_from: fund.discovered_from ? { id: fund.discovered_from.id, name: fund.discovered_from.name } : null,
         findings: findings.map(finding => serializeFundFinding({ finding })),
         people: people.map(person => serializeFundPerson({ person })),

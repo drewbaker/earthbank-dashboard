@@ -65,6 +65,8 @@ model User {
     share_links         ShareLink[]
     owned_fund_managers FundManager[]
     approved_fund_managers FundManager[] @relation("fund_approval")
+    activity_confirmed_fund_managers FundManager[] @relation("fund_activity_confirmation")
+    emailed_fund_managers FundManager[] @relation("fund_last_email")
     rejected_findings   FundFinding[]
     diligence_answers   FundDiligenceAnswer[]
     fund_notes          FundNote[]
@@ -713,6 +715,16 @@ model FundManager {
     // The newest dated public activity research found (news, deal, fund close, AUM or impact report,
     // conference, DFI record); none in 12 months suggests the fund may have closed.
     last_public_activity_on        DateTime?
+    // The newest email with the fund's website domain in a connected Gmail (date only; the email isn't
+    // read), and whose mailbox it was in.
+    last_email_on                  DateTime?
+    last_email_user_id             String?
+    // When a team member confirmed the fund is still operating ("Still active").
+    activity_confirmed_at          DateTime?
+    activity_confirmed_by_id       String?
+    // The newest of the three (research, email, confirmation) and which it was: research | email | team.
+    last_activity_on               DateTime?
+    last_activity_source           String?
     fit_signals_met                Int       @default(0)
     research_completeness          Int       @default(0)
     diligence_completeness         Int       @default(0)
@@ -722,6 +734,8 @@ model FundManager {
 
     owner             User?                    @relation(fields: [owner_id], references: [id], onDelete: SetNull)
     approved_by       User?                    @relation("fund_approval", fields: [approved_by_id], references: [id], onDelete: SetNull)
+    activity_confirmed_by User?                @relation("fund_activity_confirmation", fields: [activity_confirmed_by_id], references: [id], onDelete: SetNull)
+    last_email_user   User?                    @relation("fund_last_email", fields: [last_email_user_id], references: [id], onDelete: SetNull)
     discovered_from   FundManager?             @relation("fund_discovery", fields: [discovered_from_id], references: [id], onDelete: SetNull)
     discovered        FundManager[]            @relation("fund_discovery")
     findings          FundFinding[]

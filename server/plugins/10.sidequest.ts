@@ -2,7 +2,7 @@ import { defineNitroPlugin } from 'nitropack/runtime'
 import { config } from '#server/utils/config.ts'
 import { queueFirstPublicListSyncs, resumeFundResearch } from '#server/utils/funds/resume.ts'
 import { ensureSeedFunds } from '#server/utils/funds/seed.ts'
-import { enqueueBookkeepingSync } from '#server/utils/jobs/enqueue.ts'
+import { enqueueBookkeepingSync, enqueueFundEmailActivityCheck } from '#server/utils/jobs/enqueue.ts'
 import { ensureJobQueue, startJobWorkers, stopJobWorkers } from '#server/utils/jobs/sidequest.ts'
 
 export default defineNitroPlugin(async nitroApp => {
@@ -32,6 +32,8 @@ async function startFundResearch() {
     if (lists > 0) {
         console.info(`[research] queued a first read of ${lists} public investment lists`)
     }
+    // Recent email with funds counts as activity; check after each deploy as well as daily.
+    await enqueueFundEmailActivityCheck()
     const seeded = await ensureSeedFunds({ now: new Date() })
     if (seeded > 0) {
         console.info(`[research] added ${seeded} seed funds`)

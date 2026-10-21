@@ -66,6 +66,8 @@ export default defineNuxtConfig({
             '40 * * * *': ['fund-research-resume'],
             // Public DFI and government lists change slowly; read them weekly, Sunday 05:00 UTC.
             '0 5 * * 0': ['public-investments-sync'],
+            // Daily: recent email with a fund's domain counts as activity (06:15 UTC, before the US day).
+            '15 6 * * *': ['fund-email-activity'],
         },
         openAPI: {
             production: 'runtime',

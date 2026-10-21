@@ -1,4 +1,5 @@
 import { BackfillFunderJob } from '#root/jobs/backfill-funder.job.ts'
+import { CheckFundEmailActivityJob } from '#root/jobs/check-fund-email-activity.job.ts'
 import { CheckFundNamesJob } from '#root/jobs/check-fund-names.job.ts'
 import { ProcessForwardedEmailJob } from '#root/jobs/process-forwarded-email.job.ts'
 import { ResearchFundJob } from '#root/jobs/research-fund.job.ts'
@@ -174,6 +175,24 @@ export async function enqueueFundResearch({
                 .timeout(30 * 60 * 1000)
                 .unique({ withArgs: true })
                 .enqueue({ fundManagerId }),
+    })
+}
+
+/**
+ * Queue the daily check of connected Gmail for recent email with each fund (one job at a time).
+ *
+ * @returns `queued`, or `already_queued`.
+ */
+export async function enqueueFundEmailActivityCheck() {
+    await ensureJobQueue()
+    return queueOnce({
+        enqueue: () =>
+            Sidequest.build(CheckFundEmailActivityJob)
+                .queue('default')
+                .maxAttempts(2)
+                .timeout(30 * 60 * 1000)
+                .unique(true)
+                .enqueue(),
     })
 }
 

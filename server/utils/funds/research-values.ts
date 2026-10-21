@@ -49,8 +49,14 @@ export type FundResearchValues = {
     fit_signals: Record<FundFitSignal, FundFitSignalStatus>
     fit_signals_met: number
     last_public_activity_on: Date | null
+    // The newest of research's activity, the latest email with the fund, and the team's confirmation.
+    last_activity_on: Date | null
+    last_activity_source: FundActivitySource | null
     research_completeness: number
 }
+
+/** Where a fund's last activity came from. */
+export type FundActivitySource = 'research' | 'email' | 'team'
 
 /**
  * Work out a fund's sortable research values from its active findings.
@@ -62,6 +68,8 @@ export type FundResearchValues = {
  * @param input.findings - The fund's active findings.
  * @param input.hasPrincipals - Whether a principal is known.
  * @param input.hasWorkHistory - Whether any team work history is known.
+ * @param input.lastEmailOn - The newest email with the fund's domain in a connected Gmail, if any.
+ * @param input.activityConfirmedAt - When a team member confirmed the fund is still operating, if ever.
  * @param input.now - Current time (for how many years the fund has been going).
  * @returns The values to store.
  */
@@ -69,11 +77,15 @@ export function deriveFundResearchValues({
     findings,
     hasPrincipals,
     hasWorkHistory,
+    lastEmailOn = null,
+    activityConfirmedAt = null,
     now = new Date(),
 }: {
     findings: ActiveFinding[]
     hasPrincipals: boolean
     hasWorkHistory: boolean
+    lastEmailOn?: Date | null
+    activityConfirmedAt?: Date | null
     now?: Date
 }): FundResearchValues {
     const newestFirst = [...findings].sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
@@ -119,6 +131,13 @@ export function deriveFundResearchValues({
         ],
         now,
     })
+    const lastActivity = newestActivity({
+        activities: [
+            { source: 'research', on: lastPublicActivityOn },
+            { source: 'email', on: lastEmailOn },
+            { source: 'team', on: activityConfirmedAt },
+        ],
+    })
     const fitSignals = deriveFundFitSignals({
         hasFundRaises: fundRaises.some(raise => raise.close_type !== 'raising') || all('public_record').length > 0,
         hasLps: all('lp').length > 0,
@@ -128,7 +147,7 @@ export function deriveFundResearchValues({
         loanTypes: latest('loan_types') ? loanTypes : null,
         dealLoanTypes: deals.flatMap(deal => (deal.loan_type ? [deal.loan_type] : [])),
         sectors: latest('sectors') ? sectors : null,
-        lastPublicActivityOn,
+        lastActivityOn: lastActivity?.on ?? null,
         now,
     })
     return {
@@ -163,6 +182,8 @@ export function deriveFundResearchValues({
         fit_signals: fitSignals,
         fit_signals_met: Object.values(fitSignals).filter(status => status === 'met').length,
         last_public_activity_on: lastPublicActivityOn,
+        last_activity_on: lastActivity?.on ?? null,
+        last_activity_source: lastActivity?.source ?? null,
         research_completeness: researchCompleteness({ filledFields, hasPrincipals, hasWorkHistory }),
     }
 }
@@ -182,7 +203,7 @@ export function deriveFundResearchValues({
  * @param input.loanTypes - Loan types it lists, or null when unknown.
  * @param input.dealLoanTypes - Loan types of its published deals.
  * @param input.sectors - Sectors it lends in, or null when unknown.
- * @param input.lastPublicActivityOn - Its newest dated public activity, if research found any.
+ * @param input.lastActivityOn - Its newest activity (research, email or the team's confirmation), if any.
  * @param input.now - Current time.
  * @returns Each signal's status.
  */
@@ -195,7 +216,7 @@ export function deriveFundFitSignals({
     loanTypes,
     dealLoanTypes,
     sectors,
-    lastPublicActivityOn = null,
+    lastActivityOn = null,
     now,
 }: {
     hasFundRaises: boolean
@@ -206,7 +227,7 @@ export function deriveFundFitSignals({
     loanTypes: LoanType[] | null
     dealLoanTypes: LoanType[]
     sectors: FundSector[] | null
-    lastPublicActivityOn?: Date | null
+    lastActivityOn?: Date | null
     now: Date
 }): Record<FundFitSignal, FundFitSignalStatus> {
     const recentSince = new Date(now)
@@ -233,10 +254,26 @@ export function deriveFundFitSignals({
         }),
         // Nothing dated at all is unknown, not a sign of closing: research may have missed it.
         recently_active: signalStatus({
-            isKnown: lastPublicActivityOn !== null,
-            isMet: lastPublicActivityOn !== null && lastPublicActivityOn >= recentSince,
+            isKnown: lastActivityOn !== null,
+            isMet: lastActivityOn !== null && lastActivityOn >= recentSince,
         }),
     }
+}
+
+/**
+ * The newest of a fund's activities.
+ *
+ * @param input.activities - Each source's date, or null when it has none.
+ * @returns The newest date and its source, or null when there's none.
+ */
+function newestActivity({ activities }: { activities: { source: FundActivitySource; on: Date | null }[] }) {
+    let newest: { source: FundActivitySource; on: Date } | null = null
+    for (const { source, on } of activities) {
+        if (on && (!newest || on > newest.on)) {
+            newest = { source, on }
+        }
+    }
+    return newest
 }
 
 /**

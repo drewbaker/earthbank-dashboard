@@ -184,10 +184,14 @@ const columns: TableColumn<Fund>[] = sortableColumns({
         },
         {
             id: 'last_activity',
-            accessorFn: fund => fund.last_public_activity_on ?? undefined,
+            accessorFn: fund => fund.last_activity_on ?? undefined,
             header: 'Last activity',
             meta: { term: 'last_public_activity' },
-            cell: ({ row }) => h(FundsLastActivity, { lastActivityOn: row.original.last_public_activity_on }),
+            cell: ({ row }) =>
+                h(FundsLastActivity, {
+                    lastActivityOn: row.original.last_activity_on,
+                    source: row.original.last_activity_source,
+                }),
         },
         {
             id: 'check_size',

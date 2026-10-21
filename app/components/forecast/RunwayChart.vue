@@ -71,12 +71,13 @@ const categories = computed(() => ({
     ...(props.scenarioProjection ? { scenario: { name: 'Scenario (weighted)', color: palette.value.scenario } } : {}),
 }))
 
-// Our own legend, committed first, plus the $0 threshold when cash runs out.
+// Our own legend in the order the lines sit on the chart: the weighted pipeline line is never below the
+// committed one, so it's listed first. Plus the $0 threshold when cash runs out.
 const legend = computed(() => [
-    { key: 'committed', name: 'Committed money only', color: palette.value.committed, isDashed: false },
     ...(props.committedOnly
         ? []
         : [{ key: 'weighted', name: 'Weighted pipeline', color: palette.value.weighted, isDashed: false }]),
+    { key: 'committed', name: 'Committed money only', color: palette.value.committed, isDashed: false },
     ...(props.scenarioProjection
         ? [{ key: 'scenario', name: 'Scenario (weighted)', color: palette.value.scenario, isDashed: false }]
         : []),
@@ -92,7 +93,7 @@ const LEGEND_TERMS: Record<string, GlossaryTerm> = {
     below: 'out_of_cash',
 }
 
-// Tooltip rows, committed first.
+// Tooltip rows, in the legend's order (top line first).
 const tooltipSeries = computed(
     () => legend.value.filter(item => item.key !== 'below') as { key: SeriesKey; name: string; color: string }[],
 )
