@@ -31,12 +31,20 @@ export const FUND_FIT_TAG_LABELS: Record<FundFitTag, string> = {
 }
 
 // How a fund got onto the list.
-export const FUND_ORIGINS = ['seed', 'manual', 'spider_person', 'spider_public_record', 'spider_suggestion'] as const
+export const FUND_ORIGINS = [
+    'seed',
+    'manual',
+    'board_import',
+    'spider_person',
+    'spider_public_record',
+    'spider_suggestion',
+] as const
 export type FundOrigin = (typeof FUND_ORIGINS)[number]
 
 export const FUND_ORIGIN_LABELS: Record<FundOrigin, string> = {
     seed: 'Seed list',
     manual: 'Added by the team',
+    board_import: 'Imported from the old fund board',
     spider_person: "Found through a team member's past work",
     spider_public_record: 'Found in a DFI or government list',
     spider_suggestion: 'Found while researching another fund',

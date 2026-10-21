@@ -598,10 +598,10 @@ export function listFailedFundResearch() {
  * Whether research for this origin goes ahead of spidered funds.
  *
  * @param input.origin - The fund's origin.
- * @returns True for seeds and funds the team added.
+ * @returns True for seeds and funds the team added or imported.
  */
 export function isPriorityOrigin({ origin }: { origin: string }) {
-    return origin === 'seed' || origin === 'manual'
+    return origin === 'seed' || origin === 'manual' || origin === 'board_import'
 }
 
 /**

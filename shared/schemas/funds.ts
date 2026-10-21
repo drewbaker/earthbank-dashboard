@@ -228,6 +228,34 @@ export const ImportFundNoteRequest = z
     })
 export type ImportFundNoteRequest = z.infer<typeof ImportFundNoteRequest>
 
+// The JSON export of the old Airtable fund board (Funds → Import): its records, with the fields read
+// leniently in app code (columns were free text and some are missing).
+export const ImportFundBoardRequest = z.object({
+    records: z
+        .array(z.object({ id: z.string(), fields: z.record(z.string(), z.unknown()) }))
+        .min(1)
+        .max(2000),
+})
+export type ImportFundBoardRequest = z.infer<typeof ImportFundBoardRequest>
+
+export const FundBoardImportResult = z.object({
+    added: z.number().int(),
+    updated: z.number().int(),
+    unchanged: z.number().int(),
+    left_archived: z.number().int(),
+    skipped: z.number().int(),
+    funds: z.array(
+        z.object({
+            name: z.string(),
+            fund_id: z.string().nullable(),
+            outcome: z.enum(['added', 'updated', 'unchanged', 'left_archived', 'skipped']),
+            // What was filled in or done (e.g. "website", "notes", "queued for research").
+            changes: z.array(z.string()),
+        }),
+    ),
+})
+export type FundBoardImportResult = z.infer<typeof FundBoardImportResult>
+
 export const FundDetail = Fund.extend({
     notes: z.string().nullable(),
     research_error: z.string().nullable(),

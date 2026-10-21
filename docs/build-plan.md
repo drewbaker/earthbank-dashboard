@@ -280,6 +280,7 @@ Status: built on the `funds-research` branch (requested Oct 16, 2026). Replaces 
 - [x] **Import notes** on the fund page: paste call notes or link a Google Doc; the AI fills research fields, people and diligence from it, each quoted and credited "Note from {author} on {time}"; people's existing answers kept
 - [x] Archive / Restore button on the fund page header
 - [x] **Pending approval**: spider finds wait under the Funds table (not researched, not on the board or map) until someone approves or archives them; sidebar says "Funding Pipeline"
+- [x] Old Airtable fund board imported once (59 funds; existing ones only filled in)
 - [x] **Stricter spider screen**: only lenders in energy, distributed energy, clean industrials, agriculture, agro-processing, energy efficiency, e-mobility and improved utilities; a Firecrawl web check of lenders that pass the name check; closed lenders archived; pending funds screened again
 - [x] **Last public activity** per fund, with "Possibly closed" after 12 months and a seventh fit signal
 - [x] Fund names tidied: no all-caps, no legal forms (LLC, Inc.)
