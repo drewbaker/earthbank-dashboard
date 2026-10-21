@@ -11,6 +11,7 @@ import {
     FIT_SIGNAL_LOAN_TYPES,
     FIT_SIGNAL_MANAGED_CENTS,
     FIT_SIGNAL_MIN_YEARS,
+    RECENT_ACTIVITY_MONTHS,
     TARGET_SECTORS,
     WORKING_CAPITAL_LOAN_TYPES,
 } from '#shared/constants/funds.ts'
@@ -47,6 +48,7 @@ export type FundResearchValues = {
     // The team's criteria for a lender worth researching, each met, not met or unknown.
     fit_signals: Record<FundFitSignal, FundFitSignalStatus>
     fit_signals_met: number
+    last_public_activity_on: Date | null
     research_completeness: number
 }
 
@@ -105,6 +107,18 @@ export function deriveFundResearchValues({
     const aumCents = aum ? toUsdCents(aum) : null
     const yearEstablished = latest('year_established')?.year ?? null
     const sectors = latest('sectors')?.sectors ?? []
+    const lastPublicActivityOn = latestActivityDate({
+        dates: [
+            ...all('news').map(item => item.published_on),
+            ...deals.map(deal => deal.date),
+            ...fundRaises.map(raise => raise.closed_on),
+            ...all('aum').map(item => item.as_of),
+            ...all('impact_metric').map(item => item.as_of),
+            ...all('public_record').map(record => record.committed_on),
+            ...all('conference').map(item => (item.year === null ? null : String(item.year))),
+        ],
+        now,
+    })
     const fitSignals = deriveFundFitSignals({
         hasFundRaises: fundRaises.some(raise => raise.close_type !== 'raising') || all('public_record').length > 0,
         hasLps: all('lp').length > 0,
@@ -114,6 +128,7 @@ export function deriveFundResearchValues({
         loanTypes: latest('loan_types') ? loanTypes : null,
         dealLoanTypes: deals.flatMap(deal => (deal.loan_type ? [deal.loan_type] : [])),
         sectors: latest('sectors') ? sectors : null,
+        lastPublicActivityOn,
         now,
     })
     return {
@@ -147,6 +162,7 @@ export function deriveFundResearchValues({
         }),
         fit_signals: fitSignals,
         fit_signals_met: Object.values(fitSignals).filter(status => status === 'met').length,
+        last_public_activity_on: lastPublicActivityOn,
         research_completeness: researchCompleteness({ filledFields, hasPrincipals, hasWorkHistory }),
     }
 }
@@ -166,6 +182,7 @@ export function deriveFundResearchValues({
  * @param input.loanTypes - Loan types it lists, or null when unknown.
  * @param input.dealLoanTypes - Loan types of its published deals.
  * @param input.sectors - Sectors it lends in, or null when unknown.
+ * @param input.lastPublicActivityOn - Its newest dated public activity, if research found any.
  * @param input.now - Current time.
  * @returns Each signal's status.
  */
@@ -178,6 +195,7 @@ export function deriveFundFitSignals({
     loanTypes,
     dealLoanTypes,
     sectors,
+    lastPublicActivityOn = null,
     now,
 }: {
     hasFundRaises: boolean
@@ -188,8 +206,11 @@ export function deriveFundFitSignals({
     loanTypes: LoanType[] | null
     dealLoanTypes: LoanType[]
     sectors: FundSector[] | null
+    lastPublicActivityOn?: Date | null
     now: Date
 }): Record<FundFitSignal, FundFitSignalStatus> {
+    const recentSince = new Date(now)
+    recentSince.setUTCMonth(recentSince.getUTCMonth() - RECENT_ACTIVITY_MONTHS)
     const managedCents = Math.max(aumCents ?? 0, largestFundCents ?? 0)
     const isManagedKnown = aumCents !== null || largestFundCents !== null
     const lendingTypes = [...(loanTypes ?? []), ...dealLoanTypes]
@@ -210,7 +231,44 @@ export function deriveFundFitSignals({
             isKnown: sectors !== null && sectors.length > 0,
             isMet: (sectors ?? []).some(sector => TARGET_SECTORS.includes(sector)),
         }),
+        // Nothing dated at all is unknown, not a sign of closing: research may have missed it.
+        recently_active: signalStatus({
+            isKnown: lastPublicActivityOn !== null,
+            isMet: lastPublicActivityOn !== null && lastPublicActivityOn >= recentSince,
+        }),
     }
+}
+
+/**
+ * The newest of some partial dates ("2025", "2025-03", "2025-03-14"), each taken at the end of the
+ * period it names (a 2025 report counts as activity up to the end of 2025) and capped at today.
+ *
+ * @param input.dates - Partial dates; nulls and unreadable ones are skipped.
+ * @param input.now - Current time.
+ * @returns The newest date, or null.
+ */
+export function latestActivityDate({ dates, now }: { dates: (string | null | undefined)[]; now: Date }) {
+    let newest: Date | null = null
+    for (const text of dates) {
+        const match = /^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/.exec(text?.trim() ?? '')
+        if (!match) {
+            continue
+        }
+        const year = Number(match[1])
+        const end = match[3]
+            ? new Date(Date.UTC(year, Number(match[2]) - 1, Number(match[3])))
+            : match[2]
+              ? new Date(Date.UTC(year, Number(match[2]), 0))
+              : new Date(Date.UTC(year, 11, 31))
+        if (Number.isNaN(end.getTime())) {
+            continue
+        }
+        const capped = end > now ? now : end
+        if (!newest || capped > newest) {
+            newest = capped
+        }
+    }
+    return newest
 }
 
 /**

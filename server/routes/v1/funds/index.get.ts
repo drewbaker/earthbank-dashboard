@@ -30,7 +30,7 @@ defineRouteMeta({
             {
                 name: 'min_fit_signals',
                 in: 'query',
-                description: "Funds meeting at least this many of the team's criteria (FUND_FIT_SIGNALS, 0–6).",
+                description: "Funds meeting at least this many of the team's criteria (FUND_FIT_SIGNALS, 0–7).",
                 schema: { type: 'integer' },
             },
             { name: 'lender_archetype', in: 'query', schema: { type: 'string' } },

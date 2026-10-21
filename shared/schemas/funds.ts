@@ -165,6 +165,8 @@ export const Fund = z.object({
     aum_cents: Cents.nullable(),
     latest_fund_size_cents: Cents.nullable(),
     last_fund_close_on: DateOnly.nullable(),
+    // The newest dated public activity research found; none in 12 months suggests it may have closed.
+    last_public_activity_on: DateOnly.nullable(),
     check_min_cents: Cents.nullable(),
     check_max_cents: Cents.nullable(),
     has_working_capital_loans: z.boolean(),

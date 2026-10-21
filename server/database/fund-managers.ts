@@ -54,6 +54,7 @@ export type FundListFilters = {
  * @param input.approvedById - Who added it, when it is approved on creation.
  * @param input.screening - The AI screen of a spider find: its reason, and whether it fits Earth Bank
  *   (when not, the fund is created archived).
+ * @param input.isNameChecked - The name was tidied by a person or the AI name check.
  * @param input.now - Creation time (also when research was queued).
  * @returns The created row.
  */
@@ -69,6 +70,7 @@ export function createFundManagerRow({
     approvalStatus,
     approvedById = null,
     screening = null,
+    isNameChecked = false,
     now,
 }: {
     name: string
@@ -82,6 +84,7 @@ export function createFundManagerRow({
     approvalStatus: FundApprovalStatus
     approvedById?: string | null
     screening?: { note: string | null; fitsEarthBank: boolean } | null
+    isNameChecked?: boolean
     now: Date
 }) {
     const isApproved = approvalStatus === 'approved'
@@ -91,6 +94,7 @@ export function createFundManagerRow({
             id: newId({ kind: 'fundManager', now: now.getTime() }),
             name,
             name_key: nameKey,
+            name_checked_at: isNameChecked ? now : null,
             website_url: websiteUrl,
             website_domain: websiteDomain,
             linkedin_url: linkedinUrl,
@@ -364,6 +368,33 @@ export function countPendingFundManagers() {
 }
 
 /**
+ * Funds whose displayed name nobody has checked yet (added before the name check existed).
+ *
+ * @param input.limit - Most rows.
+ * @returns Id, name and website per fund, oldest first.
+ */
+export function listFundsWithUncheckedNames({ limit }: { limit: number }) {
+    return db().fundManager.findMany({
+        where: { name_checked_at: null },
+        select: { id: true, name: true, website_url: true },
+        orderBy: { id: 'asc' },
+        take: limit,
+    })
+}
+
+/**
+ * Store a fund's tidied display name (its name key, used to tell funds apart, doesn't change).
+ *
+ * @param input.fundManagerId - The fund.
+ * @param input.name - The display name.
+ * @param input.now - When it was checked.
+ * @returns The updated row.
+ */
+export function storeFundDisplayName({ fundManagerId, name, now }: { fundManagerId: string; name: string; now: Date }) {
+    return db().fundManager.update({ where: { id: fundManagerId }, data: { name, name_checked_at: now } })
+}
+
+/**
  * Funds whose fit signals haven't been worked out yet (researched before the signals existed).
  *
  * @returns Their ids.
@@ -406,6 +437,7 @@ export function listUnscreenedPendingFunds({ limit }: { limit: number }) {
  * @param input.fundManagerId - The fund.
  * @param input.note - The model's one-line reason.
  * @param input.isScreenedOut - Archive it as outside Earth Bank's focus.
+ * @param input.displayName - The tidied name the screen gave, if any (stored as checked).
  * @param input.now - Current time.
  * @returns The updated row.
  */
@@ -413,11 +445,13 @@ export function recordFundScreening({
     fundManagerId,
     note,
     isScreenedOut,
+    displayName = null,
     now,
 }: {
     fundManagerId: string
     note: string | null
     isScreenedOut: boolean
+    displayName?: string | null
     now: Date
 }) {
     return db().fundManager.update({
@@ -425,6 +459,7 @@ export function recordFundScreening({
         data: {
             screened_at: now,
             screening_note: note,
+            ...(displayName ? { name: displayName, name_checked_at: now } : {}),
             ...(isScreenedOut ? { screened_out_at: now, archived_at: now } : {}),
         },
     })

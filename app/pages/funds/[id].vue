@@ -4,6 +4,7 @@ import { useAsyncData, useRoute, useSeoMeta, useToast } from '#imports'
 import type { FundFitTag, FundResearchField, FundResearchGroup, FundStage } from '#shared/constants/funds.ts'
 import {
     AFFILIATION_RELATIONS,
+    FUND_FIT_SIGNALS,
     FUND_FIT_TAG_LABELS,
     FUND_FIT_TAGS,
     FUND_ORIGIN_LABELS,
@@ -470,6 +471,10 @@ async function rejectFinding(finding: FundFinding) {
                             </dd>
                         </div>
                         <div class="min-w-0 space-y-0.5">
+                            <dt class="text-muted">Last public activity <TermHint term="last_public_activity" /></dt>
+                            <dd><FundsLastActivity :last-activity-on="fund.last_public_activity_on" /></dd>
+                        </div>
+                        <div class="min-w-0 space-y-0.5">
                             <dt class="text-muted">Found</dt>
                             <dd>
                                 {{ FUND_ORIGIN_LABELS[fund.origin] }}
@@ -484,7 +489,8 @@ async function rejectFinding(finding: FundFinding) {
                     </dl>
                     <div class="mt-4 border-t border-default pt-4">
                         <p class="mb-2 text-sm text-muted">
-                            Fit signals: {{ fund.fit_signals_met }} of 6 <TermHint term="fit_signals" />
+                            Fit signals: {{ fund.fit_signals_met }} of {{ FUND_FIT_SIGNALS.length }}
+                            <TermHint term="fit_signals" />
                         </p>
                         <FundsFitSignals
                             :signals="fund.fit_signals"

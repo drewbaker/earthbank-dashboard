@@ -1,6 +1,7 @@
 import { Job } from 'sidequest'
 import { researchAiProvider } from '#server/utils/ai/provider.ts'
 import { screenPendingFunds } from '#server/utils/funds/spider.ts'
+import { webReader } from '#server/utils/web/firecrawl.ts'
 
 /**
  * Screens pending funds the AI hasn't checked yet (found before the screen existed), archiving the
@@ -15,6 +16,6 @@ export class ScreenPendingFundsJob extends Job {
         if (!classifier) {
             return { skipped: 'ANTHROPIC_API_KEY is not set' }
         }
-        return screenPendingFunds({ classifier, now: new Date() })
+        return screenPendingFunds({ classifier, reader: webReader(), now: new Date() })
     }
 }

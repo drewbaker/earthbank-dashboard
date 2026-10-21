@@ -77,6 +77,7 @@ export function serializeFund({ fund }: { fund: FundListRow }): Fund {
         aum_cents: centsToNumber({ cents: fund.aum_cents }),
         latest_fund_size_cents: centsToNumber({ cents: fund.latest_fund_size_cents }),
         last_fund_close_on: toDateOnly({ date: fund.last_fund_close_on }),
+        last_public_activity_on: toDateOnly({ date: fund.last_public_activity_on }),
         check_min_cents: centsToNumber({ cents: fund.check_min_cents }),
         check_max_cents: centsToNumber({ cents: fund.check_max_cents }),
         has_working_capital_loans: fund.has_working_capital_loans,

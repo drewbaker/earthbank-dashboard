@@ -17,6 +17,7 @@ vi.mock('#server/utils/jobs/enqueue.ts', () => ({
     },
     enqueuePublicInvestmentSync: async () => 'queued',
     enqueuePendingFundScreening: async () => 'queued',
+    enqueueFundNameCheck: async () => 'queued',
 }))
 
 const { cleanupTestDatabase } = setupTestDatabase()
@@ -227,6 +228,10 @@ function lenderVerdict({
         kind,
         scope: fits ? 'multi_country' : 'state_or_province',
         impact_focus: fits ? 'impact' : 'general',
+        in_target_sectors: fits ? 'yes' : 'no',
+        operating_status: 'active',
+        last_activity_year: null,
+        display_name: name,
         fits_earth_bank: fits,
         reason,
     }
@@ -966,6 +971,97 @@ describe('screening spider finds', () => {
         expect(prompt).toContain('- Kijani Green Lending: came up as test')
     })
 
+    it('checks lenders that pass the name check on the web, and archives ones that closed', async () => {
+        const { discoverLenders } = await import('#server/utils/funds/spider.ts')
+        const { listFundManagers } = await import('#server/database/fund-managers.ts')
+        const searches: string[] = []
+        const unused = async () => {
+            throw new Error('The web check only searches')
+        }
+        const reader: WebReader = {
+            name: 'fake-firecrawl',
+            readPage: unused,
+            mapSite: unused,
+            lookupCompany: unused,
+            lookupPerson: unused,
+            async search({ query }) {
+                searches.push(query)
+                return {
+                    hits: query.includes('Dawn Solar')
+                        ? [
+                              {
+                                  url: 'https://dawnsolar.example/news',
+                                  title: 'Dawn Solar Credit winds down',
+                                  snippet:
+                                      'In 2022 Dawn Solar Credit stopped lending and returned capital to investors.',
+                              },
+                          ]
+                        : [],
+                    failure: null,
+                    credits: 2,
+                }
+            },
+        }
+        const classifier = fakeAi({
+            answers: [
+                // Names alone: both look like they fit, a school doesn't.
+                {
+                    organizations: [
+                        lenderVerdict({ name: 'Dawn Solar Credit', isLender: true, kind: 'lender' }),
+                        lenderVerdict({ name: 'Mara Agro Finance', isLender: true, kind: 'lender' }),
+                        lenderVerdict({ name: 'Riverside College', isLender: false, kind: 'school' }),
+                    ],
+                },
+                // With the web results.
+                {
+                    organizations: [
+                        {
+                            ...lenderVerdict({
+                                name: 'Dawn Solar Credit',
+                                isLender: true,
+                                kind: 'lender',
+                                fits: false,
+                                reason: 'Solar lender that stopped lending in 2022.',
+                            }),
+                            operating_status: 'closed',
+                            last_activity_year: 2022,
+                        },
+                        lenderVerdict({ name: 'Mara Agro Finance', isLender: true, kind: 'lender' }),
+                    ],
+                },
+            ],
+        })
+        const added = await discoverLenders({
+            candidates: ['Dawn Solar Credit', 'Mara Agro Finance', 'Riverside College'].map(name => ({
+                type: 'named' as const,
+                name,
+                website: null,
+                context: 'test',
+            })),
+            discoveredFromId: null,
+            classifier: classifier.provider,
+            reader,
+            now,
+        })
+        expect(added).toBe(1)
+        // Only lenders that passed the name check are searched.
+        expect(searches).toEqual(['"Dawn Solar Credit"', '"Mara Agro Finance"'])
+        expect(classifier.prompts[1]).toContain('Web search results:\n  1. Dawn Solar Credit winds down')
+        expect(classifier.prompts[1]).toContain(
+            '- Mara Agro Finance: came up as test\n  Web search results: none found.',
+        )
+        const funds = await listFundManagers({ includeArchived: true, limit: 1000 })
+        expect(funds.find(fund => fund.name === 'Dawn Solar Credit')).toMatchObject({
+            screening_note: 'Solar lender that stopped lending in 2022.',
+            screened_out_at: now,
+        })
+        expect(funds.find(fund => fund.name === 'Mara Agro Finance')).toMatchObject({
+            approval_status: 'pending',
+            archived_at: null,
+        })
+        expect(funds.some(fund => fund.name === 'Riverside College')).toBe(false)
+    })
+
     it('screens pending funds found before the screen existed, once', async () => {
         const { addFund } = await import('#server/utils/funds/add-fund.ts')
         const { screenPendingFunds } = await import('#server/utils/funds/spider.ts')
@@ -1015,6 +1111,53 @@ describe('screening spider finds', () => {
             'sba_microloan',
             'usda_rural_business',
         ])
+    })
+})
+
+describe('checking fund names', () => {
+    it('tidies the names of funds nobody has checked, once, keeping their name key', async () => {
+        const { addFund } = await import('#server/utils/funds/add-fund.ts')
+        const { checkFundNames } = await import('#server/utils/funds/fund-names.ts')
+        const { findFundManager, listFundsWithUncheckedNames, storeFundDisplayName } =
+            await import('#server/database/fund-managers.ts')
+        // Everything added earlier in this file counts as checked; only the two below are new.
+        for (const fund of await listFundsWithUncheckedNames({ limit: 1000 })) {
+            await storeFundDisplayName({ fundManagerId: fund.id, name: fund.name, now })
+        }
+        const { fund: northeast } = await addFund({
+            name: 'NORTHEAST ENTREPRENEUR FUND, INC.',
+            websiteUrl: null,
+            origin: 'spider_public_record',
+            now,
+        })
+        const { fund: mission } = await addFund({
+            name: 'MISSION SOLAR LENDING',
+            websiteUrl: null,
+            origin: 'spider_public_record',
+            now,
+        })
+        // addFund already tidies in code; the AI fixes the capitals code can't know.
+        expect(northeast.name).toBe('Northeast Entrepreneur Fund')
+        const classifier = fakeAi({
+            answers: [
+                {
+                    names: [
+                        { original: 'Northeast Entrepreneur Fund', display_name: 'Northeast Entrepreneur Fund' },
+                        // A different name isn't accepted.
+                        { original: 'Mission Solar Lending', display_name: 'Mission Solar' },
+                    ],
+                },
+            ],
+        })
+        expect(await checkFundNames({ classifier: classifier.provider, now })).toEqual({ checked: 2, renamed: 0 })
+        expect(await findFundManager({ fundManagerId: mission.id })).toMatchObject({
+            name: 'Mission Solar Lending',
+            name_key: 'mission solar lending',
+            name_checked_at: now,
+        })
+        const again = fakeAi({ answers: [] })
+        expect(await checkFundNames({ classifier: again.provider, now })).toEqual({ checked: 0, renamed: 0 })
+        expect(again.prompts).toHaveLength(0)
     })
 })
 

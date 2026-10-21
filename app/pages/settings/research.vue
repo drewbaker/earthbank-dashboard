@@ -19,7 +19,7 @@ const { data: sources, refresh: refreshSources } = await useAsyncData('settings.
 
 const formState = reactive<FundResearchSettings>({
     spider_enabled: true,
-    max_funds: 100,
+    max_funds: 200,
     monthly_budget_usd: 300,
     max_searches_per_fund: 20,
     max_fetches_per_fund: 25,
@@ -100,7 +100,7 @@ async function syncSource({ source }: { source: PublicInvestmentSource }) {
                 >
                     <USwitch v-model="formState.spider_enabled" :label="formState.spider_enabled ? 'On' : 'Paused'" />
                 </UFormField>
-                <UFormField label="Fund limit" description="Start at 100; up to 1,000." name="max_funds">
+                <UFormField label="Fund limit" description="200 now; up to 1,000." name="max_funds">
                     <UInputNumber v-model="formState.max_funds" :min="1" :max="1000" class="w-full" />
                 </UFormField>
                 <UFormField

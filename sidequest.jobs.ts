@@ -1,6 +1,7 @@
 // Every Sidequest job class. Worker threads load a bundle of this file, and jobs are resolved by
 // class name, so never rename a class while jobs of that name may be queued (alias the old name).
 export { BackfillFunderJob } from '#root/jobs/backfill-funder.job.ts'
+export { CheckFundNamesJob } from '#root/jobs/check-fund-names.job.ts'
 export { ProcessForwardedEmailJob } from '#root/jobs/process-forwarded-email.job.ts'
 export { ResearchFundJob } from '#root/jobs/research-fund.job.ts'
 export { ScreenPendingFundsJob } from '#root/jobs/screen-pending-funds.job.ts'

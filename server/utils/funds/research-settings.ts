@@ -5,10 +5,10 @@ import { FundResearchSettings as FundResearchSettingsSchema } from '#shared/sche
 
 const FUND_RESEARCH_SETTINGS_KEY = 'fund_research'
 
-// Start with 100 funds (raise toward 1,000 in Settings → Research once the research looks right).
+// Start with 200 funds (raise toward 1,000 in Settings → Research once the research looks right).
 export const DEFAULT_FUND_RESEARCH_SETTINGS: FundResearchSettings = {
     spider_enabled: true,
-    max_funds: 100,
+    max_funds: 200,
     monthly_budget_usd: 300,
     max_searches_per_fund: 20,
     max_fetches_per_fund: 25,

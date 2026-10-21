@@ -76,3 +76,89 @@ export function websiteDomain({ url }: { url: string | null | undefined }) {
         return null
     }
 }
+
+// Legal forms dropped from the end of a displayed name ("Minlam Asset Management LLC"). Whole words
+// like "Corporation" or "Company" are kept: they're usually part of the name.
+const TRAILING_LEGAL_FORM =
+    /(?:[\s,]+(?:L\.?L\.?C|Inc|Incorporated|Ltd|Limited|L\.?L\.?P|L\.?P|P\.?L\.?C|GmbH|AG|S\.?A\.?S|S\.?A\.?R\.?L|S\.?R\.?L|S\.?p\.?A|S\.?A\.?C|S\.?A\.?P\.?I\.?(?:\s+de\s+C\.?V)?|S\.?A|B\.?V|N\.?V|Pte|Pty|Corp|Co)\.?)+\s*$/i
+
+// Short words kept lowercase inside a title-cased name, and abbreviations kept in capitals.
+const LOWERCASE_WORDS = new Set([
+    'a',
+    'an',
+    'and',
+    'at',
+    'de',
+    'del',
+    'des',
+    'du',
+    'for',
+    'in',
+    'la',
+    'of',
+    'on',
+    'the',
+    'to',
+])
+const UPPERCASE_WORDS = new Set([
+    'cdfi',
+    'sme',
+    'smes',
+    'msme',
+    'usa',
+    'us',
+    'uk',
+    'eu',
+    'ii',
+    'iii',
+    'iv',
+    'nyc',
+    'dc',
+    'ai',
+])
+
+/**
+ * An organization's name as the team should see it: legal forms dropped from the end, and names
+ * written in all capitals (as government lists often give them) in title case.
+ *
+ * "NORTHEAST ENTREPRENEUR FUND, INC." → "Northeast Entrepreneur Fund". Names that already use lower
+ * case keep their capitalization. Unknown abbreviations in all-caps names come out title-cased; the AI
+ * name check fixes those when it runs.
+ *
+ * @param input.name - The name as found.
+ * @returns The tidied name (the original when tidying would leave nothing).
+ */
+export function tidyOrganizationName({ name }: { name: string }) {
+    const trimmed = name.trim().replace(/\s+/g, ' ')
+    const withoutLegalForm = trimmed.replace(TRAILING_LEGAL_FORM, '').replace(/[\s,]+$/, '') || trimmed
+    if (/[a-z]/.test(withoutLegalForm) || !/[A-Z]{2}/.test(withoutLegalForm)) {
+        return withoutLegalForm
+    }
+    return withoutLegalForm
+        .toLowerCase()
+        .split(' ')
+        .map((word, index) => {
+            if (UPPERCASE_WORDS.has(word.replace(/[^a-z]/g, ''))) {
+                return word.toUpperCase()
+            }
+            if (index > 0 && LOWERCASE_WORDS.has(word)) {
+                return word
+            }
+            // Capitalize each part of hyphenated or slashed words ("agro-processing" → "Agro-Processing").
+            return word.replace(
+                /(^|[-/(&])([a-z])/g,
+                (_match, separator: string, letter: string) => separator + letter.toUpperCase(),
+            )
+        })
+        .join(' ')
+}
+
+/**
+ * Whether a name looks untidy: written in all capitals, or ending in a legal form.
+ *
+ * @param input.name - The name.
+ * @returns True when tidyOrganizationName (or the AI name check) should look at it.
+ */
+export function isUntidyOrganizationName({ name }: { name: string }) {
+    return tidyOrganizationName({ name }) !== name.trim()
+}

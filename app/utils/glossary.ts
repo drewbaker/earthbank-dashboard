@@ -25,9 +25,11 @@ export const GLOSSARY = {
     fund_spider:
         'New lenders found from team work history, co-lenders and DFI lists wait as pending until someone approves them; then they are researched.',
     fit_signals:
-        "The team's signs of a lender worth researching: has raised funds, 3+ years old, managed $10M+, makes working-capital, credit-line or term-debt loans, raised from LPs, and lends in our sectors (climate, nature, agriculture, clean energy and industrials, alternative materials and proteins, textiles, distributed energy, retrofits, space). Worked out from research; ? means not found yet.",
+        "The team's signs of a lender worth researching: has raised funds, 3+ years old, managed $10M+, makes working-capital, credit-line or term-debt loans, raised from LPs, lends in our sectors (energy, distributed energy, clean industrials, agriculture, agro-processing, energy efficiency, e-mobility, improved utilities), and public activity in the last 12 months. Worked out from research; ? means not found yet.",
+    last_public_activity:
+        'The newest dated thing research found: news, a press release, a deal, a fund close, an AUM or impact report, a conference or a DFI record. Nothing in the last 12 months suggests the fund may have closed.',
     fund_screening:
-        'Before a spider find reaches this list, the AI checks where and to whom it lends. Lenders limited to one town, county or state with no climate focus, or with no climate or impact focus at all, are archived with its reason. It learns from what the team approves and archives.',
+        "Before a spider find reaches this list, the AI looks it up on the web and checks its sectors, where it lends and whether it's still active. Lenders outside our sectors, limited to one town, county or state with no climate focus, with no climate or impact focus, or that have closed are archived with its reason. It learns from what the team approves and archives.",
     fund_approval:
         "Spider finds wait here so nobody pays to research a lender outside Earth Bank's focus (a local development corporation, say). Approve to add it to the list and research it; archive to drop it (it moves to Archived and the spider never adds it again).",
     ticket_fit:

@@ -639,6 +639,9 @@ model FundManager {
     name               String
     // Lowercased, punctuation-free name for de-duplication (normalizeOrganizationName).
     name_key           String    @unique
+    // When the displayed name was tidied (capitalization, legal forms) by the AI name check or a person;
+    // null for names nobody has checked yet.
+    name_checked_at    DateTime?
     website_url        String?
     // Bare host without "www.", also used for de-duplication.
     website_domain     String?   @unique
@@ -707,6 +710,9 @@ model FundManager {
     // The team's criteria for a lender worth researching (FUND_FIT_SIGNALS → met | not_met | unknown) and
     // how many are met; null until worked out from research.
     fit_signals                    Json?
+    // The newest dated public activity research found (news, deal, fund close, AUM or impact report,
+    // conference, DFI record); none in 12 months suggests the fund may have closed.
+    last_public_activity_on        DateTime?
     fit_signals_met                Int       @default(0)
     research_completeness          Int       @default(0)
     diligence_completeness         Int       @default(0)

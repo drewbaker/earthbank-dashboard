@@ -71,6 +71,9 @@ export const FUND_SECTORS = [
     'blue_economy',
     'climate_adaptation',
     'distributed_energy',
+    'energy_efficiency',
+    'utilities',
+    'agro_processing',
     'clean_industrials',
     'alternative_materials',
     'alternative_proteins',
@@ -91,13 +94,16 @@ export const FUND_SECTOR_LABELS: Record<FundSector, string> = {
     energy: 'Energy',
     clean_cooking: 'Clean cooking',
     water: 'Water & sanitation',
-    mobility: 'Mobility',
+    mobility: 'E-mobility',
     buildings: 'Buildings & housing',
     circular_economy: 'Circular economy',
     forestry_nature: 'Forestry & nature',
     blue_economy: 'Blue economy',
     climate_adaptation: 'Climate adaptation',
     distributed_energy: 'Distributed energy',
+    energy_efficiency: 'Energy efficiency',
+    utilities: 'Improved utilities',
+    agro_processing: 'Agro-processing',
     clean_industrials: 'Clean industrials',
     alternative_materials: 'Alternative plastics & materials',
     alternative_proteins: 'Alternative proteins',
@@ -164,6 +170,7 @@ export const FUND_FIT_SIGNALS = [
     'working_capital_or_term_debt',
     'has_lps',
     'target_sectors',
+    'recently_active',
 ] as const
 export type FundFitSignal = (typeof FUND_FIT_SIGNALS)[number]
 
@@ -177,34 +184,39 @@ export const FUND_FIT_SIGNAL_LABELS: Record<FundFitSignal, string> = {
     working_capital_or_term_debt: 'Working capital, credit lines or term debt',
     has_lps: 'Raised from limited partners',
     target_sectors: 'Lends in our sectors',
+    recently_active: 'Public activity in the last 12 months',
 }
 
 // Managing this much (AUM, or one fund's size) is a good sign, though not a hard rule.
 export const FIT_SIGNAL_MANAGED_CENTS = 10_000_000 * 100
 export const FIT_SIGNAL_MIN_YEARS = 3
+// A fund with no public activity for this long may have closed.
+export const RECENT_ACTIVITY_MONTHS = 12
 
 // Loan types that show working-capital, credit-line or term-debt experience.
 export const FIT_SIGNAL_LOAN_TYPES: readonly LoanType[] = ['working_capital', 'credit_line', 'term_debt']
 
-// The sectors Earth Bank wants its lenders to work in: climate, nature, agriculture, clean energy,
-// clean industrials, alternative plastics and proteins, sustainable textiles, distributed energy,
-// retrofitting and space.
+// The only sectors Earth Bank wants its lenders to work in: energy (including electrification and clean
+// cooking), distributed energy, clean industrials, agriculture, agro-processing, energy efficiency
+// (including building retrofits), e-mobility and improved utilities (power, water, sanitation).
 export const TARGET_SECTORS: readonly FundSector[] = [
-    'agriculture',
-    'electrification',
     'energy',
+    'electrification',
     'clean_cooking',
-    'forestry_nature',
-    'blue_economy',
-    'climate_adaptation',
     'distributed_energy',
     'clean_industrials',
-    'alternative_materials',
-    'alternative_proteins',
-    'sustainable_textiles',
+    'agriculture',
+    'agro_processing',
+    'energy_efficiency',
     'retrofitting',
-    'space',
+    'mobility',
+    'utilities',
+    'water',
 ]
+
+// The target sectors as one line for AI instructions.
+export const TARGET_SECTORS_TEXT =
+    'energy, distributed energy, clean industrials, agriculture, energy efficiency, e-mobility, improved utilities (power, water, sanitation) and agro-processing'
 
 // The size the team cares most about: working-capital loans of at least $500K.
 export const WORKING_CAPITAL_TARGET_CENTS = 500_000 * 100

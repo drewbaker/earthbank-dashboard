@@ -120,6 +120,7 @@ export async function syncPublicInvestmentSource({
             })),
             discoveredFromId: null,
             classifier: ai,
+            reader,
             now,
         })
         await savePublicInvestmentSourceState({

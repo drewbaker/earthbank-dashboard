@@ -2,6 +2,7 @@ import {
     isPriorityOrigin,
     listFailedFundResearch,
     listFundsNeedingResearch,
+    listFundsWithUncheckedNames,
     listUnscreenedPendingFunds,
     setFundResearchStatus,
 } from '#server/database/fund-managers.ts'
@@ -10,6 +11,7 @@ import { readFundResearchSettings, readMonthResearchSpend } from '#server/utils/
 import { listPublicInvestmentSourceStates } from '#server/database/public-investments.ts'
 import { PUBLIC_INVESTMENT_SOURCES } from '#server/utils/funds/public-investment-sources.ts'
 import {
+    enqueueFundNameCheck,
     enqueueFundResearch,
     enqueuePendingFundScreening,
     enqueuePublicInvestmentSync,
@@ -25,7 +27,8 @@ const MAX_PER_RUN = 200
  *
  * Runs hourly and at startup. Does nothing without an API key or when this month's budget is spent;
  * jobs are unique per fund, so a fund already waiting isn't queued twice. Also queues the AI screen of
- * pending funds found before the screen existed.
+ * pending funds found before the screen existed, and the name check of funds whose names nobody has
+ * tidied.
  *
  * @param input.now - Current time.
  * @returns How many funds were queued.
@@ -44,6 +47,9 @@ export async function resumeFundResearch({ now }: { now: Date }) {
     })
     if ((await listUnscreenedPendingFunds({ limit: 1 })).length > 0) {
         await enqueuePendingFundScreening()
+    }
+    if ((await listFundsWithUncheckedNames({ limit: 1 })).length > 0) {
+        await enqueueFundNameCheck()
     }
     return requeueFundResearch({ funds, now })
 }

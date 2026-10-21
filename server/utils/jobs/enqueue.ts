@@ -1,4 +1,5 @@
 import { BackfillFunderJob } from '#root/jobs/backfill-funder.job.ts'
+import { CheckFundNamesJob } from '#root/jobs/check-fund-names.job.ts'
 import { ProcessForwardedEmailJob } from '#root/jobs/process-forwarded-email.job.ts'
 import { ResearchFundJob } from '#root/jobs/research-fund.job.ts'
 import { ScreenPendingFundsJob } from '#root/jobs/screen-pending-funds.job.ts'
@@ -173,6 +174,24 @@ export async function enqueueFundResearch({
                 .timeout(30 * 60 * 1000)
                 .unique({ withArgs: true })
                 .enqueue({ fundManagerId }),
+    })
+}
+
+/**
+ * Queue the name check of funds whose names nobody has tidied yet (one job at a time).
+ *
+ * @returns `queued`, or `already_queued`.
+ */
+export async function enqueueFundNameCheck() {
+    await ensureJobQueue()
+    return queueOnce({
+        enqueue: () =>
+            Sidequest.build(CheckFundNamesJob)
+                .queue('research-spider')
+                .maxAttempts(3)
+                .timeout(10 * 60 * 1000)
+                .unique(true)
+                .enqueue(),
     })
 }
 

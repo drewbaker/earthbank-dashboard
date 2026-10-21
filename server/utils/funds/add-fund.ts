@@ -2,7 +2,12 @@ import { createFundManagerRow, findFundManagerByIdentity, isPriorityOrigin } fro
 import { linkOrganizationToFund } from '#server/database/fund-research.ts'
 import { enqueueFundResearch } from '#server/utils/jobs/enqueue.ts'
 import type { FundOrigin } from '#shared/constants/funds.ts'
-import { canonicalLinkedinUrl, organizationNameKey, websiteDomain } from '#shared/funds/organization-names.ts'
+import {
+    canonicalLinkedinUrl,
+    organizationNameKey,
+    tidyOrganizationName,
+    websiteDomain,
+} from '#shared/funds/organization-names.ts'
 
 /**
  * Put a lender on the list (unless it's already there) and queue its research.
@@ -12,7 +17,8 @@ import { canonicalLinkedinUrl, organizationNameKey, websiteDomain } from '#share
  * researched until someone approves them (many turn out to be local lenders outside Earth Bank's
  * focus); funds people add or the seed list holds are approved and queued at once.
  *
- * @param input.name - Display name.
+ * @param input.name - Display name; tidied (legal forms dropped, all-caps names in title case).
+ * @param input.isNameChecked - The name was given by a person or tidied by the AI name check already.
  * @param input.websiteUrl - Website, if known.
  * @param input.linkedinUrl - LinkedIn company page, if known.
  * @param input.discoveryContext - How the fund came up or a region hint, used to find the right website.
@@ -33,6 +39,7 @@ export async function addFund({
     discoveredFromId = null,
     addedById = null,
     screening = null,
+    isNameChecked = false,
     now,
 }: {
     name: string
@@ -43,6 +50,7 @@ export async function addFund({
     discoveredFromId?: string | null
     addedById?: string | null
     screening?: { note: string | null; fitsEarthBank: boolean } | null
+    isNameChecked?: boolean
     now: Date
 }) {
     const nameKey = organizationNameKey({ name })
@@ -52,7 +60,7 @@ export async function addFund({
         return { fund: existing, isNew: false }
     }
     const fund = await createFundManagerRow({
-        name: name.trim(),
+        name: tidyOrganizationName({ name }),
         nameKey,
         websiteUrl: domain ? websiteUrl : null,
         websiteDomain: domain,
@@ -63,6 +71,8 @@ export async function addFund({
         approvalStatus: needsApproval({ origin }) ? 'pending' : 'approved',
         approvedById: addedById,
         screening,
+        // Names people type are taken as written (only tidied); others wait for the AI name check.
+        isNameChecked: isNameChecked || addedById !== null,
         now,
     })
     await linkOrganizationToFund({ nameKey, fundManagerId: fund.id })

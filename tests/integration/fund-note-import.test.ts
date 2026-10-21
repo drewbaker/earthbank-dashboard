@@ -11,6 +11,7 @@ vi.mock('#server/utils/jobs/enqueue.ts', () => ({
     enqueueFundResearch: async () => 'queued',
     enqueuePublicInvestmentSync: async () => 'queued',
     enqueuePendingFundScreening: async () => 'queued',
+    enqueueFundNameCheck: async () => 'queued',
 }))
 
 const { cleanupTestDatabase } = setupTestDatabase()

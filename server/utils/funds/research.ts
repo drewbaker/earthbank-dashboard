@@ -337,6 +337,7 @@ export async function researchFund({
                   ],
                   discoveredFromId: fundManagerId,
                   classifier,
+                  reader,
                   now,
               })
             : 0

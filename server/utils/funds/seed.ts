@@ -41,6 +41,7 @@ export async function ensureSeedFunds({ now }: { now: Date }) {
             websiteUrl: null,
             discoveryContext: SEED_FUND_HINTS[name] ?? null,
             origin: 'seed',
+            isNameChecked: true,
             now,
         })
         added += isNew ? 1 : 0

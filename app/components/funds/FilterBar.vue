@@ -83,7 +83,7 @@ const completenessItems = [
 
 const fitSignalItems = [
     anyItem('Any fit signals'),
-    ...[2, 3, 4, 5].map(count => ({ label: `${count}+ fit signals`, value: String(count) })),
+    ...[2, 3, 4, 5, 6].map(count => ({ label: `${count}+ fit signals`, value: String(count) })),
 ]
 
 const ticketFitItems = [

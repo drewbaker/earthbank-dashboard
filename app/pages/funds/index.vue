@@ -107,6 +107,7 @@ const FundsFocusTags = resolveComponent('FundsFocusTags')
 const FundsCompletenessMeter = resolveComponent('FundsCompletenessMeter')
 const FundsResearchStatusBadge = resolveComponent('FundsResearchStatusBadge')
 const FundsFitSignals = resolveComponent('FundsFitSignals')
+const FundsLastActivity = resolveComponent('FundsLastActivity')
 
 const STAGE_ORDER = new Map(FUND_STAGES.map((stage, index) => [stage, index]))
 // The table's sort order is remembered in this browser, so coming back to Funds keeps it.
@@ -180,6 +181,13 @@ const columns: TableColumn<Fund>[] = sortableColumns({
             accessorFn: fund => fund.last_fund_close_on ?? undefined,
             header: 'Last close',
             cell: ({ row }) => formatDate({ value: row.original.last_fund_close_on, unknown: '—' }),
+        },
+        {
+            id: 'last_activity',
+            accessorFn: fund => fund.last_public_activity_on ?? undefined,
+            header: 'Last activity',
+            meta: { term: 'last_public_activity' },
+            cell: ({ row }) => h(FundsLastActivity, { lastActivityOn: row.original.last_public_activity_on }),
         },
         {
             id: 'check_size',
