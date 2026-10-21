@@ -578,6 +578,15 @@ async function rejectFinding(finding: FundFinding) {
                             </template>
                             <dl class="divide-y divide-default">
                                 <div
+                                    v-if="group === 'basics' && fund.screening_note"
+                                    class="grid gap-1 py-2 sm:grid-cols-3"
+                                >
+                                    <dt class="pt-2 text-sm text-muted">
+                                        AI screen <TermHint term="fund_screening" />
+                                    </dt>
+                                    <dd class="py-2 text-sm sm:col-span-2">{{ fund.screening_note }}</dd>
+                                </div>
+                                <div
                                     v-for="field in fieldsInGroup({ group })"
                                     :key="field"
                                     class="grid gap-1 py-2 sm:grid-cols-3"
