@@ -11,6 +11,12 @@ const emit = defineEmits<{ imported: [fund: FundDetail] }>()
 const api = useApi()
 const toast = useToast()
 
+const NOTE_ORIGIN_LABELS: Record<FundNote['origin'], string> = {
+    pasted: 'Pasted',
+    google_doc: 'Google Doc',
+    attachment: 'File',
+}
+
 type ImportMode = 'paste' | 'google_doc'
 const mode = ref<ImportMode>('paste')
 const modeItems = [
@@ -79,7 +85,7 @@ function noteSummary({ note }: { note: FundNote }) {
                 <p class="text-sm text-muted">
                     Paste call notes or link a Google Doc. The AI fills in this profile and due diligence from what the
                     note says, quoting it, and credits each fact as a note from you. Answers someone already typed are
-                    kept.
+                    kept. For PDFs and other files, use the Files tab.
                 </p>
             </template>
             <div class="space-y-4">
@@ -136,12 +142,7 @@ function noteSummary({ note }: { note: FundNote }) {
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div class="flex min-w-0 flex-wrap items-center gap-2">
                             <span class="font-medium text-highlighted">{{ note.title }}</span>
-                            <UBadge
-                                :label="note.origin === 'google_doc' ? 'Google Doc' : 'Pasted'"
-                                color="neutral"
-                                variant="soft"
-                                size="sm"
-                            />
+                            <UBadge :label="NOTE_ORIGIN_LABELS[note.origin]" color="neutral" variant="soft" size="sm" />
                             <a
                                 v-if="note.doc_url"
                                 :href="note.doc_url"
@@ -149,6 +150,12 @@ function noteSummary({ note }: { note: FundNote }) {
                                 rel="noopener noreferrer"
                                 class="text-sm underline"
                                 >Open doc</a
+                            >
+                            <NuxtLink
+                                v-if="note.attachment_id"
+                                :to="{ query: { tab: 'files', file: note.attachment_id } }"
+                                class="text-sm underline"
+                                >Open file</NuxtLink
                             >
                         </div>
                         <UBadge

@@ -204,8 +204,10 @@ export type FundList = z.infer<typeof FundList>
 export const FundNote = z.object({
     id: z.string(),
     title: z.string(),
-    origin: z.enum(['pasted', 'google_doc']),
+    origin: z.enum(['pasted', 'google_doc', 'attachment']),
     doc_url: z.string().nullable(),
+    /** The file it was read from (Files tab), for origin `attachment`. */
+    attachment_id: z.string().nullable(),
     author: UserSummary.nullable(),
     status: z.enum(['running', 'done', 'failed']),
     error: z.string().nullable(),

@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs'
-import { access, mkdir, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, resolve, sep } from 'node:path'
 import { ensureDataDirectory } from '#server/utils/config.ts'
 
@@ -33,6 +33,16 @@ export async function putFile({ key, data }: { key: string; data: Uint8Array }) 
     const path = storagePath({ key })
     await mkdir(dirname(path), { recursive: true })
     await writeFile(path, data)
+}
+
+/**
+ * Read a stored file into memory (for files the AI reads; downloads stream instead).
+ *
+ * @param input.key - Relative storage key.
+ * @returns The file contents.
+ */
+export function readStoredFile({ key }: { key: string }) {
+    return readFile(storagePath({ key }))
 }
 
 /**

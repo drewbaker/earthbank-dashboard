@@ -8,8 +8,8 @@ import { notFound } from '#server/utils/errors.ts'
 
 defineRouteMeta({
     openAPI: {
-        tags: ['Tasks'],
-        summary: 'Remove an attachment',
+        tags: ['Attachments'],
+        summary: 'Remove a file',
         description: 'The file is deleted from disk by the hourly cleanup after 30 days.',
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: { 204: { description: 'Removed' } },
@@ -29,7 +29,12 @@ export default defineApiHandler(async event => {
         action: 'attachment.deleted',
         entityType: 'attachment',
         entityId: attachmentId,
-        changes: { task_id: attachment.task_id, filename: attachment.filename },
+        changes: {
+            task_id: attachment.task_id,
+            funder_id: attachment.funder_id,
+            fund_id: attachment.fund_manager_id,
+            filename: attachment.filename,
+        },
         ip: requestIp({ event }),
     })
     setResponseStatus(event, 204)

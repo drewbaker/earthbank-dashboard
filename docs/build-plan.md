@@ -114,7 +114,7 @@ Notes from building it:
     - [x] `Milestone`: title, description, due_at, goal_id?, opportunity_id?, status (`upcoming | done | missed`), kind (`funding | event | internal`)
     - [x] `Task`: title, description, assignee_id, due_at, status (`todo | doing | done`), milestone_id?, opportunity_id?, sort, completed_at, created_by
     - [x] `Comment`: task_id, author_id, body (Markdown), edited_at, deleted_at
-    - [x] `Attachment`: task_id, uploaded_by, filename, content_type, size_bytes, storage_key
+    - [x] `Attachment`: task_id, uploaded_by, filename, content_type, size_bytes, storage_key (funder and fund files added in Phase 10)
 - [x] `server/utils/storage.ts` (local disk under `DATA_DIR/files`, key escape checks); upload limit 25 MB
 - [x] `/v1` routes: milestones CRUD; tasks CRUD + reorder; tasks/{id}/comments CRUD; tasks/{id}/attachments upload, list, delete; `attachments/{id}/download`
 - [x] Notifications (`server/utils/notifications.ts` → `enqueueEmail`):
@@ -307,6 +307,18 @@ Paid datasets that would help (not bought):
 - **Impact fund profiles**: ImpactBase (GIIN)
 - **DFI deal flow**: Inside DFIs or IJGlobal
 - **Emerging-market company data**: EMIS (named in Dalberg's proposal)
+
+---
+
+## Phase 10: Files on funders and funds
+
+- [x] `Attachment` holds funder and fund files as well as task files (`funder_id` + optional `opportunity_id`, `fund_manager_id`; `origin` upload or email; `read_status`, summary and counts); change events and fund notes link the file they came from
+- [x] **Files** card on the funder page (optionally tied to one ask) and a **Files** tab on the fund page: upload or drop PDFs and Word, Excel, PowerPoint or text files, download, read again, remove
+- [x] `ReadAttachmentJob`: a fund file is read like an imported note (every fact, person and diligence answer quoted from the file, credited "{file} from {person} on {time}", linking back to the Files tab); a funder file updates its asks like an email (`ai_document` changes, confident ones applied, the rest on Activity, each showing the file); personal documents and files without text aren't read
+- [x] Email to dashboard@: attachments from a verified team member are screened (signature images, invites, contact cards and non-documents by type; IDs, tax and bank documents by name and text; then the AI keeps only business documents) and filed: a plain forward's with its funder, otherwise the assistant files each with the funder or fund it's about (`attach_file`) and replies; each email's files handled once
+- [x] `FilePastEmailAttachmentsJob` (after each deploy): files the attachments of past emails to the dashboard address that haven't had theirs filed, without re-running their instructions or replying
+- [x] Tests: `funder-and-fund-files.test.ts`
+- [ ] After deploy: check Settings → audit (`email_attachments.processed`) or the Files cards for what the pass over past emails filed; Resend keeps received attachments for a limited time, so the oldest may no longer download
 
 ---
 

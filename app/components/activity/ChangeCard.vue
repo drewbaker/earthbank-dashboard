@@ -258,6 +258,23 @@ async function saveEdit() {
             />
         </div>
 
+        <div v-if="event.attachment" class="flex items-center gap-3 rounded-md border border-default p-3">
+            <UIcon name="i-lucide-file-text" class="size-5 shrink-0 text-muted" />
+            <p class="min-w-0 flex-1 truncate text-sm">
+                <span class="font-medium text-highlighted">{{ event.attachment.filename }}</span>
+                <span class="text-muted"> · read by the AI</span>
+            </p>
+            <UButton
+                size="sm"
+                color="neutral"
+                icon="i-lucide-download"
+                label="Download"
+                :to="event.attachment.download_url"
+                external
+                class="shrink-0"
+            />
+        </div>
+
         <template v-if="!isEditing">
             <!-- Each box is also its button: click the value you want. -->
             <div class="grid grid-cols-2 gap-3">

@@ -8,8 +8,8 @@ import { fileExists, safeFilename, streamFile } from '#server/utils/storage.ts'
 
 defineRouteMeta({
     openAPI: {
-        tags: ['Tasks'],
-        summary: 'Download an attachment',
+        tags: ['Attachments'],
+        summary: 'Download a file',
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: { 200: { description: 'The file' } },
     },

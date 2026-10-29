@@ -10,8 +10,9 @@ export type FundNoteRow = Prisma.FundNoteGetPayload<{ include: typeof FUND_NOTE_
  *
  * @param input.fundManagerId - The fund.
  * @param input.authorUserId - Who imported it.
- * @param input.origin - `pasted` or `google_doc`.
+ * @param input.origin - `pasted`, `google_doc` or `attachment`.
  * @param input.docUrl - The Google Doc link, for docs.
+ * @param input.attachmentId - The file, for files.
  * @param input.title - "Note from Drew on Oct 18, 2026, 3:04 PM".
  * @param input.text - The note's text.
  * @param input.now - Import time.
@@ -22,14 +23,16 @@ export function createFundNote({
     authorUserId,
     origin,
     docUrl,
+    attachmentId = null,
     title,
     text,
     now,
 }: {
     fundManagerId: string
-    authorUserId: string
-    origin: 'pasted' | 'google_doc'
+    authorUserId: string | null
+    origin: 'pasted' | 'google_doc' | 'attachment'
     docUrl: string | null
+    attachmentId?: string | null
     title: string
     text: string
     now: Date
@@ -41,6 +44,7 @@ export function createFundNote({
             author_user_id: authorUserId,
             origin,
             doc_url: docUrl,
+            attachment_id: attachmentId,
             title,
             text,
         },
@@ -105,7 +109,7 @@ export function saveNoteDiligenceAnswers({
 }: {
     fundManagerId: string
     fundNoteId: string
-    authorUserId: string
+    authorUserId: string | null
     answers: { question: string; answer: string; sourceUrls: string[] }[]
 }) {
     return db().$transaction(async tx => {

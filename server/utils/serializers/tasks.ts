@@ -1,13 +1,11 @@
-import type {
-    Attachment as AttachmentRow,
-    Comment as CommentRow,
-    User as UserRow,
-} from '#server/generated/prisma/client.ts'
+import type { Comment as CommentRow, User as UserRow } from '#server/generated/prisma/client.ts'
+import type { AttachmentRow } from '#server/database/attachments.ts'
 import type { TaskRow } from '#server/database/tasks.ts'
 import { toDateOnly, toIsoDateTime } from '#server/utils/dates.ts'
+import { serializeAttachment } from '#server/utils/serializers/attachments.ts'
 import { serializeUserSummary } from '#server/utils/serializers/common.ts'
 import type { TaskStatus } from '#shared/constants/pipeline.ts'
-import type { Attachment, Comment, Task, TaskDetail } from '#shared/schemas/index.ts'
+import type { Comment, Task, TaskDetail } from '#shared/schemas/index.ts'
 
 /**
  * Public shape of a task.
@@ -62,7 +60,7 @@ export function serializeComment({
     attachments = [],
 }: {
     comment: CommentRow & { author: UserRow | null }
-    attachments?: (AttachmentRow & { uploaded_by: UserRow | null })[]
+    attachments?: AttachmentRow[]
 }): Comment {
     return {
         id: comment.id,
@@ -72,30 +70,6 @@ export function serializeComment({
         edited_at: toIsoDateTime({ date: comment.edited_at }),
         attachments: attachments.map(attachment => serializeAttachment({ attachment })),
         created_at: comment.created_at.toISOString(),
-    }
-}
-
-/**
- * Public shape of an attachment. The storage key stays internal; downloads go through the API.
- *
- * @param input.attachment - The attachment with its uploader.
- * @returns The API representation.
- */
-export function serializeAttachment({
-    attachment,
-}: {
-    attachment: AttachmentRow & { uploaded_by: UserRow | null }
-}): Attachment {
-    return {
-        id: attachment.id,
-        task_id: attachment.task_id,
-        comment_id: attachment.comment_id,
-        filename: attachment.filename,
-        content_type: attachment.content_type,
-        size_bytes: attachment.size_bytes,
-        uploaded_by: serializeUserSummary({ user: attachment.uploaded_by }),
-        download_url: `/v1/attachments/${attachment.id}/download`,
-        created_at: attachment.created_at.toISOString(),
     }
 }
 
@@ -116,7 +90,7 @@ export function serializeTaskDetail({
 }: {
     task: TaskRow
     comments: (CommentRow & { author: UserRow | null })[]
-    attachments: (AttachmentRow & { uploaded_by: UserRow | null })[]
+    attachments: AttachmentRow[]
     today: string
 }): TaskDetail {
     return {

@@ -74,6 +74,7 @@ type WrittenChangeEvents = Awaited<ReturnType<typeof writeFieldChanges>>
  * @param input.status - `applied` (default) or `pending`.
  * @param input.actorUserId - The user making it, or null for imports and AI.
  * @param input.evidenceId - Email evidence id, if any.
+ * @param input.attachmentId - The funder file the AI read, if any.
  * @param input.reason - Why it changed.
  * @param input.confidence - AI confidence 0–1, if any.
  * @param input.effectiveOn - The day the change happened (YYYY-MM-DD): the email's date for AI
@@ -89,6 +90,7 @@ export async function applyFieldChanges<Entity extends ChangeEntityType>({
     status = 'applied',
     actorUserId = null,
     evidenceId = null,
+    attachmentId = null,
     reason = null,
     confidence = null,
     effectiveOn,
@@ -100,6 +102,7 @@ export async function applyFieldChanges<Entity extends ChangeEntityType>({
     status?: 'applied' | 'pending'
     actorUserId?: string | null
     evidenceId?: string | null
+    attachmentId?: string | null
     reason?: string | null
     confidence?: number | null
     effectiveOn?: string
@@ -137,6 +140,7 @@ export async function applyFieldChanges<Entity extends ChangeEntityType>({
         status,
         actorUserId,
         evidenceId,
+        attachmentId,
         reason,
         confidence,
     })
@@ -158,6 +162,7 @@ export async function applyFieldChanges<Entity extends ChangeEntityType>({
         source,
         actorUserId,
         evidenceId,
+        attachmentId,
     })
     return [...written, ...ruleEvents]
 }
@@ -174,6 +179,7 @@ export async function applyFieldChanges<Entity extends ChangeEntityType>({
  * @param input.source - Source of the stage change (the follow-on changes share it).
  * @param input.actorUserId - Who made it.
  * @param input.evidenceId - Email evidence, if any.
+ * @param input.attachmentId - The funder file, if any.
  * @returns The change events written.
  */
 async function applyStageRules({
@@ -186,6 +192,7 @@ async function applyStageRules({
     source,
     actorUserId,
     evidenceId,
+    attachmentId = null,
 }: {
     opportunityId: string
     fromStage: string | null
@@ -196,6 +203,7 @@ async function applyStageRules({
     source: ChangeSource
     actorUserId: string | null
     evidenceId: string | null
+    attachmentId?: string | null
 }): Promise<WrittenChangeEvents> {
     const events: WrittenChangeEvents = []
     for (const rule of stageRuleChanges({ fromStage, toStage, on, hasCommitteeDate, explicitFields })) {
@@ -207,6 +215,7 @@ async function applyStageRules({
                 source,
                 actorUserId,
                 evidenceId,
+                attachmentId,
                 reason: rule.reason,
             })),
         )
@@ -269,6 +278,7 @@ export async function acceptChangeEvent({
             source: event.source as ChangeSource,
             actorUserId,
             evidenceId: event.evidence_id,
+            attachmentId: event.attachment_id,
         })
     }
 }

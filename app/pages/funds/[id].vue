@@ -29,25 +29,39 @@ const toast = useToast()
 const { ownerItems } = usePipelineReference()
 const fundId = computed(() => String(route.params.id))
 
-const { data: fund, error: loadError } = await useAsyncData(`fund.${fundId.value}`, () =>
-    api<FundDetail>({ path: `/funds/${fundId.value}` }),
-)
+const {
+    data: fund,
+    refresh: refreshFund,
+    error: loadError,
+} = await useAsyncData(`fund.${fundId.value}`, () => api<FundDetail>({ path: `/funds/${fundId.value}` }))
 
 useSeoMeta({ title: () => `${fund.value?.name ?? 'Fund'} · Earth Bank Dashboard` })
 
-const PROFILE_TABS = ['overview', 'team', 'track_record', 'presence', 'diligence', 'import', 'sources'] as const
+const PROFILE_TABS = [
+    'overview',
+    'team',
+    'track_record',
+    'presence',
+    'diligence',
+    'files',
+    'import',
+    'sources',
+] as const
 type ProfileTab = (typeof PROFILE_TABS)[number]
-// ?tab=import&note=… opens a tab directly (facts from a pasted note link back to it this way).
+// ?tab=import&note=… or ?tab=files&file=… opens a tab directly (facts from a pasted note or a file link
+// back to it this way).
 const tab = ref<ProfileTab>(
     PROFILE_TABS.includes(route.query.tab as ProfileTab) ? (route.query.tab as ProfileTab) : 'overview',
 )
 const highlightedNoteId = computed(() => (typeof route.query.note === 'string' ? route.query.note : null))
+const highlightedFileId = computed(() => (typeof route.query.file === 'string' ? route.query.file : null))
 const tabItems = computed(() => [
     { label: 'Overview', value: 'overview', icon: 'i-lucide-file-text' },
     { label: `Team & network (${fund.value?.people.length ?? 0})`, value: 'team', icon: 'i-lucide-users' },
     { label: 'Deals & LPs', value: 'track_record', icon: 'i-lucide-handshake' },
     { label: 'News & impact', value: 'presence', icon: 'i-lucide-newspaper' },
     { label: `Due diligence (${diligenceGapCount.value} gaps)`, value: 'diligence', icon: 'i-lucide-clipboard-check' },
+    { label: 'Files', value: 'files', icon: 'i-lucide-paperclip' },
     { label: 'Import', value: 'import', icon: 'i-lucide-file-input' },
     { label: 'Sources', value: 'sources', icon: 'i-lucide-link' },
 ])
@@ -851,6 +865,15 @@ async function rejectFinding(finding: FundFinding) {
                             </div>
                         </UCard>
                     </template>
+
+                    <AttachmentsFilesCard
+                        v-if="fund && tab === 'files'"
+                        :owner-path="`/funds/${fund.id}`"
+                        owner-kind="fund"
+                        :highlighted-file-id="highlightedFileId"
+                        :is-read-only="Boolean(fund.archived_at)"
+                        @read="() => refreshFund()"
+                    />
 
                     <FundsNoteImport
                         v-if="fund && tab === 'import'"

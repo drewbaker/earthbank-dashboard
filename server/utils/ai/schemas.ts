@@ -71,3 +71,47 @@ export const DraftedReply = z.object({
     used_documents: z.array(z.string()).describe('Names of reference documents the email draws facts from.'),
 })
 export type DraftedReply = z.infer<typeof DraftedReply>
+
+// What a funder file (a proposal, award letter, grant agreement, term sheet, report template…) says
+// about Earth Bank's asks with that funder.
+export const FunderDocumentReading = z.object({
+    is_relevant: z
+        .boolean()
+        .describe("True when the document is about Earth Bank's fundraising with this funder or about the funder."),
+    summary: z
+        .string()
+        .describe('One or two sentences, at most 300 characters: what the document is and its funding facts.'),
+    reason: z.string().describe('Why the suggested changes follow from the document, for the team to review.'),
+    opportunity_id: z
+        .string()
+        .nullable()
+        .describe('Id of the existing opportunity the document is mainly about, from the context; null if unclear.'),
+    opportunity_updates: z.array(
+        z.object({
+            opportunity_id: z.string().describe('Id of an existing opportunity from the context.'),
+            stage: z.enum(OPPORTUNITY_STAGES).nullable(),
+            amount_usd: z.number().nullable().describe('Whole US dollars, only when the document states the amount.'),
+            expected_decision_on: z.string().nullable().describe('YYYY-MM-DD'),
+            expected_receipt_on: z.string().nullable().describe('YYYY-MM-DD when the money is expected to land.'),
+            next_step: z.string().nullable().describe('Short next action for Earth Bank, if the document implies one.'),
+            confidence: z.number().describe('0 to 1 for this opportunity update.'),
+            reason: z.string(),
+        }),
+    ),
+    new_contacts: z
+        .array(z.object({ name: z.string(), email: z.string().nullable(), title: z.string().nullable() }))
+        .describe('People at the funder the document names as contacts for this ask, not in the known contacts.'),
+})
+export type FunderDocumentReading = z.infer<typeof FunderDocumentReading>
+
+// A first look at a file attached to an email sent to the dashboard: is it a business document worth
+// filing, or something to leave alone (a logo, a signature, an invite, or a personal document)?
+export const EmailAttachmentScreen = z.object({
+    kind: z
+        .enum(['business_document', 'unrelated', 'personal'])
+        .describe(
+            'business_document: about a funder, a fund or lender, or Earth Bank fundraising (deck, proposal, fact sheet, report, term sheet, agreement, budget). unrelated: email signatures, logos, calendar invites, newsletters, receipts and anything not about funding. personal: private or personal documents (IDs, medical, tax, pay, bank details, personal letters, CVs sent privately).',
+        ),
+    summary: z.string().describe('At most 200 characters: what the document is, in neutral words.'),
+})
+export type EmailAttachmentScreen = z.infer<typeof EmailAttachmentScreen>

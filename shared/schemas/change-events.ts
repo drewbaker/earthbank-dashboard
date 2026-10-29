@@ -20,6 +20,8 @@ export const ChangeEvent = z.object({
     actor: UserSummary.nullable(),
     evidence_id: z.string().nullable(),
     evidence: EmailEvidence.nullable(),
+    /** The funder file the AI read, for changes from a file. */
+    attachment: z.object({ id: z.string(), filename: z.string(), download_url: z.string() }).nullable(),
     reason: z.string().nullable(),
     confidence: z.number().nullable(),
     resolved_at: IsoDateTime.nullable(),

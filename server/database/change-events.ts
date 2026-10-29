@@ -10,7 +10,11 @@ export type ChangeEventDraft = {
     toValue: Prisma.InputJsonValue | null
 }
 
-export const CHANGE_EVENT_INCLUDE = { actor_user: true, resolved_by_user: true } satisfies Prisma.ChangeEventInclude
+export const CHANGE_EVENT_INCLUDE = {
+    actor_user: true,
+    resolved_by_user: true,
+    attachment: { select: { id: true, filename: true, deleted_at: true } },
+} satisfies Prisma.ChangeEventInclude
 
 export type ChangeEventRow = Prisma.ChangeEventGetPayload<{ include: typeof CHANGE_EVENT_INCLUDE }>
 
@@ -25,6 +29,7 @@ export type ChangeEventRow = Prisma.ChangeEventGetPayload<{ include: typeof CHAN
  * @param input.status - `applied`, or `pending` for suggestions that wait for review.
  * @param input.actorUserId - The user who made it, or null for imports and AI.
  * @param input.evidenceId - Email evidence that caused it, if any.
+ * @param input.attachmentId - The funder file the AI read, if any.
  * @param input.reason - Why it changed (AI reasoning, revert note).
  * @param input.confidence - AI confidence 0–1, if any.
  * @returns The created change event rows.
@@ -38,6 +43,7 @@ export async function writeFieldChanges({
     status,
     actorUserId,
     evidenceId,
+    attachmentId = null,
     reason,
     confidence,
 }: {
@@ -49,6 +55,7 @@ export async function writeFieldChanges({
     status: ChangeStatus
     actorUserId: string | null
     evidenceId: string | null
+    attachmentId?: string | null
     reason: string | null
     confidence: number | null
 }) {
@@ -71,6 +78,7 @@ export async function writeFieldChanges({
                     status,
                     actor_user_id: actorUserId,
                     evidence_id: evidenceId,
+                    attachment_id: attachmentId,
                     reason,
                     confidence,
                 },

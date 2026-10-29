@@ -5,6 +5,7 @@ import { findFunderNames } from '#server/database/funders.ts'
 import type { EmailEvidence as EmailEvidenceRow, User as UserRow } from '#server/generated/prisma/client.ts'
 import { findOpportunityNames, listOpportunityIdsForFunder } from '#server/database/opportunities.ts'
 import { toIsoDateTime } from '#server/utils/dates.ts'
+import { attachmentDownloadPath } from '#server/utils/serializers/attachments.ts'
 import { serializeUserSummary } from '#server/utils/serializers/common.ts'
 import { serializeEmailEvidence } from '#server/utils/serializers/email-evidence.ts'
 import type { ChangeSource, ChangeStatus } from '#shared/constants/pipeline.ts'
@@ -100,6 +101,14 @@ export function serializeChangeEvent({
         actor: serializeUserSummary({ user: event.actor_user }),
         evidence_id: event.evidence_id,
         evidence: evidence ? serializeEmailEvidence({ evidence, viewer }) : null,
+        attachment:
+            event.attachment && !event.attachment.deleted_at
+                ? {
+                      id: event.attachment.id,
+                      filename: event.attachment.filename,
+                      download_url: attachmentDownloadPath({ attachmentId: event.attachment.id }),
+                  }
+                : null,
         reason: event.reason,
         confidence: event.confidence,
         resolved_at: toIsoDateTime({ date: event.resolved_at }),

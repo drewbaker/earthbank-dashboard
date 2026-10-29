@@ -1,7 +1,9 @@
 import { BackfillFunderJob } from '#root/jobs/backfill-funder.job.ts'
 import { CheckFundEmailActivityJob } from '#root/jobs/check-fund-email-activity.job.ts'
 import { CheckFundNamesJob } from '#root/jobs/check-fund-names.job.ts'
+import { FilePastEmailAttachmentsJob } from '#root/jobs/file-past-email-attachments.job.ts'
 import { ProcessForwardedEmailJob } from '#root/jobs/process-forwarded-email.job.ts'
+import { ReadAttachmentJob } from '#root/jobs/read-attachment.job.ts'
 import { ResearchFundJob } from '#root/jobs/research-fund.job.ts'
 import { ScreenPendingFundsJob } from '#root/jobs/screen-pending-funds.job.ts'
 import { SendEmailJob } from '#root/jobs/send-email.job.ts'
@@ -111,6 +113,45 @@ export async function enqueueFunderBackfill({ funderId }: { funderId: string }) 
 export async function enqueueForwardedEmail({ receivedEmailId }: { receivedEmailId: string }) {
     await ensureJobQueue()
     return Sidequest.build(ProcessForwardedEmailJob).queue('mail').maxAttempts(5).enqueue({ receivedEmailId })
+}
+
+/**
+ * Queue the AI reading of a funder or fund file (once per file at a time). It runs on the default
+ * queue, not behind long Gmail syncs, so an uploaded file is read within a minute or two.
+ *
+ * @param input.attachmentId - The file.
+ * @returns `queued`, or `already_queued` when it's already waiting or being read.
+ */
+export async function enqueueAttachmentRead({ attachmentId }: { attachmentId: string }) {
+    await ensureJobQueue()
+    return queueOnce({
+        enqueue: () =>
+            Sidequest.build(ReadAttachmentJob)
+                .queue('default')
+                .maxAttempts(3)
+                .timeout(15 * 60 * 1000)
+                .unique({ withArgs: true })
+                .enqueue({ attachmentId }),
+    })
+}
+
+/**
+ * Queue a pass over every email sent to the dashboard address, filing the attachments of any that
+ * haven't had theirs filed (emails from before attachments were read, or whose webhook was lost).
+ *
+ * @returns `queued`, or `already_queued` when a pass is waiting or running.
+ */
+export async function enqueuePastEmailAttachments() {
+    await ensureJobQueue()
+    return queueOnce({
+        enqueue: () =>
+            Sidequest.build(FilePastEmailAttachmentsJob)
+                .queue('mail')
+                .maxAttempts(3)
+                .timeout(60 * 60 * 1000)
+                .unique(true)
+                .enqueue(),
+    })
 }
 
 /**

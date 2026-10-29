@@ -1,7 +1,5 @@
+import { MAX_ATTACHMENT_BYTES } from '#shared/constants/attachments.ts'
 import { apiErrorMessage } from '~/composables/useApi.ts'
-
-/** Largest file the server accepts (keep in step with the attachments route). */
-export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
 /**
  * Upload files to a task, or to one of your comments on it.
@@ -46,4 +44,41 @@ export function useAttachmentUpload() {
         }
         return failures
     }
+}
+
+/**
+ * Upload files to a funder or a fund (the AI then reads them).
+ *
+ * @param input.uploadPath - The API path, e.g. `/v1/funds/fmg_…/attachments`.
+ * @param input.files - Files to upload.
+ * @param input.fields - Extra form fields (a funder file's `opportunity_id`).
+ * @returns Messages for files that failed (empty when all uploaded).
+ */
+export async function uploadOwnerFiles({
+    uploadPath,
+    files,
+    fields = {},
+}: {
+    uploadPath: string
+    files: File[]
+    fields?: Record<string, string>
+}) {
+    const failures: string[] = []
+    for (const file of files) {
+        if (file.size > MAX_ATTACHMENT_BYTES) {
+            failures.push(`${file.name} is over 25 MB.`)
+            continue
+        }
+        const form = new FormData()
+        form.append('file', file)
+        for (const [name, value] of Object.entries(fields)) {
+            form.append(name, value)
+        }
+        try {
+            await $fetch(uploadPath, { method: 'POST', body: form })
+        } catch (error) {
+            failures.push(`${file.name}: ${apiErrorMessage({ error, fallback: 'upload failed' })}`)
+        }
+    }
+    return failures
 }

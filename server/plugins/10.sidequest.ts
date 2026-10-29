@@ -1,8 +1,14 @@
 import { defineNitroPlugin } from 'nitropack/runtime'
+import { listUnreadAttachmentIds } from '#server/database/attachments.ts'
 import { config } from '#server/utils/config.ts'
 import { queueFirstPublicListSyncs, resumeFundResearch } from '#server/utils/funds/resume.ts'
 import { ensureSeedFunds } from '#server/utils/funds/seed.ts'
-import { enqueueBookkeepingSync, enqueueFundEmailActivityCheck } from '#server/utils/jobs/enqueue.ts'
+import {
+    enqueueAttachmentRead,
+    enqueueBookkeepingSync,
+    enqueueFundEmailActivityCheck,
+    enqueuePastEmailAttachments,
+} from '#server/utils/jobs/enqueue.ts'
 import { ensureJobQueue, startJobWorkers, stopJobWorkers } from '#server/utils/jobs/sidequest.ts'
 
 export default defineNitroPlugin(async nitroApp => {
@@ -15,6 +21,7 @@ export default defineNitroPlugin(async nitroApp => {
         // First run: the seed lenders go on the Funds list and their research is queued. After a deploy,
         // research jobs lost in the restart are queued again.
         startFundResearch().catch(error => console.error('[research] seeding or resuming fund research failed', error))
+        startFileReading().catch(error => console.error('[attachments] queueing file reading failed', error))
     } else {
         await ensureJobQueue()
     }
@@ -42,5 +49,21 @@ async function startFundResearch() {
     const resumed = await resumeFundResearch({ now: new Date() })
     if (resumed > 0) {
         console.info(`[research] queued ${resumed} interrupted fund research jobs`)
+    }
+}
+
+/**
+ * Queue files whose reading a restart interrupted, and a pass over the emails sent to the dashboard
+ * address that files any attachments not filed yet (emails from before attachments were read, or
+ * whose webhook was lost; each email is handled once).
+ *
+ * @returns Resolves once queued.
+ */
+async function startFileReading() {
+    for (const attachmentId of await listUnreadAttachmentIds()) {
+        await enqueueAttachmentRead({ attachmentId })
+    }
+    if (config.resendApiKey && config.anthropicApiKey) {
+        await enqueuePastEmailAttachments()
     }
 }

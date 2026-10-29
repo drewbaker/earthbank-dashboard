@@ -17,6 +17,7 @@ import { todayDateOnly, toDateOnly } from '#server/utils/dates.ts'
 import { createFunderWithDetails, loadFunderDetail } from '#server/utils/funders.ts'
 import { findEmailOwnerUserId } from '#server/utils/mail/attribution.ts'
 import type { IncomingEmail } from '#server/utils/mail/types.ts'
+import type { ChangeSource } from '#shared/constants/pipeline.ts'
 import type { FunderDetail } from '#shared/schemas/index.ts'
 import { emailDomain, normalizeEmailAddress } from '#shared/utils/email-addresses.ts'
 import { funderNameKey } from '#shared/utils/funder-names.ts'
@@ -344,32 +345,19 @@ async function applyClassification({
         reason: string
         riskyFields: Set<string>
     }) {
-        const safe: Record<string, ChangeValue> = {}
-        const review: Record<string, ChangeValue> = {}
-        for (const [field, value] of Object.entries(changes)) {
-            const manualAt = await latestManualChangeAt({ entityType, entityId, field })
-            if (manualAt && manualAt > email.sentAt) {
-                continue
-            }
-            if (confidence >= AUTO_APPLY_CONFIDENCE && !riskyFields.has(field)) {
-                safe[field] = value
-            } else {
-                review[field] = value
-            }
-        }
-        // Stage rules (approval → funding 60 days later) date from when the email was sent.
-        const effectiveOn = todayDateOnly({ now: email.sentAt, timeZone: config.defaultTimeZone })
-        const common = {
+        const counts = await proposeFieldChanges({
             entityType,
             entityId,
+            changes,
+            confidence,
+            reason,
+            riskyFields,
+            happenedAt: email.sentAt,
             source: changeSource,
             evidenceId,
-            reason,
-            confidence,
-            effectiveOn,
-        } as const
-        applied += (await applyFieldChanges({ ...common, changes: safe as never, status: 'applied' })).length
-        pending += (await applyFieldChanges({ ...common, changes: review as never, status: 'pending' })).length
+        })
+        applied += counts.applied
+        pending += counts.pending
     }
 
     // Facts read off the email itself (did we really exchange email with this person, and who wrote)
@@ -478,6 +466,74 @@ async function applyClassification({
             source: changeSource,
         }).catch(error => console.info('[mail] contact not added', error instanceof Error ? error.message : error))
     }
+    return { applied, pending }
+}
+
+/**
+ * Apply AI-proposed changes to one funder or opportunity: confident ones (≥ 0.8, and not in
+ * `riskyFields`) apply straight away, the rest wait on the Activity page. A field someone edited by
+ * hand after the email or file was written is left alone.
+ *
+ * @param input.entityType - `funder` or `opportunity`.
+ * @param input.entityId - The record.
+ * @param input.changes - Proposed field values.
+ * @param input.confidence - AI confidence for these changes.
+ * @param input.reason - AI reasoning.
+ * @param input.riskyFields - Fields that always wait for review.
+ * @param input.happenedAt - When the email was sent (or the file arrived); stage rules date from it.
+ * @param input.source - The change source.
+ * @param input.evidenceId - The email behind it, if any.
+ * @param input.attachmentId - The file behind it, if any.
+ * @returns How many changes were applied and how many wait for review.
+ */
+export async function proposeFieldChanges({
+    entityType,
+    entityId,
+    changes,
+    confidence,
+    reason,
+    riskyFields,
+    happenedAt,
+    source,
+    evidenceId = null,
+    attachmentId = null,
+}: {
+    entityType: 'funder' | 'opportunity'
+    entityId: string
+    changes: Record<string, ChangeValue>
+    confidence: number
+    reason: string
+    riskyFields: Set<string>
+    happenedAt: Date
+    source: ChangeSource
+    evidenceId?: string | null
+    attachmentId?: string | null
+}) {
+    const safe: Record<string, ChangeValue> = {}
+    const review: Record<string, ChangeValue> = {}
+    for (const [field, value] of Object.entries(changes)) {
+        const manualAt = await latestManualChangeAt({ entityType, entityId, field })
+        if (manualAt && manualAt > happenedAt) {
+            continue
+        }
+        if (confidence >= AUTO_APPLY_CONFIDENCE && !riskyFields.has(field)) {
+            safe[field] = value
+        } else {
+            review[field] = value
+        }
+    }
+    const common = {
+        entityType,
+        entityId,
+        source,
+        evidenceId,
+        attachmentId,
+        reason,
+        confidence,
+        effectiveOn: todayDateOnly({ now: happenedAt, timeZone: config.defaultTimeZone }),
+    } as const
+    const applied = (await applyFieldChanges({ ...common, changes: safe as never, status: 'applied' })).length
+    const pending = (await applyFieldChanges({ ...common, changes: review as never, status: 'pending' })).length
     return { applied, pending }
 }
 

@@ -269,6 +269,7 @@ export function serializeFundNote({ note }: { note: FundNoteRow }): FundNote {
         title: note.title,
         origin: note.origin as FundNote['origin'],
         doc_url: note.doc_url,
+        attachment_id: note.attachment_id,
         author: serializeUserSummary({ user: note.author }),
         status: note.status as FundNote['status'],
         error: note.error,

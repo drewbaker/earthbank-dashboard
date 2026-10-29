@@ -1,49 +1,78 @@
+import type { Prisma } from '#server/generated/prisma/client.ts'
 import { db } from '#server/utils/db.ts'
+import type { AttachmentOrigin, AttachmentReadStatus } from '#shared/constants/attachments.ts'
 
-export const ATTACHMENT_INCLUDE = { uploaded_by: true } as const
+export const ATTACHMENT_INCLUDE = {
+    uploaded_by: true,
+    opportunity: { select: { id: true, name: true } },
+} satisfies Prisma.AttachmentInclude
+
+export type AttachmentRow = Prisma.AttachmentGetPayload<{ include: typeof ATTACHMENT_INCLUDE }>
+
+/** What a file is attached to: a task (or one of its comments), a funder (and maybe one of its asks), or a fund. */
+export type AttachmentTarget =
+    | { kind: 'task'; taskId: string; commentId?: string | null }
+    | { kind: 'funder'; funderId: string; opportunityId?: string | null }
+    | { kind: 'fund'; fundManagerId: string }
 
 /**
- * Record an uploaded file.
+ * Record a stored file.
  *
  * @param input.attachmentId - Pre-generated id (it's part of the storage key).
- * @param input.taskId - The task.
- * @param input.commentId - The comment it belongs to, when attached to a comment.
- * @param input.uploadedById - Who uploaded it.
+ * @param input.target - What it's attached to.
+ * @param input.uploadedById - Who uploaded it (or sent the email it came on).
  * @param input.filename - Original file name.
  * @param input.contentType - MIME type.
  * @param input.sizeBytes - Size.
  * @param input.storageKey - Where the bytes live.
+ * @param input.origin - `upload` (default) or `email`.
+ * @param input.receivedEmailId - Resend's id for the email it came on.
+ * @param input.readStatus - `queued` when the AI will read it; null for task files.
+ * @param input.createdAt - When; defaults to now (emailed files keep the email's time).
  * @returns The attachment with its uploader.
  */
 export function createAttachmentRow({
     attachmentId,
-    taskId,
-    commentId = null,
+    target,
     uploadedById,
     filename,
     contentType,
     sizeBytes,
     storageKey,
+    origin = 'upload',
+    receivedEmailId = null,
+    readStatus = null,
+    createdAt,
 }: {
     attachmentId: string
-    taskId: string
-    commentId?: string | null
-    uploadedById: string
+    target: AttachmentTarget
+    uploadedById: string | null
     filename: string
     contentType: string
     sizeBytes: number
     storageKey: string
+    origin?: AttachmentOrigin
+    receivedEmailId?: string | null
+    readStatus?: AttachmentReadStatus | null
+    createdAt?: Date
 }) {
     return db().attachment.create({
         data: {
             id: attachmentId,
-            task_id: taskId,
-            comment_id: commentId,
+            task_id: target.kind === 'task' ? target.taskId : null,
+            comment_id: target.kind === 'task' ? (target.commentId ?? null) : null,
+            funder_id: target.kind === 'funder' ? target.funderId : null,
+            opportunity_id: target.kind === 'funder' ? (target.opportunityId ?? null) : null,
+            fund_manager_id: target.kind === 'fund' ? target.fundManagerId : null,
             uploaded_by_id: uploadedById,
             filename,
             content_type: contentType,
             size_bytes: sizeBytes,
             storage_key: storageKey,
+            origin,
+            received_email_id: receivedEmailId,
+            read_status: readStatus,
+            ...(createdAt ? { created_at: createdAt } : {}),
         },
         include: ATTACHMENT_INCLUDE,
     })
@@ -71,6 +100,61 @@ export function listTaskAttachments({ taskId }: { taskId: string }) {
         include: ATTACHMENT_INCLUDE,
         orderBy: { id: 'asc' },
     })
+}
+
+/**
+ * A funder's or a fund's live files, newest first.
+ *
+ * @param input.funderId - The funder, or
+ * @param input.fundManagerId - the fund.
+ * @returns Attachments with uploaders.
+ */
+export function listOwnerAttachments({ funderId, fundManagerId }: { funderId?: string; fundManagerId?: string }) {
+    return db().attachment.findMany({
+        where: {
+            deleted_at: null,
+            ...(funderId ? { funder_id: funderId } : { fund_manager_id: fundManagerId ?? '' }),
+        },
+        include: ATTACHMENT_INCLUDE,
+        orderBy: { id: 'desc' },
+    })
+}
+
+/**
+ * Record how the AI reading of a file is going or went.
+ *
+ * @param input.attachmentId - The file.
+ * @param input.data - Status, summary, counts and any error.
+ * @returns The updated attachment.
+ */
+export function updateAttachmentRead({
+    attachmentId,
+    data,
+}: {
+    attachmentId: string
+    data: {
+        read_status: AttachmentReadStatus
+        read_summary?: string | null
+        read_error?: string | null
+        read_counts?: Prisma.InputJsonValue
+        read_at?: Date | null
+        opportunity_id?: string | null
+    }
+}) {
+    return db().attachment.update({ where: { id: attachmentId }, data, include: ATTACHMENT_INCLUDE })
+}
+
+/**
+ * Files waiting to be read (or interrupted while being read), for re-queueing after a restart.
+ *
+ * @returns Ids of files still queued or reading.
+ */
+export async function listUnreadAttachmentIds() {
+    const rows = await db().attachment.findMany({
+        where: { deleted_at: null, read_status: { in: ['queued', 'reading'] } },
+        select: { id: true },
+    })
+    return rows.map(row => row.id)
 }
 
 /**

@@ -331,6 +331,15 @@ async function toggleArchived() {
 
                     <PipelineFunderEmails :funder-id="funder.id" />
 
+                    <AttachmentsFilesCard
+                        :owner-path="`/funders/${funder.id}`"
+                        owner-kind="funder"
+                        :opportunities="
+                            funder.opportunities.map(opportunity => ({ id: opportunity.id, name: opportunity.name }))
+                        "
+                        @read="reloadFunder"
+                    />
+
                     <UCard :ui="{ body: 'p-0 sm:p-0' }">
                         <template #header>
                             <div class="flex items-center justify-between">

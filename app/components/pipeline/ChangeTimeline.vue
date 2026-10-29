@@ -26,6 +26,7 @@ const SOURCE_ICONS: Record<ChangeEvent['source'], string> = {
     ai_email: 'i-lucide-sparkles',
     ai_forward: 'i-lucide-forward',
     ai_instruction: 'i-lucide-mail-check',
+    ai_document: 'i-lucide-file-text',
 }
 
 const STATUS_BADGES: Record<ChangeEvent['status'], { label: string; color: 'warning' | 'neutral' | 'error' } | null> = {
@@ -119,6 +120,14 @@ const STATUS_BADGES: Record<ChangeEvent['status'], { label: string; color: 'warn
                     </p>
                     <p class="text-muted">{{ event.evidence.summary }}</p>
                 </div>
+                <a
+                    v-if="event.attachment"
+                    :href="event.attachment.download_url"
+                    class="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                    <UIcon name="i-lucide-file-text" class="size-3.5" />
+                    {{ event.attachment.filename }}
+                </a>
             </div>
             <div v-if="event.status === 'applied'" class="flex shrink-0 items-start gap-1">
                 <UButton

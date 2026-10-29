@@ -94,7 +94,7 @@ export const FUNDER_KIND_LABELS: Record<FunderKind, string> = {
 export const FUNDER_STATUSES = ['active', 'draft'] as const
 export type FunderStatus = (typeof FUNDER_STATUSES)[number]
 
-export const CHANGE_SOURCES = ['manual', 'import', 'ai_email', 'ai_forward', 'ai_instruction'] as const
+export const CHANGE_SOURCES = ['manual', 'import', 'ai_email', 'ai_forward', 'ai_instruction', 'ai_document'] as const
 export type ChangeSource = (typeof CHANGE_SOURCES)[number]
 
 export const CHANGE_SOURCE_LABELS: Record<ChangeSource, string> = {
@@ -103,6 +103,7 @@ export const CHANGE_SOURCE_LABELS: Record<ChangeSource, string> = {
     ai_email: 'AI from email',
     ai_forward: 'AI from forwarded email',
     ai_instruction: 'Instruction by email',
+    ai_document: 'AI from a file',
 }
 
 // superseded: a suggestion made out of date by a newer email or edit to the same field.

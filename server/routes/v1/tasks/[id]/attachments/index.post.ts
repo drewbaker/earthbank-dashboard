@@ -8,10 +8,9 @@ import { recordAudit } from '#server/utils/audit.ts'
 import { requireUser } from '#server/utils/auth.ts'
 import { ApiError, badRequest, forbidden, notFound } from '#server/utils/errors.ts'
 import { newId } from '#server/utils/ids.ts'
-import { serializeAttachment } from '#server/utils/serializers/tasks.ts'
+import { serializeAttachment } from '#server/utils/serializers/attachments.ts'
 import { putFile, safeFilename } from '#server/utils/storage.ts'
-
-const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+import { MAX_ATTACHMENT_BYTES } from '#shared/constants/attachments.ts'
 
 defineRouteMeta({
     openAPI: {
@@ -65,8 +64,7 @@ export default defineApiHandler(async event => {
     await putFile({ key: storageKey, data: file.data })
     const attachment = await createAttachmentRow({
         attachmentId,
-        taskId,
-        commentId,
+        target: { kind: 'task', taskId, commentId },
         uploadedById: ctx.user.id,
         filename: file.filename!.split(/[/\\]/).at(-1)!.slice(0, 200),
         contentType: file.type ?? 'application/octet-stream',

@@ -46,30 +46,30 @@ model User {
     invited_users User[]       @relation("user_inviter")
     sign_in_links SignInLink[]
 
-    sessions            Session[]
-    audit_log           AuditLog[]
-    owned_funders       Funder[]
-    owned_opportunities Opportunity[]
-    change_events       ChangeEvent[]         @relation("change_event_actor")
-    resolved_changes    ChangeEvent[]         @relation("change_event_resolver")
-    assigned_tasks      Task[]                @relation("task_assignee")
-    created_tasks       Task[]                @relation("task_creator")
-    created_milestones  Milestone[]
-    comments            Comment[]
-    attachments         Attachment[]
-    scenarios           Scenario[]
-    planned_expenses    PlannedExpense[]
-    mailbox_connection  MailboxConnection?
-    email_evidence      EmailEvidence[]
-    knowledge_sources   KnowledgeSource[]
-    share_links         ShareLink[]
-    owned_fund_managers FundManager[]
-    approved_fund_managers FundManager[] @relation("fund_approval")
-    activity_confirmed_fund_managers FundManager[] @relation("fund_activity_confirmation")
-    emailed_fund_managers FundManager[] @relation("fund_last_email")
-    rejected_findings   FundFinding[]
-    diligence_answers   FundDiligenceAnswer[]
-    fund_notes          FundNote[]
+    sessions                         Session[]
+    audit_log                        AuditLog[]
+    owned_funders                    Funder[]
+    owned_opportunities              Opportunity[]
+    change_events                    ChangeEvent[]         @relation("change_event_actor")
+    resolved_changes                 ChangeEvent[]         @relation("change_event_resolver")
+    assigned_tasks                   Task[]                @relation("task_assignee")
+    created_tasks                    Task[]                @relation("task_creator")
+    created_milestones               Milestone[]
+    comments                         Comment[]
+    attachments                      Attachment[]
+    scenarios                        Scenario[]
+    planned_expenses                 PlannedExpense[]
+    mailbox_connection               MailboxConnection?
+    email_evidence                   EmailEvidence[]
+    knowledge_sources                KnowledgeSource[]
+    share_links                      ShareLink[]
+    owned_fund_managers              FundManager[]
+    approved_fund_managers           FundManager[]         @relation("fund_approval")
+    activity_confirmed_fund_managers FundManager[]         @relation("fund_activity_confirmation")
+    emailed_fund_managers            FundManager[]         @relation("fund_last_email")
+    rejected_findings                FundFinding[]
+    diligence_answers                FundDiligenceAnswer[]
+    fund_notes                       FundNote[]
 
     @@map("user")
 }
@@ -161,6 +161,7 @@ model Funder {
     milestones    Milestone[]
     tasks         Task[]
     emails        EmailEvidence[]
+    attachments   Attachment[]
 
     @@index([tier])
     @@index([relationship_status])
@@ -230,11 +231,12 @@ model Opportunity {
     created_at           DateTime  @default(now())
     updated_at           DateTime  @updatedAt
 
-    funder     Funder      @relation(fields: [funder_id], references: [id], onDelete: Cascade)
-    goal       Goal        @relation(fields: [goal_id], references: [id])
-    owner      User?       @relation(fields: [owner_id], references: [id], onDelete: SetNull)
-    milestones Milestone[]
-    tasks      Task[]
+    funder      Funder       @relation(fields: [funder_id], references: [id], onDelete: Cascade)
+    goal        Goal         @relation(fields: [goal_id], references: [id])
+    owner       User?        @relation(fields: [owner_id], references: [id], onDelete: SetNull)
+    milestones  Milestone[]
+    tasks       Task[]
+    attachments Attachment[]
 
     @@index([funder_id])
     @@index([goal_id, stage])
@@ -251,12 +253,14 @@ model ChangeEvent {
     field               String
     from_value          Json?
     to_value            Json?
-    // manual | import | ai_email | ai_forward
+    // manual | import | ai_email | ai_forward | ai_instruction | ai_document
     source              String
     // applied | pending | rejected | reverted | superseded
     status              String
     actor_user_id       String?
     evidence_id         String?
+    // The funder file the AI read, for ai_document changes.
+    attachment_id       String?
     reason              String?
     confidence          Float?
     resolved_at         DateTime?
@@ -266,6 +270,7 @@ model ChangeEvent {
     actor_user       User?          @relation("change_event_actor", fields: [actor_user_id], references: [id], onDelete: SetNull)
     resolved_by_user User?          @relation("change_event_resolver", fields: [resolved_by_user_id], references: [id], onDelete: SetNull)
     evidence         EmailEvidence? @relation(fields: [evidence_id], references: [id], onDelete: SetNull)
+    attachment       Attachment?    @relation(fields: [attachment_id], references: [id], onDelete: SetNull)
 
     @@index([entity_type, entity_id, field])
     @@index([status])
@@ -366,26 +371,52 @@ model Comment {
     @@map("comment")
 }
 
-// A file on a task. The bytes live on disk under DATA_DIR/files at storage_key.
+// A file on a task, a funder (optionally one of its asks) or a fund. The bytes live on disk under
+// DATA_DIR/files at storage_key. Exactly one of task_id, funder_id and fund_manager_id is set.
+// Funder and fund files (usually PDFs) are read by the AI into the pipeline or the fund's research.
 model Attachment {
-    id             String    @id
-    task_id        String
+    id                String    @id
+    task_id           String?
     // Set when the file was attached to a comment rather than to the task itself.
-    comment_id     String?
-    uploaded_by_id String?
-    filename       String
-    content_type   String
-    size_bytes     Int
-    storage_key    String
-    deleted_at     DateTime?
-    created_at     DateTime  @default(now())
+    comment_id        String?
+    funder_id         String?
+    // The ask a funder file is about, when someone said (or the AI could tell).
+    opportunity_id    String?
+    fund_manager_id   String?
+    uploaded_by_id    String?
+    filename          String
+    content_type      String
+    size_bytes        Int
+    storage_key       String
+    // upload | email (an attachment on an email sent to the dashboard address)
+    origin            String    @default("upload")
+    // Resend's id for the received email it came from, so an email's files are filed once.
+    received_email_id String?
+    // How the AI reading went: null (task files aren't read) | queued | reading | done | skipped | failed
+    read_status       String?
+    // What the AI took from it (≤ 300 characters), or why it was skipped or failed.
+    read_summary      String?
+    read_error        String?
+    // { facts, people, diligence, applied, pending, contacts }: what reading it added.
+    read_counts       Json?
+    read_at           DateTime?
+    deleted_at        DateTime?
+    created_at        DateTime  @default(now())
 
-    task        Task     @relation(fields: [task_id], references: [id], onDelete: Cascade)
-    comment     Comment? @relation(fields: [comment_id], references: [id], onDelete: SetNull)
-    uploaded_by User?    @relation(fields: [uploaded_by_id], references: [id], onDelete: SetNull)
+    task          Task?         @relation(fields: [task_id], references: [id], onDelete: Cascade)
+    comment       Comment?      @relation(fields: [comment_id], references: [id], onDelete: SetNull)
+    funder        Funder?       @relation(fields: [funder_id], references: [id], onDelete: Cascade)
+    opportunity   Opportunity?  @relation(fields: [opportunity_id], references: [id], onDelete: SetNull)
+    fund_manager  FundManager?  @relation(fields: [fund_manager_id], references: [id], onDelete: Cascade)
+    uploaded_by   User?         @relation(fields: [uploaded_by_id], references: [id], onDelete: SetNull)
+    fund_notes    FundNote[]
+    change_events ChangeEvent[]
 
     @@index([task_id])
     @@index([comment_id])
+    @@index([funder_id])
+    @@index([fund_manager_id])
+    @@index([received_email_id])
     @@map("attachment")
 }
 
@@ -637,48 +668,48 @@ model ShareLink {
 
 // A lender (debt fund, impact fund, CDFI, mission bank, fintech lender) being considered as a partner.
 model FundManager {
-    id                 String    @id
-    name               String
+    id                  String    @id
+    name                String
     // Lowercased, punctuation-free name for de-duplication (normalizeOrganizationName).
-    name_key           String    @unique
+    name_key            String    @unique
     // When the displayed name was tidied (capitalization, legal forms) by the AI name check or a person;
     // null for names nobody has checked yet.
-    name_checked_at    DateTime?
-    website_url        String?
+    name_checked_at     DateTime?
+    website_url         String?
     // Bare host without "www.", also used for de-duplication.
-    website_domain     String?   @unique
+    website_domain      String?   @unique
     // The fund's LinkedIn company page (given when added, or found by research).
-    linkedin_url       String?
+    linkedin_url        String?
     // pending | approved. Funds the spider finds wait as pending (not researched, not on the board or
     // map) until someone approves them; funds people add are approved.
-    approval_status    String    @default("approved")
-    approved_at        DateTime?
-    approved_by_id     String?
+    approval_status     String    @default("approved")
+    approved_at         DateTime?
+    approved_by_id      String?
     // The AI screen of a spider find (lends where and to whom, and whether that fits Earth Bank): when it
     // ran, its one-line reason, and when it archived the fund as outside Earth Bank's focus.
-    screened_at        DateTime?
-    screening_note     String?
-    screened_out_at    DateTime?
+    screened_at         DateTime?
+    screening_note      String?
+    screened_out_at     DateTime?
     // new_addition | sourced | in_diligence | shortlisted | passed
-    stage              String    @default("new_addition")
+    stage               String    @default("new_addition")
     // FUND_FIT_TAGS keys.
-    fit_tags           Json      @default("[]")
-    notes              String?
-    owner_id           String?
+    fit_tags            Json      @default("[]")
+    notes               String?
+    owner_id            String?
     // seed | manual | spider_person | spider_public_record | spider_suggestion
-    origin             String    @default("manual")
-    discovered_from_id String?
+    origin              String    @default("manual")
+    discovered_from_id  String?
     // How the fund came up (e.g. "co-lender on a 2024 loan in Kenya", "BII investee: SME lending, Ghana")
     // or the team's region hint for seeds; used to find the right website for common names.
-    discovery_context  String?
+    discovery_context   String?
     // Website and LinkedIn candidates the research couldn't choose between, for a person to confirm.
-    identity_candidates Json     @default("[]")
+    identity_candidates Json      @default("[]")
     // queued | running | done | failed | skipped
-    research_status    String    @default("queued")
-    research_queued_at DateTime?
-    researched_at      DateTime?
-    research_error     String?
-    archived_at        DateTime?
+    research_status     String    @default("queued")
+    research_queued_at  DateTime?
+    researched_at       DateTime?
+    research_error      String?
+    archived_at         DateTime?
 
     // Current research values, recomputed from active findings after every run (for sorting and filtering).
     summary                        String?
@@ -732,19 +763,20 @@ model FundManager {
     created_at DateTime @default(now())
     updated_at DateTime @updatedAt
 
-    owner             User?                    @relation(fields: [owner_id], references: [id], onDelete: SetNull)
-    approved_by       User?                    @relation("fund_approval", fields: [approved_by_id], references: [id], onDelete: SetNull)
-    activity_confirmed_by User?                @relation("fund_activity_confirmation", fields: [activity_confirmed_by_id], references: [id], onDelete: SetNull)
-    last_email_user   User?                    @relation("fund_last_email", fields: [last_email_user_id], references: [id], onDelete: SetNull)
-    discovered_from   FundManager?             @relation("fund_discovery", fields: [discovered_from_id], references: [id], onDelete: SetNull)
-    discovered        FundManager[]            @relation("fund_discovery")
-    findings          FundFinding[]
-    people            FundPerson[]
-    diligence_answers FundDiligenceAnswer[]
-    research_runs     FundResearchRun[]
-    imported_notes    FundNote[]
-    organization      ResearchOrganization?
-    public_records    PublicInvestmentRecord[]
+    owner                 User?                    @relation(fields: [owner_id], references: [id], onDelete: SetNull)
+    approved_by           User?                    @relation("fund_approval", fields: [approved_by_id], references: [id], onDelete: SetNull)
+    activity_confirmed_by User?                    @relation("fund_activity_confirmation", fields: [activity_confirmed_by_id], references: [id], onDelete: SetNull)
+    last_email_user       User?                    @relation("fund_last_email", fields: [last_email_user_id], references: [id], onDelete: SetNull)
+    discovered_from       FundManager?             @relation("fund_discovery", fields: [discovered_from_id], references: [id], onDelete: SetNull)
+    discovered            FundManager[]            @relation("fund_discovery")
+    findings              FundFinding[]
+    people                FundPerson[]
+    diligence_answers     FundDiligenceAnswer[]
+    research_runs         FundResearchRun[]
+    imported_notes        FundNote[]
+    attachments           Attachment[]
+    organization          ResearchOrganization?
+    public_records        PublicInvestmentRecord[]
 
     @@index([stage])
     @@index([approval_status])
@@ -928,9 +960,10 @@ model FundNote {
     id                 String   @id
     fund_manager_id    String
     author_user_id     String?
-    // pasted | google_doc
+    // pasted | google_doc | attachment (a file uploaded or emailed to the fund)
     origin             String
     doc_url            String?
+    attachment_id      String?
     // "Note from Drew on Oct 18, 2026, 3:04 PM", in the author's time zone at import.
     title              String
     text               String
@@ -948,6 +981,7 @@ model FundNote {
 
     fund_manager      FundManager           @relation(fields: [fund_manager_id], references: [id], onDelete: Cascade)
     author            User?                 @relation(fields: [author_user_id], references: [id], onDelete: SetNull)
+    attachment        Attachment?           @relation(fields: [attachment_id], references: [id], onDelete: SetNull)
     diligence_answers FundDiligenceAnswer[]
 
     @@index([fund_manager_id, created_at])
@@ -957,28 +991,28 @@ model FundNote {
 // One piece of paid AI work for fund research: researching a fund, reading a public investment list,
 // or deciding whether spidered organizations are lenders. Its cost feeds the monthly budget.
 model FundResearchRun {
-    id               String    @id
+    id                String    @id
     // fund | public_list | classification
-    kind             String    @default("fund")
-    fund_manager_id  String?
+    kind              String    @default("fund")
+    fund_manager_id   String?
     // The public list read (kind public_list).
-    source_key       String?
+    source_key        String?
     // running | done | failed | skipped
-    status           String    @default("running")
-    model            String?
-    started_at       DateTime
-    finished_at      DateTime?
-    input_tokens     Int       @default(0)
-    output_tokens    Int       @default(0)
-    web_searches     Int       @default(0)
-    web_fetches      Int       @default(0)
+    status            String    @default("running")
+    model             String?
+    started_at        DateTime
+    finished_at       DateTime?
+    input_tokens      Int       @default(0)
+    output_tokens     Int       @default(0)
+    web_searches      Int       @default(0)
+    web_fetches       Int       @default(0)
     // Firecrawl credits (pages read with a full browser, web searches); their cost is in cost_micro_usd.
-    firecrawl_credits Int      @default(0)
-    cost_micro_usd   Int       @default(0)
-    findings_added   Int       @default(0)
-    findings_dropped Int       @default(0)
-    funds_discovered Int       @default(0)
-    error            String?
+    firecrawl_credits Int       @default(0)
+    cost_micro_usd    Int       @default(0)
+    findings_added    Int       @default(0)
+    findings_dropped  Int       @default(0)
+    funds_discovered  Int       @default(0)
+    error             String?
 
     fund_manager FundManager?  @relation(fields: [fund_manager_id], references: [id], onDelete: Cascade)
     findings     FundFinding[]

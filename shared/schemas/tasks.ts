@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { TASK_STATUSES } from '#shared/constants/pipeline.ts'
 import { DateOnly, DateOnlyInput, IsoDateTime, listOf, queryBoolean, UserSummary } from '#shared/schemas/common.ts'
+import { Attachment } from '#shared/schemas/attachments.ts'
 import { OpportunityReference } from '#shared/schemas/milestones.ts'
 
 export const Task = z.object({
@@ -26,20 +27,6 @@ export type Task = z.infer<typeof Task>
 
 export const TaskList = listOf(Task)
 export type TaskList = z.infer<typeof TaskList>
-
-export const Attachment = z.object({
-    id: z.string(),
-    task_id: z.string(),
-    /** Set when the file belongs to a comment rather than the task. */
-    comment_id: z.string().nullable(),
-    filename: z.string(),
-    content_type: z.string(),
-    size_bytes: z.number().int(),
-    uploaded_by: UserSummary.nullable(),
-    download_url: z.string(),
-    created_at: IsoDateTime,
-})
-export type Attachment = z.infer<typeof Attachment>
 
 export const Comment = z.object({
     id: z.string(),
