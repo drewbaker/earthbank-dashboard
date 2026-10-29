@@ -21,12 +21,12 @@ const { goals } = usePipelineReference()
 // Design grants are what fund OpEx, so the separate OpEx goal isn't shown.
 const shownGoals = computed(() => (goals.data.value?.data ?? []).filter(goal => goal.type !== 'opex'))
 const { inputs, isReady, baseProjection } = useForecast()
-// Raised is the default chart; Burn rate is the cash runway projection.
-type OverviewChart = 'raised' | 'burn_rate'
+// Raised is the default chart; Runway is the cash runway projection.
+type OverviewChart = 'raised' | 'runway'
 const chartTab = ref<OverviewChart>('raised')
 const chartTabItems = [
     { label: 'Raised', value: 'raised', icon: 'i-lucide-trending-up' },
-    { label: 'Burn rate', value: 'burn_rate', icon: 'i-lucide-flame' },
+    { label: 'Runway', value: 'runway', icon: 'i-lucide-hourglass' },
 ]
 const isPlannedExpenseOpen = ref(false)
 const editingPlannedExpense = ref<PlannedExpense | null>(null)
@@ -181,7 +181,7 @@ function describeRunway({ end }: { end: RunwayEnd }) {
                                 size="sm"
                                 aria-label="Overview chart"
                             />
-                            <div v-if="chartTab === 'burn_rate' && baseProjection" class="flex gap-2">
+                            <div v-if="chartTab === 'runway' && baseProjection" class="flex gap-2">
                                 <UButton
                                     label="Plan an expense"
                                     icon="i-lucide-receipt"
@@ -208,10 +208,10 @@ function describeRunway({ end }: { end: RunwayEnd }) {
                     <template v-else>
                         <ForecastRunwayChart v-if="baseProjection" :projection="baseProjection" :height="240" />
                         <p v-else class="py-10 text-center text-sm text-muted">
-                            The burn rate chart needs cash on hand. {{ cashSetupMessage }}
+                            The runway chart needs cash on hand. {{ cashSetupMessage }}
                         </p>
                     </template>
-                    <template v-if="chartTab === 'burn_rate' && baseProjection?.events.length" #footer>
+                    <template v-if="chartTab === 'runway' && baseProjection?.events.length" #footer>
                         <p class="mb-1 text-xs font-medium text-muted">Coming up</p>
                         <ForecastEventList
                             :events="baseProjection.events"

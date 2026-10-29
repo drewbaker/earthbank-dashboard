@@ -52,7 +52,7 @@ Names used throughout: **Earth Bank Dashboard** (display name), `earthbank_dashb
 | Audit log | `aud` | |
 
 - **Core flows**:
-    1. See cash, monthly burn, runway date, and progress on each goal at a glance. The Overview chart opens on **Raised** (money received so far as a solid line, then a dotted projection of approved asks and the weighted pipeline by expected date, against the goal; grants or lending capital), with a **Burn rate** tab for the cash runway.
+    1. See cash, monthly burn, runway date, and progress on each goal at a glance. The Overview chart opens on **Raised** (money received so far as a solid line, then a dotted projection of approved asks and the weighted pipeline by expected date, against the goal; grants or lending capital), with a **Runway** tab for the cash runway.
     2. Browse and edit funders and opportunities, including stage, amount, expected receipt date and next step.
     3. Add a new inbound funder, either by entering their email or domain or by forwarding their email. The app then backfills that person's past email threads into the funder's timeline.
     4. Plan milestones with tasks: assign, set deadlines, comment, attach files, get email alerts. Make it obvious what each person must do per milestone ("Drew: A, B, C before Jan 1").
