@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useElementSize } from '@vueuse/core'
+import { CurveType } from 'nuxt-charts/enums'
 import { computed, ref } from 'vue'
 import type { GoalType } from '#shared/constants/pipeline.ts'
 import type { RaisedEvent, RaisedOpportunity, RaisedPoint } from '#shared/forecast/project-raised.ts'
@@ -46,134 +46,94 @@ const targetCents = computed(() => {
     return targets.reduce((sum, cents) => sum + cents, 0)
 })
 
-// Drawn as plain SVG: the chart library drops rows with a missing value, so it can't end one line at
-// today and start the dotted projection there.
-const chartBox = ref<HTMLElement | null>(null)
-const { width: boxWidth } = useElementSize(chartBox)
-const MARGIN = { top: 16, right: 16, bottom: 28, left: 56 }
-const chartHeight = computed(() => props.height ?? 320)
-const plotWidth = computed(() => Math.max(boxWidth.value - MARGIN.left - MARGIN.right, 50))
-const plotHeight = computed(() => chartHeight.value - MARGIN.top - MARGIN.bottom)
-
-const points = computed(() => projection.value.points)
+// Each point on the x-axis: the months before today, today, then month ends. Money expected between today
+// and the end of this month moves to next month's point, so "Today" isn't crowded by a point two days on.
+const points = computed(() => {
+    const all = projection.value.points
+    const currentMonth = props.today.slice(0, 7)
+    const shown: RaisedPoint[] = []
+    let carried: RaisedEvent[] = []
+    for (const point of all) {
+        if (point.date > props.today && point.date.startsWith(currentMonth)) {
+            carried = point.events
+            continue
+        }
+        shown.push(carried.length ? { ...point, events: [...carried, ...point.events] } : point)
+        carried = []
+    }
+    return shown
+})
 const todayIndex = computed(() => points.value.findIndex(point => point.date === props.today))
 
-/**
- * The value a point shows: what was raised by then, or (after today) the projection.
- *
- * @param input.point - The point.
- * @returns Cents.
- */
-function pointCents({ point }: { point: RaisedPoint }) {
-    return point.raised_cents ?? point.projected_cents ?? 0
+type ChartRow = {
+    /** X-axis category: a month label, or "Today". */
+    label: string
+    date: string
+    /** Received by then up to today, then the projection (drawn dotted). */
+    projected: number
+    /** The same values, drawn solid on top and cut off at today. */
+    raised: number
+    isFuture: boolean
+    events: RaisedEvent[]
 }
 
-const yTicks = computed(() => {
-    // At least $10K, so an empty chart still gets distinct ticks.
-    const highest = Math.max(targetCents.value, ...points.value.map(point => pointCents({ point })), 1_000_000)
-    return niceTicks({ maximum: highest, count: 5 })
-})
-const yMaximum = computed(() => yTicks.value.at(-1)!)
-
-// Points sit at their dates (today is only days from the month ends around it).
-const dayNumbers = computed(() => points.value.map(point => Date.parse(`${point.date}T00:00:00Z`) / 86_400_000))
-
-/**
- * Horizontal position of a point, by its date.
- *
- * @param input.index - The point's index.
- * @returns x in pixels within the plot.
- */
-function xFor({ index }: { index: number }) {
-    const days = dayNumbers.value
-    const span = days.at(-1)! - days[0]!
-    return span > 0 ? ((days[index]! - days[0]!) / span) * plotWidth.value : plotWidth.value / 2
-}
-
-/**
- * Vertical position of an amount.
- *
- * @param input.cents - The amount.
- * @returns y in pixels within the plot.
- */
-function yFor({ cents }: { cents: number }) {
-    return plotHeight.value - (cents / yMaximum.value) * plotHeight.value
-}
-
-/**
- * An SVG path through some points.
- *
- * @param input.indexes - Point indexes, in order.
- * @returns The path's `d`, or '' for fewer than two points.
- */
-function pathThrough({ indexes }: { indexes: number[] }) {
-    if (indexes.length < 2) {
-        return ''
-    }
-    return indexes
-        .map((index, position) => {
-            const command = position === 0 ? 'M' : 'L'
-            return `${command}${xFor({ index }).toFixed(1)},${yFor({ cents: pointCents({ point: points.value[index]! }) }).toFixed(1)}`
-        })
-        .join(' ')
-}
-
-const raisedPath = computed(() =>
-    pathThrough({ indexes: points.value.flatMap((point, index) => (point.raised_cents !== null ? [index] : [])) }),
-)
-const projectedPath = computed(() =>
-    pathThrough({
-        indexes: points.value.flatMap((point, index) => (point.projected_cents !== null ? [index] : [])),
+// Two lines with the same values, overlaid: the dotted one runs the whole way, and the solid one is
+// drawn over it and clipped at today (see the style below), so it reads as one line that turns dotted.
+// The chart library needs a value in every row for every line, so neither line can simply stop.
+const rows = computed<ChartRow[]>(() =>
+    points.value.map(point => {
+        const dollars = (point.raised_cents ?? point.projected_cents ?? 0) / 100
+        return {
+            label: point.date === props.today ? 'Today' : monthLabel({ date: point.date }),
+            date: point.date,
+            projected: dollars,
+            raised: dollars,
+            isFuture: point.date > props.today,
+            events: point.events,
+        }
     }),
 )
-// About eight month labels, always including today, none crowding it.
-const xLabels = computed(() => {
-    const step = Math.max(1, Math.ceil(points.value.length / 8))
-    const todayX = todayIndex.value >= 0 ? xFor({ index: todayIndex.value }) : -Infinity
-    const minimumGap = plotWidth.value / 12
-    return points.value.flatMap((point, index) => {
-        const isToday = index === todayIndex.value
-        const isNearToday = Math.abs(xFor({ index }) - todayX) < minimumGap
-        if (!isToday && (index % step !== 0 || isNearToday)) {
-            return []
-        }
-        return [{ index, label: isToday ? 'Today' : monthLabel({ date: point.date }) }]
-    })
+
+// Drawn in this order, so the solid line sits on top.
+const categories = computed(() => ({
+    projected: { name: 'Projected', color: palette.value.committed },
+    raised: { name: 'Raised', color: palette.value.committed },
+}))
+
+// The share of the line, from its left end, that is solid: the points are evenly spaced, so today's
+// position along the line is its index over the last index.
+const solidLineInset = computed(() => {
+    const lastIndex = rows.value.length - 1
+    const solidShare = lastIndex > 0 && todayIndex.value >= 0 ? todayIndex.value / lastIndex : 1
+    return `${((1 - solidShare) * 100).toFixed(3)}%`
 })
 
-/**
- * How an x-axis label lines up with its point: labels near the edges stay inside the chart.
- *
- * @param input.index - The point's index.
- * @returns `start`, `middle` or `end`.
- */
-function labelAnchor({ index }: { index: number }) {
-    const x = xFor({ index })
-    return x < 24 ? 'start' : x > plotWidth.value - 24 ? 'end' : 'middle'
-}
+const referenceLines = computed(() =>
+    targetCents.value > 0
+        ? [
+              {
+                  y: targetCents.value / 100,
+                  color: palette.value.weighted,
+                  strokeWidth: 1.5,
+                  label: `Goal ${formatMoney({ cents: targetCents.value, compact: true })}`,
+                  strokeDasharray: '2 4',
+              },
+              ...(todayIndex.value >= 0
+                  ? [
+                        {
+                            x: 'Today',
+                            color: palette.value.committed,
+                            strokeWidth: 1,
+                            strokeDasharray: '1 3',
+                            label: 'Today',
+                        },
+                    ]
+                  : []),
+          ]
+        : [],
+)
 
 const hasMoney = computed(() => projection.value.projected_cents > 0 || targetCents.value > 0)
-
-const hoveredIndex = ref<number | null>(null)
-const hoveredPoint = computed(() => (hoveredIndex.value === null ? null : points.value[hoveredIndex.value]!))
-
-/**
- * Follow the pointer to the nearest month.
- *
- * @param event - The pointer event over the plot.
- * @returns Nothing.
- */
-function trackPointer(event: PointerEvent) {
-    const bounds = (event.currentTarget as SVGElement).getBoundingClientRect()
-    const x = event.clientX - bounds.left - MARGIN.left
-    let nearest = 0
-    points.value.forEach((_point, index) => {
-        if (Math.abs(xFor({ index }) - x) < Math.abs(xFor({ index: nearest }) - x)) {
-            nearest = index
-        }
-    })
-    hoveredIndex.value = nearest
-}
 
 const lastPoint = computed(() => projection.value.points.at(-1)!)
 const EVENT_KIND_LABELS: Record<RaisedEvent['kind'], string> = {
@@ -197,39 +157,28 @@ function monthLabel({ date }: { date: string }) {
 }
 
 /**
- * Tooltip title for a point.
+ * Tooltip title for a hovered row.
  *
- * @param input.point - The hovered point.
+ * @param row - The hovered row (the chart library's callback shape).
  * @returns "Today", or "End of Nov 30, 2026".
  */
-function tooltipTitle({ point }: { point: RaisedPoint }) {
-    return point.date === props.today ? 'Today' : `End of ${formatDate({ value: point.date })}`
+function formatTooltipTitle(row: ChartRow) {
+    return row.date === props.today ? 'Today' : `End of ${formatDate({ value: row.date })}`
 }
 
 /**
- * Round axis ticks from 0 up past the highest value: steps of 1, 2, 2.5 or 5 × a power of ten.
+ * Y-axis label: compact dollars.
  *
- * @param input.maximum - Highest value to cover (cents).
- * @param input.count - About how many steps.
- * @returns Tick values in cents, starting at 0.
+ * @param tick - Dollar value (the chart library's callback shape).
+ * @returns The label.
  */
-function niceTicks({ maximum, count }: { maximum: number; count: number }) {
-    const rough = maximum / count
-    const power = 10 ** Math.floor(Math.log10(rough))
-    const step = [1, 2, 2.5, 5, 10].map(factor => factor * power).find(candidate => candidate >= rough)!
-    const ticks: number[] = []
-    for (let tick = 0; tick < maximum + step; tick += step) {
-        ticks.push(tick)
-        if (tick >= maximum) {
-            break
-        }
-    }
-    return ticks
+function formatDollarTick(tick: number) {
+    return formatMoney({ cents: tick * 100, compact: true })
 }
 </script>
 
 <template>
-    <div class="raised-chart space-y-2">
+    <div class="raised-chart space-y-2" :style="{ '--raised-chart-solid-inset': solidLineInset }">
         <div class="flex flex-wrap items-center justify-between gap-2">
             <p class="text-sm text-muted">
                 <span class="font-semibold text-highlighted">{{
@@ -243,185 +192,98 @@ function niceTicks({ maximum, count }: { maximum: number; count: number }) {
             </p>
             <UTabs v-model="moneyKind" :items="moneyKindItems" :content="false" size="xs" variant="link" />
         </div>
-        <div v-if="hasMoney" class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
-            <span class="flex items-center gap-1.5">
-                <span class="inline-block h-0.5 w-4" :style="{ background: palette.committed }" />
-                Raised
-            </span>
-            <span class="flex items-center gap-1.5">
-                <span
-                    class="inline-block h-0.5 w-4"
-                    :style="{
-                        background: `repeating-linear-gradient(90deg, ${palette.committed} 0 3px, transparent 3px 6px)`,
-                    }"
-                />
-                Projected: approved asks plus the weighted pipeline<TermHint term="weighted_pipeline" />
-            </span>
-            <span v-if="targetCents > 0" class="flex items-center gap-1.5">
-                <span
-                    class="inline-block h-0.5 w-4"
-                    :style="{
-                        background: `repeating-linear-gradient(90deg, ${palette.weighted} 0 2px, transparent 2px 6px)`,
-                    }"
-                />
-                Goal
-            </span>
-        </div>
         <p v-if="!hasMoney" class="py-10 text-center text-sm text-muted">
             No {{ moneyKind === 'grants' ? 'grant money' : 'lending capital' }} raised or expected yet. Amounts and
             expected dates on the pipeline's asks fill this chart.
         </p>
-        <div v-else ref="chartBox" class="relative w-full" :style="{ height: `${chartHeight}px` }">
-            <svg
-                v-if="boxWidth > 0"
-                :width="boxWidth"
-                :height="chartHeight"
-                class="raised-chart__plot block"
-                role="img"
-                :aria-label="`Money raised: ${formatMoney({ cents: projection.raised_cents, compact: true })} so far, ${formatMoney({ cents: projection.projected_cents, compact: true })} projected by ${formatDate({ value: lastPoint.date })}`"
-                @pointermove="trackPointer"
-                @pointerleave="hoveredIndex = null"
-            >
-                <g :transform="`translate(${MARGIN.left},${MARGIN.top})`">
-                    <g v-for="tick in yTicks" :key="tick">
-                        <line
-                            :x1="0"
-                            :x2="plotWidth"
-                            :y1="yFor({ cents: tick })"
-                            :y2="yFor({ cents: tick })"
-                            class="raised-chart__grid"
-                        />
-                        <text
-                            :x="-8"
-                            :y="yFor({ cents: tick })"
-                            dy="0.32em"
-                            text-anchor="end"
-                            class="raised-chart__tick"
-                        >
-                            {{ formatMoney({ cents: tick, compact: true }) }}
-                        </text>
-                    </g>
-                    <text
-                        v-for="label in xLabels"
-                        :key="label.index"
-                        :x="xFor({ index: label.index })"
-                        :y="plotHeight + 18"
-                        :text-anchor="labelAnchor({ index: label.index })"
-                        class="raised-chart__tick"
-                    >
-                        {{ label.label }}
-                    </text>
-                    <line
-                        v-if="todayIndex >= 0"
-                        :x1="xFor({ index: todayIndex })"
-                        :x2="xFor({ index: todayIndex })"
-                        :y1="0"
-                        :y2="plotHeight"
-                        class="raised-chart__today"
-                    />
-                    <g v-if="targetCents > 0">
-                        <line
-                            :x1="0"
-                            :x2="plotWidth"
-                            :y1="yFor({ cents: targetCents })"
-                            :y2="yFor({ cents: targetCents })"
-                            :stroke="palette.weighted"
-                            stroke-width="1.5"
-                            stroke-dasharray="2 4"
-                        />
-                        <text
-                            :x="4"
-                            :y="yFor({ cents: targetCents }) - 6"
-                            class="raised-chart__tick"
-                            :style="{ fill: palette.weighted }"
-                        >
-                            Goal {{ formatMoney({ cents: targetCents, compact: true }) }}
-                        </text>
-                    </g>
-                    <path :d="raisedPath" fill="none" :stroke="palette.committed" stroke-width="2.5" />
-                    <path
-                        :d="projectedPath"
-                        fill="none"
-                        :stroke="palette.committed"
-                        stroke-width="2.5"
-                        stroke-dasharray="2 5"
-                        stroke-linecap="round"
-                    />
-                    <circle
-                        v-if="todayIndex >= 0"
-                        :cx="xFor({ index: todayIndex })"
-                        :cy="yFor({ cents: pointCents({ point: points[todayIndex]! }) })"
-                        r="4"
-                        :fill="palette.committed"
-                    />
-                    <g v-if="hoveredPoint && hoveredIndex !== null">
-                        <line
-                            :x1="xFor({ index: hoveredIndex })"
-                            :x2="xFor({ index: hoveredIndex })"
-                            :y1="0"
-                            :y2="plotHeight"
-                            class="raised-chart__guide"
-                        />
-                        <circle
-                            :cx="xFor({ index: hoveredIndex })"
-                            :cy="yFor({ cents: pointCents({ point: hoveredPoint }) })"
-                            r="4.5"
-                            :fill="hoveredPoint.raised_cents !== null ? palette.committed : 'var(--ui-bg)'"
-                            :stroke="palette.committed"
-                            stroke-width="2"
-                        />
-                    </g>
-                    <rect :width="plotWidth" :height="plotHeight" fill="transparent" />
-                </g>
-            </svg>
-            <div
-                v-if="hoveredPoint && hoveredIndex !== null"
-                class="pointer-events-none absolute top-2 z-10 w-72 space-y-2 rounded-md border border-default bg-elevated p-3 text-sm shadow-lg"
-                :style="
-                    xFor({ index: hoveredIndex }) > plotWidth / 2
-                        ? { right: `${boxWidth - MARGIN.left - xFor({ index: hoveredIndex }) + 12}px` }
-                        : { left: `${MARGIN.left + xFor({ index: hoveredIndex }) + 12}px` }
-                "
-            >
-                <p class="font-medium text-highlighted">{{ tooltipTitle({ point: hoveredPoint }) }}</p>
-                <div class="flex items-center gap-2">
+        <ClientOnly v-else>
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+                <span class="flex items-center gap-1.5">
+                    <span class="inline-block h-0.5 w-4" :style="{ background: palette.committed }" />
+                    Raised
+                </span>
+                <span class="flex items-center gap-1.5">
                     <span
-                        class="size-2 shrink-0 rounded-full border-2"
+                        class="inline-block h-0.5 w-4"
                         :style="{
-                            borderColor: palette.committed,
-                            backgroundColor: hoveredPoint.raised_cents !== null ? palette.committed : 'transparent',
+                            background: `repeating-linear-gradient(90deg, ${palette.committed} 0 3px, transparent 3px 6px)`,
                         }"
                     />
-                    <span class="flex-1 text-muted">{{
-                        hoveredPoint.raised_cents !== null ? 'Raised' : 'Projected'
-                    }}</span>
-                    <span class="font-medium text-highlighted">{{
-                        formatMoney({ cents: pointCents({ point: hoveredPoint }), compact: true })
-                    }}</span>
-                </div>
-                <div v-if="hoveredPoint.events.length" class="space-y-1 border-t border-default pt-2">
-                    <p class="text-xs text-muted">{{ hoveredPoint.raised_cents !== null ? 'Arrived' : 'Expected' }}</p>
-                    <div
-                        v-for="event in hoveredPoint.events.slice(0, 5)"
-                        :key="event.opportunity_id"
-                        class="flex items-start justify-between gap-3"
-                    >
-                        <span class="min-w-0 text-highlighted">
-                            {{ event.label }}
-                            <span class="text-xs text-muted">
-                                · {{ EVENT_KIND_LABELS[event.kind] }}{{ event.is_overdue ? ', overdue' : '' }}
-                            </span>
-                        </span>
-                        <span class="shrink-0 text-right font-medium text-success">
-                            +{{ formatMoney({ cents: event.amount_cents, compact: true }) }}
-                        </span>
-                    </div>
-                    <p v-if="hoveredPoint.events.length > 5" class="text-xs text-muted">
-                        and {{ hoveredPoint.events.length - 5 }} more
-                    </p>
-                </div>
+                    Projected: approved asks plus the weighted pipeline<TermHint term="weighted_pipeline" />
+                </span>
+                <span v-if="targetCents > 0" class="flex items-center gap-1.5">
+                    <span
+                        class="inline-block h-0.5 w-4"
+                        :style="{
+                            background: `repeating-linear-gradient(90deg, ${palette.weighted} 0 2px, transparent 2px 6px)`,
+                        }"
+                    />
+                    Goal
+                </span>
             </div>
-        </div>
+            <LineChart
+                :data="rows"
+                :categories="categories"
+                x-axis="label"
+                :height="height ?? 320"
+                :y-formatter="formatDollarTick"
+                :tooltip-title-formatter="formatTooltipTitle"
+                :reference-lines="referenceLines"
+                :line-width="2.5"
+                :curve-type="CurveType.Linear"
+                :x-num-ticks="8"
+                :y-num-ticks="5"
+                :y-grid-line="true"
+                :x-grid-line="false"
+                hide-legend
+            >
+                <template #tooltip="{ values }">
+                    <div
+                        v-if="values"
+                        class="max-w-80 space-y-2 rounded-md border border-default bg-elevated p-3 text-sm shadow-lg"
+                    >
+                        <p class="font-medium text-highlighted">{{ formatTooltipTitle(values) }}</p>
+                        <div class="flex items-center gap-2">
+                            <span
+                                class="size-2 shrink-0 rounded-full border-2"
+                                :style="{
+                                    borderColor: palette.committed,
+                                    backgroundColor: values.isFuture ? 'transparent' : palette.committed,
+                                }"
+                            />
+                            <span class="flex-1 text-muted">{{ values.isFuture ? 'Projected' : 'Raised' }}</span>
+                            <span class="font-medium text-highlighted">{{
+                                formatMoney({ cents: values.projected * 100, compact: true })
+                            }}</span>
+                        </div>
+                        <div v-if="values.events.length" class="space-y-1 border-t border-default pt-2">
+                            <p class="text-xs text-muted">{{ values.isFuture ? 'Expected' : 'Arrived' }}</p>
+                            <div
+                                v-for="event in values.events.slice(0, 5)"
+                                :key="event.opportunity_id"
+                                class="flex items-start justify-between gap-3"
+                            >
+                                <span class="min-w-0 text-highlighted">
+                                    {{ event.label }}
+                                    <span class="text-xs text-muted">
+                                        · {{ EVENT_KIND_LABELS[event.kind] }}{{ event.is_overdue ? ', overdue' : '' }}
+                                    </span>
+                                </span>
+                                <span class="shrink-0 text-right font-medium text-success">
+                                    +{{ formatMoney({ cents: event.amount_cents, compact: true }) }}
+                                </span>
+                            </div>
+                            <p v-if="values.events.length > 5" class="text-xs text-muted">
+                                and {{ values.events.length - 5 }} more
+                            </p>
+                        </div>
+                    </div>
+                </template>
+            </LineChart>
+            <template #fallback>
+                <USkeleton :style="{ height: `${height ?? 320}px` }" class="w-full" />
+            </template>
+        </ClientOnly>
         <p v-if="projection.undated.length" class="text-xs text-muted">
             {{ projection.undated.length }} open {{ projection.undated.length === 1 ? 'ask has' : 'asks have' }} no
             expected date, so {{ projection.undated.length === 1 ? "it isn't" : "they aren't" }} on the projected line
@@ -437,22 +299,16 @@ function niceTicks({ maximum, count }: { maximum: number; count: number }) {
 </template>
 
 <style scoped>
-.raised-chart__grid {
-    stroke: var(--ui-border);
-    stroke-dasharray: 3 3;
+/* The chart library dashes every line or none, so the lines are styled here. The first line drawn is
+   the projection, dotted the whole way. The second is the same line drawn solid on top, clipped at
+   today: the inset is measured on the line's own box, which spans first point to last. */
+.raised-chart :deep(.v-charts-line .v-charts-line-curve) {
+    stroke-dasharray: 2 5;
+    stroke-linecap: round;
 }
 
-.raised-chart__tick {
-    fill: var(--ui-text-muted);
-    font-size: 12px;
-}
-
-.raised-chart__today {
-    stroke: var(--ui-border-accented);
-}
-
-.raised-chart__guide {
-    stroke: var(--ui-text-dimmed);
-    stroke-dasharray: 2 2;
+.raised-chart :deep(.v-charts-line ~ .v-charts-line .v-charts-line-curve) {
+    stroke-dasharray: none;
+    clip-path: inset(-8px var(--raised-chart-solid-inset) -8px -8px);
 }
 </style>
