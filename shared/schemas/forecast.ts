@@ -19,6 +19,8 @@ export const ForecastInputs = z.object({
             stage: z.enum(OPPORTUNITY_STAGES),
             amount_cents: z.number().int().nullable(),
             expected_receipt_at: DateOnly.nullable(),
+            /** When the money arrived, for received asks (the Raised chart). */
+            received_at: DateOnly.nullable(),
             probability: z.number().int(),
         }),
     ),

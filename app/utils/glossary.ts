@@ -15,6 +15,9 @@ export const GLOSSARY = {
     runway_weighted: 'How long cash lasts if open asks land at their weighted value.',
     committed_money_only: 'Cash plus approved and received money, minus burn.',
     out_of_cash: 'Where the cash line drops below $0.',
+    raised: 'Money received from funders so far, by the day it arrived.',
+    raised_projected:
+        'Raised money plus approved asks and open asks × their chance of coming through, by when each is expected.',
     last_contact: `Last email or call with the funder. Yellow after ${CONTACT_STALE_AFTER_DAYS} days, red after ${CONTACT_OVERDUE_AFTER_DAYS}.`,
     global_focus: 'Asks focused on the whole world, so counted on their own.',
     research_completeness: 'How much of the AI research profile is filled in, weighted toward size, lending and deals.',

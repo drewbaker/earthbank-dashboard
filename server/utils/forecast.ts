@@ -41,6 +41,7 @@ export async function loadForecastInputs({ today }: { today: string }): Promise<
                 stage: opportunity.stage,
                 amount_cents: opportunity.amount_cents,
                 expected_receipt_at: opportunity.expected_receipt_at,
+                received_at: opportunity.received_at,
                 probability: opportunity.probability,
             }
         }),

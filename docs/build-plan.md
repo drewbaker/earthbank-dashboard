@@ -320,6 +320,8 @@ Paid datasets that would help (not bought):
 - [x] Tests: `funder-and-fund-files.test.ts`
 - [ ] After deploy: check Settings → audit (`email_attachments.processed`) or the Files cards for what the pass over past emails filed; Resend keeps received attachments for a limited time, so the oldest may no longer download
 
+- [x] Overview chart tabs: **Raised** (default) shows money received month by month as a solid line, then a dotted projection of approved asks and the weighted pipeline by expected date, against the goal; Grants or Lending capital. **Burn rate** is the cash runway chart (`projectRaised` in `shared/forecast/project-raised.ts`, `ForecastRaisedChart`)
+
 ---
 
 ## Later (not v1)

@@ -21,6 +21,13 @@ const { goals } = usePipelineReference()
 // Design grants are what fund OpEx, so the separate OpEx goal isn't shown.
 const shownGoals = computed(() => (goals.data.value?.data ?? []).filter(goal => goal.type !== 'opex'))
 const { inputs, isReady, baseProjection } = useForecast()
+// Raised is the default chart; Burn rate is the cash runway projection.
+type OverviewChart = 'raised' | 'burn_rate'
+const chartTab = ref<OverviewChart>('raised')
+const chartTabItems = [
+    { label: 'Raised', value: 'raised', icon: 'i-lucide-trending-up' },
+    { label: 'Burn rate', value: 'burn_rate', icon: 'i-lucide-flame' },
+]
 const isPlannedExpenseOpen = ref(false)
 const editingPlannedExpense = ref<PlannedExpense | null>(null)
 const toast = useToast()
@@ -164,11 +171,17 @@ function describeRunway({ end }: { end: RunwayEnd }) {
                     </UCard>
                 </div>
 
-                <UCard v-if="baseProjection">
+                <UCard v-if="inputs.data.value">
                     <template #header>
                         <div class="flex flex-wrap items-center justify-between gap-2">
-                            <h2 class="font-medium text-highlighted">Cash runway</h2>
-                            <div class="flex gap-2">
+                            <UTabs
+                                v-model="chartTab"
+                                :items="chartTabItems"
+                                :content="false"
+                                size="sm"
+                                aria-label="Overview chart"
+                            />
+                            <div v-if="chartTab === 'burn_rate' && baseProjection" class="flex gap-2">
                                 <UButton
                                     label="Plan an expense"
                                     icon="i-lucide-receipt"
@@ -185,8 +198,20 @@ function describeRunway({ end }: { end: RunwayEnd }) {
                             </div>
                         </div>
                     </template>
-                    <ForecastRunwayChart :projection="baseProjection" :height="240" />
-                    <template v-if="baseProjection.events.length" #footer>
+                    <ForecastRaisedChart
+                        v-if="chartTab === 'raised'"
+                        :today="inputs.data.value.today"
+                        :opportunities="inputs.data.value.opportunities"
+                        :goals="goals.data.value?.data ?? []"
+                        :height="240"
+                    />
+                    <template v-else>
+                        <ForecastRunwayChart v-if="baseProjection" :projection="baseProjection" :height="240" />
+                        <p v-else class="py-10 text-center text-sm text-muted">
+                            The burn rate chart needs cash on hand. {{ cashSetupMessage }}
+                        </p>
+                    </template>
+                    <template v-if="chartTab === 'burn_rate' && baseProjection?.events.length" #footer>
                         <p class="mb-1 text-xs font-medium text-muted">Coming up</p>
                         <ForecastEventList
                             :events="baseProjection.events"
